@@ -1,0 +1,64 @@
+**Software Bug Report**
+
+**Bug ID:** BUG-2023-05-05-001
+
+**Project:** riscemu
+**Repository:** AntonLydike/riscemu
+**Workflow/Job:** `.github/workflows/ci-pytest.yml`, `build (3.10)` job
+**Affected Commit SHA:** `6ec6e5130e8fbaca8b151fc7c5308b5a40aad2c8`
+**Previous Working Commit SHA:** `5f2f4e44af6d638ce9af46f48368fbfa9fc39122`
+
+**Severity:** High (Build Failure)
+**Priority:** High (Blocking CI)
+**Status:** New
+
+---
+
+**1. Bug Title:**
+`NameError: name 'Optional' is not defined` during pytest collection on Python 3.10
+
+**2. Description:**
+The CI pipeline for the `riscemu` project is failing during the `pytest` execution step. The tests cannot be collected because of a `NameError: name 'Optional' is not defined`. This error specifically occurs in the `riscemu/types/binary_data_memory_section.py` file on line 19, where `Optional[MemoryFlags] = None` is used as a type hint. The absence of the `Optional` definition prevents the module from loading, which in turn blocks all subsequent test collection that depends on this module.
+
+**3. Environment:**
+*   **Runner:** GitHub Actions 2 (hosted)
+*   **Operating System:** Ubuntu 22.04.2 LTS
+*   **Python Version:** 3.10.11
+*   **Pytest Version:** 7.3.1
+*   **Dependencies:** Installed from `requirements.txt` and `requirements-dev.txt` as per the build log.
+
+**4. Steps to Reproduce:**
+1.  Checkout the failing commit: `git checkout 6ec6e5130e8fbaca8b151fc7c5308b5a40aad2c8`
+2.  Ensure a Python 3.10.11 environment is active.
+3.  Install project dependencies: `pip install -r requirements.txt -r requirements-dev.txt`
+4.  Run the tests: `pytest -W error`
+
+**5. Expected Behavior:**
+Pytest should successfully collect all tests and proceed to execute them. The `riscemu/types/binary_data_memory_section.py` module should load without a `NameError`.
+
+**6. Actual Behavior:**
+The `pytest` command fails during the test collection phase with the following error:
+```
+____________________ ERROR collecting test/test_helpers.py _____________________
+... (stack trace leading to the error) ...
+riscemu/types/binary_data_memory_section.py:19: in BinaryDataMemorySection
+    flags: Optional[MemoryFlags] = None,
+E   NameError: name 'Optional' is not defined
+```
+This error repeats for `test/test_integers.py`, `test/test_isa.py`, and `test/test_tokenizer.py`, indicating a fundamental module import issue.
+
+**7. Root Cause Analysis:**
+The `NameError: name 'Optional' is not defined` occurs because the `Optional` type hint is used in `riscemu/types/binary_data_memory_section.py` without being imported from the `typing` module.
+
+While Python 3.9+ allows for `list[int]` instead of `typing.List[int]`, and Python 3.10+ introduces the `X | None` syntax as a cleaner alternative to `typing.Optional[X]`, the `typing.Optional` itself still requires an explicit import: `from typing import Optional`.
+
+The provided `CODE DIFF` confirms this diagnosis. The patch for `riscemu/types/binary_data_memory_section.py` explicitly *adds* the line `from typing import Optional`. This indicates that the `failed_sha` (`6ec6e5130e8fbaca8b151fc7c5308b5a40aad2c8`) was missing this crucial import, even though `Optional` was already being used in the class definition.
+
+**8. Proposed Solution:**
+Add the import statement `from typing import Optional` to the `riscemu/types/binary_data_memory_section.py` file. This is precisely what the provided `CODE DIFF` does, implying the bug has already been identified and addressed in a subsequent commit.
+
+For long-term code clarity and adherence to modern Python syntax (Python 3.10+), it would also be beneficial to consider replacing `Optional[MemoryFlags]` with `MemoryFlags | None`.
+
+**9. Attachments:**
+*   `BUILD LOG` (provided)
+*   `CODE DIFF` (provided)

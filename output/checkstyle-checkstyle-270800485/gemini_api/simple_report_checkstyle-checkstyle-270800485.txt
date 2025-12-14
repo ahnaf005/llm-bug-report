@@ -1,0 +1,105 @@
+## Software Bug Report
+
+**Bug ID:** CS-270800485-TranslationCheckTestFailure
+
+**Title:** Build Failure: `TranslationCheckTest.testDefaultTranslationFileIsMissing1` Fails Due to Environment-Dependent Path in Expected Output
+
+**Severity:** High (Build Failure)
+**Priority:** High (Blocks CI/CD pipeline)
+**Status:** Open
+
+**Component/Module:** `checkstyle` / `checks` / `TranslationCheck`
+**Version:** `8.3-SNAPSHOT` (as per build log)
+**Affected Commit (failed_sha):** `5dea2a5d390d8a7835d36723ebc5b51f0480c0c4`
+
+---
+
+### 1. Description
+
+The Travis CI build for the `checkstyle` project failed during the test execution phase (`maven-surefire-plugin:2.20:test`). Specifically, the test `com.puppycrawl.tools.checkstyle.checks.TranslationCheckTest.testDefaultTranslationFileIsMissing1` resulted in a `org.junit.ComparisonFailure`. The failure indicates a mismatch between the expected and actual XML log output, primarily due to hardcoded absolute file paths in the expected output that do not match the build environment's paths.
+
+### 2. Environment
+
+*   **Build System:** Travis CI
+*   **Operating System:** Ubuntu 12.04.5 LTS (Precise)
+*   **Kernel Version:** 4.8.12-040812-generic
+*   **Java Version:** Oracle JDK 8 (1.8.0_144)
+*   **Maven Version:** Apache Maven 3.2.5
+*   **Git Repository:** `https://github.com/checkstyle/checkstyle.git`
+*   **Branch/PR:** `refs/pull/5043/merge`
+
+### 3. Steps to Reproduce
+
+1.  Checkout the `checkstyle` repository at commit `5dea2a5d390d8a7835d36723ebc5b51f0480c0c4`.
+2.  Ensure Java 8 and Maven 3.2.5 are configured.
+3.  Execute the Maven command: `mvn clean integration-test failsafe:verify -DargLine='-Xms1024m -Xmx2048m'`
+
+### 4. Expected Behavior
+
+The `TranslationCheckTest.testDefaultTranslationFileIsMissing1` test should pass without any `ComparisonFailure`. This implies that the test's expected output should be robust against changes in the absolute file path of the build environment, or the test should be removed if its purpose is no longer valid or if it's inherently brittle.
+
+### 5. Actual Behavior
+
+The build fails with the following error:
+
+```
+[ERROR] Tests run: 20, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.735 s <<< FAILURE! - in com.puppycrawl.tools.checkstyle.checks.TranslationCheckTest
+[ERROR] testDefaultTranslationFileIsMissing1(com.puppycrawl.tools.checkstyle.checks.TranslationCheckTest)  Time elapsed: 0.035 s  <<< FAILURE!
+org.junit.ComparisonFailure: 
+Unexpected log output expected:<...>
+<file name="/home/[valeria/IdeaProjects/checkstyle/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/translation/messages_check_fire_errors.properties">
+</file>
+<file name="/home/valeria/IdeaProjects/checkstyle/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/translation/messages_check_fire_errors_de.properties">
+</file>
+<file name="/home/valeria/IdeaProjects/checkstyle/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/translation">
+<error line="0" severity="error" message="Properties file &apos;messages_check_fire_errors_ja.properties&apos; is missing." source="com.puppycrawl.tools.checkstyle.checks.TranslationCheck"/>
+</file>
+<file name="/home/valeria/IdeaProjects/checkstyle/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/translation/messages_check_fire_errors_de.properties">
+<error line="0" severity="error" message="Key &apos;anotherKey&apos; missing." source="com.puppycrawl.tools.checkstyle.checks.TranslationCheck"/>
+</file>
+<file name="/home/valeria/IdeaProjects/checkstyle/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/translation/messages_check_fire_errors.properties"]>
+</file>
+</checksty...> but was:<...>
+<file name="/home/[travis/build/checkstyle/checkstyle/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/translation/messages_check_fire_errors.properties">
+</file>
+<file name="/home/travis/build/checkstyle/checkstyle/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/translation/messages_check_fire_errors_de.properties">
+</file>
+<file name="/home/travis/build/checkstyle/checkstyle/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/translation">
+<error line="0" severity="error" message="Properties file &apos;messages_check_fire_errors_ja.properties&apos; is missing." source="com.puppycrawl.tools.checkstyle.checks.TranslationCheck"/>
+</file>
+<file name="/home/travis/build/checkstyle/checkstyle/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/translation/messages_check_fire_errors.properties">
+</file>
+<file name="/home/travis/build/checkstyle/checkstyle/src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/translation/messages_check_fire_errors_de.properties">
+<error line="0" severity="error" message="Key &apos;anotherKey&apos; missing." source="com.puppycrawl.tools.checkstyle.checks.TranslationCheck"/]>
+</file>
+</checksty...>
+	at com.puppycrawl.tools.checkstyle.checks.TranslationCheckTest.testDefaultTranslationFileIsMissing1(TranslationCheckTest.java:248)
+```
+
+### 6. Root Cause Analysis
+
+The `ComparisonFailure` occurs because the `testDefaultTranslationFileIsMissing1` test in `TranslationCheckTest.java` compares the generated XML log output against a predefined string that contains hardcoded absolute file paths.
+
+*   **Expected Path:** `/home/valeria/IdeaProjects/checkstyle/src/test/resources/...`
+*   **Actual Path (Travis CI):** `/home/travis/build/checkstyle/checkstyle/src/test/resources/...`
+
+This discrepancy in the base directory of the project between the local development environment (presumably `valeria/IdeaProjects`) and the CI environment (`travis/build/checkstyle/checkstyle`) causes the test to fail.
+
+Additionally, the `CODE DIFF` shows that the `TranslationCheck.java` class has undergone refactoring, specifically removing calls to `MessageDispatcher.fireFileFinished(filePath)`. This change in how messages are dispatched and logged could potentially alter the exact structure or content of the XML log, further contributing to the `ComparisonFailure` if the expected output was not updated to reflect these changes. The deletion of `src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/translation/xml-log.xml` in the diff, along with the removal of the failing test method, strongly suggests that this test was identified as problematic and is being removed as part of a fix.
+
+### 7. Proposed Solution / Workaround
+
+The provided `CODE DIFF` already contains the solution for this specific failure:
+
+*   **Direct Fix:** The test method `testDefaultTranslationFileIsMissing1()` in `src/test/java/com/puppycrawl/tools/checkstyle/checks/TranslationCheckTest.java` has been **removed**. This directly addresses the failure by eliminating the problematic test.
+*   **Related Refactoring:** The changes in `src/main/java/com/puppycrawl/tools/checkstyle/checks/TranslationCheck.java` (removal of `MessageDispatcher` usage) are likely part of a broader refactoring that might have made the old test's expected output invalid anyway.
+
+**Recommendation:** Apply the changes from the provided `CODE DIFF` to resolve this build failure. If a similar test is required in the future, ensure that:
+1.  Expected outputs use relative paths or placeholders instead of hardcoded absolute paths.
+2.  Path normalization is performed before comparison in tests.
+3.  Tests are updated whenever logging mechanisms or output formats change.
+
+### 8. Additional Notes
+
+*   The `CODE DIFF` also includes other changes (e.g., `pom.xml` `mutationThreshold`, `shippable.yml` `POST_ACTION`, `JavadocParser.g4` grammar updates, new Javadoc test resources) which are likely part of the same pull request (PR 5043) but are not directly related to this specific `TranslationCheckTest` failure.
+*   The build log indicates that the `failed_sha` still contains the problematic test, while the `CODE DIFF` shows its removal. This implies the diff represents the proposed changes to fix the `failed_sha` state.

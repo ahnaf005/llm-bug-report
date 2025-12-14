@@ -1,0 +1,122 @@
+## Software Bug Report: Maven Surefire Tests Fail with InaccessibleObjectException on Java 17 due to Missing `opens` Directives
+
+**Bug ID:** N/A (No specific ID provided)
+
+**Project:** Makelangelo-software
+
+**Version/Commit:** `5f7a8ca2218ba64fd6eb5be385cafc51dd5f866a` (Failing commit)
+
+**Environment:**
+*   **Operating System:** Ubuntu 24.04.1 LTS
+*   **Java Version:** Temurin JDK 17.0.13+11 (x64)
+*   **Build Tool:** Apache Maven (via `./mvnw`)
+*   **CI/CD Runner:** GitHub Actions `ubuntu-24.04` (Version: 20241215.1.0)
+
+**Severity:** High (Build Failure)
+
+**Priority:** High (Blocks successful CI/CD builds and indicates broken test execution)
+
+---
+
+### Description
+
+The Makelangelo-software project's Maven build is failing during the `test` phase when executed with Java 17. The failure is caused by `java.lang.reflect.InaccessibleObjectException` errors, indicating that the Java Module System (JPMS) is preventing reflective access to certain packages within the `com.marginallyclever.makelangelo` module from the "unnamed module" where the Surefire test runner operates.
+
+This issue affects multiple test classes across different packages, including `com.marginallyclever.makelangelo.turtle`, `com.marginallyclever.makelangelo.makeart.io`, and `com.marginallyclever.convenience`.
+
+---
+
+### Steps to Reproduce
+
+1.  Checkout the problematic commit: `git checkout 5f7a8ca2218ba64fd6eb5be385cafc51dd5f866a`
+2.  Ensure Java 17 is configured as the active JDK.
+3.  Run the Maven test command: `./mvnw -B test -Djava.awt.headless=true`
+
+---
+
+### Expected Behavior
+
+All unit tests should execute successfully, and the Maven build should complete without errors.
+
+---
+
+### Actual Behavior
+
+The Maven build fails during the `test` phase with 22 errors and 1 skipped test. The primary error observed is `java.lang.reflect.InaccessibleObjectException`, specifically:
+
+`Unable to make [constructor/method] accessible: module com.marginallyclever.makelangelo does not "opens [package]" to unnamed module @[hash]`
+
+This leads to a `BUILD FAILURE` and the CI/CD process terminating with exit code 1.
+
+---
+
+### Error Messages / Logs
+
+```
+2025-01-03T19:30:45.7665831Z [ERROR] Tests run: 16, Failures: 0, Errors: 16, Skipped: 0, Time elapsed: 0.031 s <<< FAILURE! - in com.marginallyclever.makelangelo.turtle.TurtleTest
+2025-01-03T19:30:45.7706107Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+... (repeated for all 16 TurtleTest methods) ...
+
+2025-01-03T19:30:47.7235123Z [ERROR] Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.001 s <<< FAILURE! - in com.marginallyclever.makelangelo.makeart.io.SaveDXFTest
+2025-01-03T19:30:47.7249291Z java.lang.reflect.InaccessibleObjectException: Unable to make public static void com.marginallyclever.makelangelo.makeart.io.SaveDXFTest.beforeAll() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.makeart.io" to unnamed module @6f10d5b6
+
+2025-01-03T19:30:47.7273304Z [ERROR] Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.001 s <<< FAILURE! - in com.marginallyclever.makelangelo.makeart.io.SaveGCodeTest
+2025-01-03T19:30:47.7300115Z java.lang.reflect.InaccessibleObjectException: Unable to make public static void com.marginallyclever.makelangelo.makeart.io.SaveGCodeTest.beforeAll() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.makeart.io" to unnamed module @6f10d5b6
+
+2025-01-03T19:30:47.8086923Z [ERROR] Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0 s <<< FAILURE! - in com.marginallyclever.makelangelo.makeart.io.SaveSVGTest
+2025-01-03T19:30:47.8090543Z java.lang.reflect.InaccessibleObjectException: Unable to make public static void com.marginallyclever.makelangelo.makeart.io.SaveSVGTest.beforeAll() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.makeart.io" to unnamed module @6f10d5b6
+
+2025-01-03T19:30:51.1332466Z [ERROR] Tests run: 3, Failures: 0, Errors: 3, Skipped: 0, Time elapsed: 0.002 s <<< FAILURE! - in com.marginallyclever.convenience.FileAccessTest
+2025-01-03T19:30:51.1337006Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.convenience.FileAccessTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.convenience" to unnamed module @6f10d5b6
+... (repeated for other FileAccessTest methods) ...
+
+2025-01-03T19:30:51.2295203Z [INFO] BUILD FAILURE
+```
+
+---
+
+### Root Cause Analysis
+
+The `InaccessibleObjectException` is a direct consequence of the Java Module System (JPMS), introduced in Java 9. When a project is modularized (as `Makelangelo` is, indicated by `module-info.java`), access to packages is restricted by default. Test frameworks like Surefire often use reflection to discover and execute test methods and constructors.
+
+For reflective access to succeed, the module containing the classes being tested must explicitly "open" the relevant packages to other modules. In this case, the `com.marginallyclever.makelangelo` module needs to `open` its packages to the "unnamed module" where the test classes are executed. The current `module-info.java` (at commit `5f7a8ca`) is missing these `opens` directives for the packages containing the failing tests.
+
+The build log clearly shows failures in:
+*   `com.marginallyclever.makelangelo.turtle`
+*   `com.marginallyclever.makelangelo.makeart.io`
+*   `com.marginallyclever.convenience`
+
+---
+
+### Proposed Solution / Fix
+
+The provided `CODE DIFF` (from `failed_sha: 5f7a8ca2218ba64fd6eb5be385cafc51dd5f866a` to `passed_sha: 87a4f00984227cf35919e54d23533cd7264ef402`) correctly identifies and addresses this issue.
+
+The solution is to add `opens` directives to `src/main/java/module-info.java` for all packages that require reflective access from the test runner. The diff shows the following additions:
+
+```diff
+--- a/src/main/java/module-info.java
++++ b/src/main/java/module-info.java
+@@ -20,4 +20,12 @@
+     requires org.locationtech.jts;
+     requires org.apache.httpcomponents.httpclient;
+     requires org.apache.httpcomponents.httpcore;
++
++    opens com.marginallyclever.convenience;
++    opens com.marginallyclever.convenience.voronoi;
++    opens com.marginallyclever.makelangelo.makeart.io;
++    opens com.marginallyclever.makelangelo.plotter.plottercontrols;
++    opens com.marginallyclever.makelangelo.turtle;
++    opens com.marginallyclever.convenience.noise;
++    opens com.marginallyclever.convenience.helpers;
++}\ No newline at end of file
+```
+
+Applying these changes (as represented by `passed_sha: 87a4f00984227cf35919e54d23533cd7264ef402`) should resolve the `InaccessibleObjectException` errors and allow the tests to run successfully.
+
+---
+
+### Additional Notes
+
+*   There are also several `[WARNING]` messages regarding deprecated classes (`com.marginallyclever.convenience.ColorRGB`, `com.marginallyclever.convenience.ColorPalette`, `LEGACY_MAKELANGELO_ROOT`). While not critical to this build failure, these should be addressed in future refactoring efforts to maintain code quality and compatibility.
+*   The `module-info.java` file ends without a newline, which is a minor stylistic issue that could be corrected.

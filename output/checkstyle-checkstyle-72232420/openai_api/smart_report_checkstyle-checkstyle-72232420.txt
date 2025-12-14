@@ -1,0 +1,108 @@
+Title
+- Checkstyle build failure: missing/incorrect file header and spacing violation in src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java
+
+Steps to Reproduce
+1. Check out the failing commit (the build used commit f1b28dbcdeab04227463ffe9bfb476e891962418).
+2. From the project root run the same build command used in CI:
+   mvn clean verify -DskipTests -DskipITs -Dpmd.skip=true -Dfindbugs.skip=true -Dcobertura.skip=true
+3. Observe the build output (Ant Checkstyle run during the antrun verify phase).
+
+Triggering Input / Conditions
+- File: src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java in commit f1b28dbc...
+- Checkstyle configuration used by the build enforces:
+  - A license/header pattern that must match a line of 80 forward slashes (regex '^/{80}$' or literal '////////////////////////////////////////////////////////////////////////////////').
+  - Whitespace rules requiring a comma to be followed by a space.
+- The build runs the ant-phase-verify target (config/ant-phase-verify.xml) which triggers Checkstyle on tests and fails the build if violations are present.
+
+Expected Behavior
+- Checkstyle should pass for all files. The build should finish successfully.
+- Specifically:
+  - FileContentsTest.java should contain the project license header exactly as expected by the header-check rule.
+  - There should be no "comma not followed by whitespace" violations.
+
+Observed Behavior
+- Maven build fails during the antrun verify phase because Checkstyle reports violations in FileContentsTest.java:
+  - Two header-related messages complaining the first line does not match the expected header:
+    - "Line does not match expected header line of '////////////////////////////////////////////////////////////////////////////////'."
+    - "Line does not match expected header line of '^/{80}$'."
+  - One whitespace formatting message:
+    - "',' is not followed by whitespace."
+- The build stops with:
+  - "Checkstyle failed: Got 3 errors and 0 warnings."
+  - Maven antrun plugin throws a MojoExecutionException and build exits with non-zero status.
+
+Observed error output (relevant lines from the build log)
+- From the Checkstyle run:
+  [checkstyle] /home/travis/build/checkstyle/checkstyle/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java:1: Line does not match expected header line of '////////////////////////////////////////////////////////////////////////////////'.
+  [checkstyle] /home/travis/build/checkstyle/checkstyle/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java:1: Line does not match expected header line of '^/{80}$'.
+  [checkstyle] /home/travis/build/checkstyle/checkstyle/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java:25:30: ',' is not followed by whitespace.
+- Final Maven failure:
+  [ERROR] /home/travis/build/checkstyle/checkstyle/config/ant-phase-verify.xml:50: Checkstyle failed: Got 3 errors and 0 warnings.
+  [ERROR] -> [Help 1]
+
+Relevant Code Snippets (from the provided diff)
+- The failing commit lacks the required header and contains a spacing violation. The proposed patch (included in the diff) fixes both by:
+  - Adding the project license header at the top of FileContentsTest.java.
+  - Fixing spacing in a method call (adding a space after a comma).
+
+Proposed new contents added by the patch (FileContentsTest.java — lines added at top and spacing change)
+- Added license header (top of file):
+  ////////////////////////////////////////////////////////////////////////////////
+  // checkstyle: Checks Java source code for adherence to a set of rules.
+  // Copyright (C) 2001-2015 the original author or authors.
+  //
+  // This library is free software; you can redistribute it and/or
+  // modify it under the terms of the GNU Lesser General Public
+  // License as published by the Free Software Foundation; either
+  // version 2.1 of the License, or (at your option) any later version.
+  //
+  // This library is distributed in the hope that it will be useful,
+  // but WITHOUT ANY WARRANTY; without even the implied warranty of
+  // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+  // Lesser General Public License for more details.
+  //
+  // You should have received a copy of the GNU Lesser General Public
+  // License along with this library; if not, write to the Free Software
+  // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+  ////////////////////////////////////////////////////////////////////////////////
+
+- The spacing fix (inside a test):
+  - Old (offending) line:
+    o.reportCppComment(1,2);
+  - New (fixed) line:
+    o.reportCppComment(1, 2);
+
+Other change in diff (unrelated to the Checkstyle failure but present in patch list)
+- pom.xml: removal of one <regex> entry for TokenTypes (this removes a coverage/sonar exclusion/threshold - not directly related to the Checkstyle errors).
+
+Stack Traces / Build trace
+- The build log shows the failing plugin and message chain:
+  [INFO] --- maven-antrun-plugin:1.8:run (ant-phase-verify) @ checkstyle ---
+  ...
+  [checkstyle] Running Checkstyle 6.9-SNAPSHOT on 677 files
+  [checkstyle] /.../FileContentsTest.java:1: Line does not match expected header line of '////////////////////////////////////////////////////////////////////////////////'.
+  [checkstyle] /.../FileContentsTest.java:1: Line does not match expected header line of '^/{80}$'.
+  [checkstyle] /.../FileContentsTest.java:25:30: ',' is not followed by whitespace.
+  [checkstyle] ...
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD FAILURE
+  ...
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-antrun-plugin:1.8:run (ant-phase-verify) on project checkstyle: An Ant BuildException has occured: The following error occurred while executing this line:
+  [ERROR] /.../config/ant-phase-verify.xml:50: Checkstyle failed: Got 3 errors and 0 warnings.
+  [ERROR] -> [Help 1]
+
+Patches / Suggested Fixes (contained in the diff)
+- Add the canonical license/header to src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java exactly matching the project header-check configuration.
+- Fix the missing whitespace after comma in method call(s) (change o.reportCppComment(1,2); to o.reportCppComment(1, 2);).
+- The diff already contains these fixes — apply/commit the patch shown in the diff.
+
+Additional recommendations / notes
+- Ensure the header text exactly matches the project's header-check rule: check line length (80 slashes), exact text, and no extra leading/trailing characters or line-ending differences (CRLF vs LF). If the header-check uses a strict regex, a single character mismatch or extra trailing whitespace may still fail.
+- After applying the patch, run Checkstyle locally before pushing:
+  mvn -Pquick-checkstyle -DskipTests verify
+  or run the same ant-phase-verify target that CI runs, to confirm no remaining violations.
+- If the header-check pattern was recently changed, confirm the header template matches the current regex in the checkstyle configuration.
+- The pom.xml modification in the diff removes a TokenTypes coverage entry — verify that this change is intentional and unrelated to the Checkstyle failure.
+
+Summary
+- Root cause: FileContentsTest.java in the failing commit did not include the project's required license/header and contained a formatting violation (missing space after comma). Checkstyle detected these issues and the antrun verify phase failed the build. The provided patch in the diff adds the correct header and fixes the spacing, which should resolve the three reported Checkstyle errors.

@@ -1,0 +1,88 @@
+## Bug Report: Javadoc Generation Fails Due to Malformed HTML in Comment
+
+**1. Title:**
+Javadoc Generation Fails Due to Unescaped HTML-like Characters in Comment
+
+**2. Steps to Reproduce:**
+1.  Clone the repository `https://github.com/wmixvideo/nfe.git`.
+2.  Checkout the specific commit `12c8a862172bb697d54268935005e83c52e89481`.
+3.  Execute the Maven command: `mvn install -DskipTests=true -Dgpg.skip=true --settings ~/settings.xml`
+
+**3. Triggering Input:**
+The bug is triggered by a malformed Javadoc comment in the `NFAutorizador31.java` file, specifically the line:
+`* Links NFC-e segundo site => https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia`
+The `=>` sequence is interpreted by the Javadoc parser as an unclosed HTML tag (`>`), leading to a parsing error.
+
+**4. Expected Behavior:**
+The `mvn install` command should successfully compile the project, run tests (if not skipped), and generate Javadoc documentation without errors, producing the project artifact.
+
+**5. Observed Behavior:**
+The `mvn install` command fails during the `maven-javadoc-plugin:2.9.1:jar` goal. The Javadoc tool encounters a parsing error due to the `=>` sequence in a comment, which it interprets as a malformed HTML tag. The build terminates with an exit code of 1.
+
+**6. Relevant Code Snippets:**
+The problematic code snippet from `src/main/java/com/fincatto/nfe310/classes/NFAutorizador31.java` (around line 93 in the original file):
+
+```java
+    /**
+     * Links NFC-e segundo site => https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia
+     */
+    BA {
+        @Override
+        public String getNfeStatusServico(final NFAmbiente ambiente) {
+            return NFAmbiente.HOMOLOGACAO.equals(ambiente) ? "https://homologacao.sefaz.ba.gov.br/webservices/NfeStatusServico/NfeStatusServico.asmx" : "https://nfe.sefaz.ba.gov.br/webservices/NfeStatusServico/NfeStatusServico.asmx";
+        }
+```
+
+**7. Stack Traces:**
+```
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-javadoc-plugin:2.9.1:jar (attach-javadocs) on project nfe: MavenReportException: Error while creating archive:
+[ERROR] Exit code: 1 - /home/travis/build/wmixvideo/nfe/src/main/java/com/fincatto/nfe310/classes/NFAutorizador31.java:93: error: bad use of '>'
+[ERROR] * Links NFC-e segundo site => https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia
+[ERROR] ^
+[ERROR] /home/travis/build/wmixvideo/nfe/src/main/java/com/fincatto/nfe310/classes/nota/NFNotaInfoICMSTotal.java:81: warning: no @param for valor
+[ERROR] public void setValor(final BigDecimal valor) {
+[ERROR] ^
+... (additional warnings omitted for brevity) ...
+[ERROR] 
+[ERROR] Command line was: /usr/lib/jvm/java-8-oracle/jre/../bin/javadoc @options @packages
+[ERROR] 
+[ERROR] Refer to the generated Javadoc files in '/home/travis/build/wmixvideo/nfe/target/apidocs' dir.
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException
+```
+
+**8. Patches / Suggested Fixes:**
+The provided code diff includes the fix for this issue. The `=>` sequence in the Javadoc comment is replaced with a colon `:` to avoid being misinterpreted as an HTML tag.
+
+```diff
+--- a/src/main/java/com/fincatto/nfe310/classes/NFAutorizador31.java
++++ b/src/main/java/com/fincatto/nfe310/classes/NFAutorizador31.java
+@@ -79,18 +79,18 @@ public enum NFAutorizador31 {
+         }
+ 
+         @Override
+-        public String getNfceInutilizacao(NFAmbiente ambiente) {
++        public String getNfceInutilizacao(final NFAmbiente ambiente) {
+             return NFAmbiente.HOMOLOGACAO.equals(ambiente) ? "https://homnfce.sefaz.am.gov.br/nfce-services/services/NfeInutilizacao2" : "https://nfe.sefaz.am.gov.br/services2/services/NfeInutilizacao2";
+         }
+ 
+         @Override
+         public NFUnidadeFederativa[] getUFs() {
+-            return new NFUnidadeFederativa[]{NFUnidadeFederativa.AM};\
++            return new NFUnidadeFederativa[] { NFUnidadeFederativa.AM };\
+         }\
+     },\
+-    \
++\
+     /**
+-     * Links NFC-e segundo site => https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia
++     * Links NFC-e segundo site: https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia
+      */
+     BA {
+         @Override
+```

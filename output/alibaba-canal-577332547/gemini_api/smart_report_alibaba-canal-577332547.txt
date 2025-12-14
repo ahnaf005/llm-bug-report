@@ -1,0 +1,86 @@
+Here's a detailed bug report based on the provided build log and code diff:
+
+---
+
+## Bug Report: Maven Build Failure - `MysqlConnectorTest` Fails to Connect to Local MySQL
+
+**1. Title:** Maven Build Failure: `MysqlConnectorTest` Fails to Connect to Local MySQL
+
+**2. Steps to Reproduce:**
+1.  Clone the `alibaba/canal` repository.
+2.  Checkout the specific commit `c48407b449e69416de7cad272e0da8d9560b98f6`.
+3.  Execute the Maven build command: `./mvnw clean install -DskipTests=false -Dcheckstyle.skip=true -Dmaven.javadoc.skip=true`
+
+**3. Triggering Input:**
+The `MysqlConnectorTest.testQuery` test method attempts to establish a connection to a MySQL server running on `127.0.0.1:3306`. The failure is triggered when no MySQL server is available or accessible at this address during the test execution, particularly in a CI environment where a local MySQL instance might not be provisioned.
+
+**4. Expected Behavior:**
+The `MysqlConnectorTest.testQuery` should successfully connect to a MySQL instance (if one is configured and running) and pass without errors. The overall Maven build should complete with `BUILD SUCCESS`.
+
+**5. Observed Behavior:**
+The Maven build fails during the `test` phase of the `canal.parse.driver` module. Specifically, the `MysqlConnectorTest.testQuery` method throws an `AssertionError` because it cannot connect to `127.0.0.1:3306`. This failure propagates, causing the entire reactor build to fail.
+
+**Error Messages:**
+```
+[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.398 s <<< FAILURE! - in com.alibaba.otter.canal.parse.driver.mysql.MysqlConnectorTest
+[ERROR] testQuery(com.alibaba.otter.canal.parse.driver.mysql.MysqlConnectorTest)  Time elapsed: 0.306 s <<< FAILURE!
+java.lang.AssertionError: connect /127.0.0.1:3306 failure
+...
+[INFO] Reactor Summary:
+[INFO] ...
+[INFO] canal driver module for otter 1.1.4-SNAPSHOT ....... FAILURE [  3.503 s]
+[INFO] ...
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.22.1:test (default-test) on project canal.parse.driver: There are test failures.
+```
+
+**6. Relevant Code Snippets:**
+The failing test is `MysqlConnectorTest.java`. The relevant part of the code diff that addresses this issue is:
+
+```diff
+--- a/driver/src/test/java/com/alibaba/otter/canal/parse/driver/mysql/MysqlConnectorTest.java
++++ b/driver/src/test/java/com/alibaba/otter/canal/parse/driver/mysql/MysqlConnectorTest.java
+@@ -4,10 +4,12 @@ import java.io.IOException;
+ import java.net.InetSocketAddress;
+ 
+ import org.junit.Assert;
++import org.junit.Ignore;
+ import org.junit.Test;
+ 
+ import com.alibaba.otter.canal.parse.driver.mysql.packets.server.ResultSetPacket;
+ 
++@Ignore
+ public class MysqlConnectorTest {
+ 
+     @Test
+```
+
+**7. Stack Traces:**
+```
+[ERROR] testQuery(com.alibaba.otter.canal.parse.driver.mysql.MysqlConnectorTest)  Time elapsed: 0.306 s  <<< FAILURE!
+java.lang.AssertionError: connect /127.0.0.1:3306 failure
+	at com.alibaba.otter.canal.parse.driver.mysql.MysqlConnectorTest.testQuery(MysqlConnectorTest.java:25)
+```
+
+**8. Patches / Suggested Fixes:**
+The provided code diff includes a patch that resolves this build failure by ignoring the `MysqlConnectorTest` class. This is achieved by adding the `@Ignore` annotation from JUnit to the `MysqlConnectorTest` class definition. This effectively skips the test during the Maven build, allowing the build to proceed without requiring a running MySQL instance.
+
+```diff
+--- a/driver/src/test/java/com/alibaba/otter/canal/parse/driver/mysql/MysqlConnectorTest.java
++++ b/driver/src/test/java/com/alibaba/otter/canal/parse/driver/mysql/MysqlConnectorTest.java
+@@ -4,10 +4,12 @@ import java.io.IOException;
+ import java.net.InetSocketAddress;
+ 
+ import org.junit.Assert;
++import org.junit.Ignore; // Added import
+ import org.junit.Test;
+ 
+ import com.alibaba.otter.canal.parse.driver.mysql.packets.server.ResultSetPacket;
+ 
++@Ignore // Added annotation to ignore the test class
+ public class MysqlConnectorTest {
+ 
+     @Test
+```

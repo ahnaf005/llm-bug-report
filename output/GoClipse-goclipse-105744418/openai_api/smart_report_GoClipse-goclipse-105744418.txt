@@ -1,0 +1,149 @@
+Title
+- Compilation error in StartGocodeServerOperation after method-signature refactor — does not match AbstractUIOperation API
+
+Steps to Reproduce
+1. Clone the repository and checkout the failing commit (the CI used commit f737d664794570bb2a319d7bff9111f2c0ca9e0a).
+   - Example:
+     - git clone https://github.com/GoClipse/goclipse.git
+     - cd goclipse
+     - git checkout f737d664794570bb2a319d7bff9111f2c0ca9e0a
+2. Run the Maven build used by CI:
+   - mvn clean integration-test
+3. Observe the build failure during compilation of the plugin_ide.ui module.
+
+Triggering Input / Conditions
+- The failing change is in plugin_ide.ui/src/com/googlecode/goclipse/ui/actions/StartGocodeServerOperation.java (see code diff included below).
+- The build is performed by tycho / Maven on Java 8 (CI environment details in the log).
+- This is a compile-time problem (method signatures/overrides).
+
+Expected Behavior
+- The project should compile successfully (the class StartGocodeServerOperation should correctly override whatever methods the AbstractUIOperation superclass requires).
+- No "must override or implement a supertype method" or "undefined for the type AbstractUIOperation" compilation errors should occur.
+
+Observed Behavior
+- The build fails with compilation errors in StartGocodeServerOperation.java. The compiler reports that the class's method(s) are attempting to override methods that do not exist in the supertype, and a call to super.performBackgroundComputation() references an undefined supertype method.
+
+Relevant lines from the build log (error output)
+- /home/travis/build/GoClipse/goclipse/plugin_ide.ui/src/com/googlecode/goclipse/ui/actions/StartGocodeServerOperation.java:[35]
+  protected void performBackgroundComputation() throws CommonException, OperationCancellation, CoreException {
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  The method performBackgroundComputation() of type StartGocodeServerOperation must override or implement a supertype method
+- /home/travis/build/GoClipse/goclipse/plugin_ide.ui/src/com/googlecode/goclipse/ui/actions/StartGocodeServerOperation.java:[43]
+  super.performBackgroundComputation();
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  The method performBackgroundComputation() is undefined for the type AbstractUIOperation
+- Summary from log:
+  2 problems (2 errors)
+  Failed to execute goal org.eclipse.tycho:tycho-compiler-plugin:0.24.0:compile (...) on project com.googlecode.goclipse.ui: Compilation failure
+
+Relevant Code Snippets (from provided diff)
+- Old code (removed/replaced in patch):
+  @Override
+  protected void performBackgroundComputation() throws CommonException, OperationCancellation, CoreException {
+      if (ToolchainPreferences.AUTO_START_DAEMON.get() == false) {
+          return; // stop operation
+      }
+      gocodePath = GocodeServerManager.getGocodePath();
+      boolean needsStart = gocodeServerManager.prepareServerStart(gocodePath);
+      if(needsStart) {
+          super.performBackgroundComputation();
+      } else {
+          return;
+      }
+  }
+  ...
+  @Override
+  protected void doBackgroundComputation(IProgressMonitor monitor)
+      throws CoreException, CommonException, OperationCancellation {
+      gocodeServerManager.doStartServer(gocodePath, monitor);
+  }
+
+- New code (added by patch):
+  @Override
+  protected boolean isBackgroundComputationNecessary() throws CoreException, CommonException, OperationCancellation {
+      if (ToolchainPreferences.AUTO_START_DAEMON.get() == false) {
+          return false; // stop operation
+      }
+      
+      gocodePath = GocodeServerManager.getGocodePath();
+      boolean needsStart = gocodeServerManager.prepareServerStart(gocodePath);
+      return needsStart;
+  }
+  ...
+  @Override
+  protected void doBackgroundComputation(IProgressMonitor monitor) throws CoreException, OperationCancellation {
+      gocodeServerManager.doStartServer(gocodePath, monitor);
+  }
+
+Analysis / Root Cause
+- The failing compilation messages indicate that StartGocodeServerOperation is attempting to override performBackgroundComputation() (and call super.performBackgroundComputation()), but AbstractUIOperation (the superclass) does not contain that method.
+- The diff shows a refactor where the implementer attempted to replace performBackgroundComputation() with isBackgroundComputationNecessary() returning boolean and changed the exceptions on doBackgroundComputation. This is a breaking change if the AbstractUIOperation API used by the project does not declare isBackgroundComputationNecessary() (or if the signature / throws-clause differs).
+- Two core mismatch types:
+  1. Name/signature mismatch: Methods in StartGocodeServerOperation no longer match the superclass method signatures, so the @Override annotations fail.
+  2. The code still referenced super.performBackgroundComputation() (in the original code). If the supertype does not provide that method, calling super.performBackgroundComputation() will fail to compile — the build log shows that (super.performBackgroundComputation() is undefined).
+- The removal of CommonException from the throws clause of doBackgroundComputation may also break an override if the superclass method declares it in its throws-clause.
+
+Patches / Suggested Fixes
+Below are actionable suggestions to resolve the compilation errors. Pick the approach that matches the project's intended API change (i.e., whether AbstractUIOperation was meant to be changed or whether StartGocodeServerOperation should conform to the existing AbstractUIOperation API).
+
+1) If AbstractUIOperation actually expects a boolean isBackgroundComputationNecessary(...) method (the new approach) — make sure the method exactly matches the superclass signature:
+   - Verify the exact method name, return type, parameter list, and declared exceptions in AbstractUIOperation.
+   - Update StartGocodeServerOperation to match them exactly (including the order and types in the throws clause).
+   - Remove any call to super.performBackgroundComputation() (because that method does not exist). If you need to call a parent behavior, call the correct parent method (e.g., super.isBackgroundComputationNecessary(...) if applicable).
+   - Ensure doBackgroundComputation's declared throws match the supertype's throws. In the diff doBackgroundComputation removed CommonException — if the superclass declares CommonException, add it back to the throws clause to be a valid override.
+
+   Example patch (conceptual — adjust to the real superclass signature):
+   - Match the exact throws / signature:
+     @Override
+     protected boolean isBackgroundComputationNecessary() throws CoreException, CommonException, OperationCancellation {
+         ...
+     }
+   - Call parent method only if parent defines it. Do not call super.performBackgroundComputation() unless AbstractUIOperation defines it.
+
+2) If the intent was NOT to change the override method name — restore the original method name/signature to match the superclass:
+   - Revert the method name back to performBackgroundComputation(...) with the correct throws clause matching AbstractUIOperation:
+     @Override
+     protected void performBackgroundComputation() throws CommonException, OperationCancellation, CoreException {
+         ...
+         if (needsStart) {
+             super.performBackgroundComputation(); // only if the super actually defines it
+         }
+     }
+   - Ensure doBackgroundComputation(...) also matches the superclass signature (including any declared exceptions).
+
+3) If the superclass does not provide either method (unlikely but possible because of API/tycho/classpath mismatch), then:
+   - Remove the @Override annotation from the method(s) in StartGocodeServerOperation so the compiler does not treat them as overrides.
+   - But this is only a workaround — better is to align with the actual AbstractUIOperation API used in the project or update the base class to the intended version.
+
+4) Extra checks:
+   - Confirm the project's dependency set (target platform / tycho) and AbstractUIOperation version. If AbstractUIOperation signature changed in another commit, ensure both are updated consistently.
+   - If AbstractUIOperation comes from a library that was updated (different version), update code accordingly across all classes that override it.
+   - Run mvn -X (debug) or open the IDE to inspect the actual AbstractUIOperation class to copy exact signatures.
+
+Minimal concrete example patch (if the superclass defines isBackgroundComputationNecessary with the same throws):
+- Ensure the method has the exact throws order and types:
+  @Override
+  protected boolean isBackgroundComputationNecessary() throws CommonException, OperationCancellation, CoreException {
+      if (!ToolchainPreferences.AUTO_START_DAEMON.get()) {
+          return false;
+      }
+      gocodePath = GocodeServerManager.getGocodePath();
+      return gocodeServerManager.prepareServerStart(gocodePath);
+  }
+- Ensure doBackgroundComputation throws include CommonException if the superclass method declares it:
+  @Override
+  protected void doBackgroundComputation(IProgressMonitor monitor) throws CoreException, CommonException, OperationCancellation {
+      gocodeServerManager.doStartServer(gocodePath, monitor);
+  }
+
+Why this will fix it
+- The Java compiler requires that any method annotated with @Override must correspond to a method in a supertype with the same signature. Matching the exact signature and declared exceptions resolves the "must override or implement a supertype method" error and makes the super calls valid.
+- Matching or removing incorrect super calls prevents "method is undefined for the type AbstractUIOperation" errors.
+
+Additional notes
+- The build log shows earlier modules and tests compiled OK; the failure occurs only in the UI module. That suggests the rest of the codebase and tests are fine and the problem is confined to signature mismatch in StartGocodeServerOperation.
+- The diff shows two related changes: switching from a void performBackgroundComputation() to boolean isBackgroundComputationNecessary(), and altering doBackgroundComputation's throws. Make sure any change is consistent with the AbstractUIOperation contract used in the project (Tycho / Eclipse target platform version).
+
+If you want, I can:
+- Inspect AbstractUIOperation's exact API if you provide its source or the library (jar) version used so I can craft the precise replacement signatures and a ready patch.
+- Produce a small patch file that matches the superclass signature exactly (once you confirm which signature the superclass exposes).

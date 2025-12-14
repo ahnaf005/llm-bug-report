@@ -1,0 +1,94 @@
+Bug Report: Failing Unit Test in SIC-API -> FacturaServiceImplTest.shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien
+
+Summary
+- One unit test fails in CI: sic.service.impl.FacturaServiceImplTest.shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien.
+- Failure cause: array-length mismatch — test expected 5 result types but service returned 4.
+- The attached code diff shows an intended test update that removes "Factura B" from the expected array (reduces expected length to 4). The CI build was run before that change (so it still expected 5), which caused the failure.
+- Outcome: mvn test fails on SIC-API module and the build aborts.
+
+Environment
+- CI: Travis CI container-based build (Ubuntu precise image).
+- Java: 1.8.0_31 / Oracle JDK8
+- Maven: 3.2.5
+- Build: belluccifranco/sic, Job id 212962406
+- failing_sha: 7699514d8732d25f4539ec008738a042ea1e29ae
+- passed_sha (reference): b21d4ba403ce8c368f0e9e675e8dc8905fcd9401
+
+How to reproduce
+1. Checkout the repository at the failing commit (the commit used by CI / failing_sha).
+2. Run: mvn test -B
+3. Observe the failing test: sic.service.impl.FacturaServiceImplTest.shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien
+
+Actual result (from build log)
+- Test failure message:
+  java.lang.AssertionError: array lengths differed, expected.length=5 actual.length=4
+  at sic.service.impl.FacturaServiceImplTest.shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien(FacturaServiceImplTest.java:122)
+- Tests run: 63, Failures: 1, Errors: 0, Skipped: 0
+- Build result: BUILD FAILURE (SIC-API failed)
+
+Relevant excerpt from build log (key lines)
+- Failing test:
+  Failed tests:
+    FacturaServiceImplTest.shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien:122 array lengths differed, expected.length=5 actual.length=4
+- Surefire plugin reports test failures and aborts build:
+  [ERROR] Failed to execute goal ... maven-surefire-plugin:2.18.1:test ... There are test failures.
+
+Code diff (provided)
+- File changed: sic-api/src/test/java/sic/service/impl/FacturaServiceImplTest.java
+- Diff shows this exact change (context around test):
+  - Original expected array (5 elements):
+      String[] expResult = {"Factura A", "Factura B", "Factura X", "Factura Y", "Pedido"};
+  - New expected array (4 elements):
+      String[] expResult = {"Factura A", "Factura X", "Factura Y", "Pedido"};
+
+Interpretation / Analysis
+- The test checks getTipoFacturaVenta(empresa, cliente) and asserts returned String[] equals expResult.
+- The service currently returns 4 types for this scenario (it does not include "Factura B"); test in CI expected 5 types (including "Factura B"), so the arrays had different lengths and the assertion failed.
+- The provided patch modifies the test to expect 4 results (removes "Factura B"), which would make the test consistent with the service behavior.
+- The failing_sha indicates CI executed before the test update was applied. The code diff shows the intended fix to the test; once applied to the tested commit, the test should pass (assuming the service behavior is correct).
+- Two possible root causes:
+  1. Service behavior intentionally changed earlier to remove "Factura B" (business change), but tests were not updated yet — test must be updated (as in patch).
+  2. Service regression: service should still include "Factura B", but service implementation lost it — then the service must be fixed instead.
+
+Evidence that the patch aligns with current service behavior:
+- CI actual length = 4; the patch changes expected length to 4. That suggests the service currently returns 4 and the patch is meant to update test expectations.
+
+Suggested fixes (prioritized)
+1. If business logic intentionally removed "Factura B":
+   - Accept and merge the test change in the patch (update test expected values).
+   - Commit and run full test suite locally: mvn test.
+   - Push to CI; confirm build passes.
+
+2. If "Factura B" should still be returned (i.e., business behavior unchanged and service regressed):
+   - Revert the test patch.
+   - Investigate FacturaService.getTipoFacturaVenta implementation to find why "Factura B" is missing when both empresa and cliente discriminate IVA.
+   - Add/restore logic to return "Factura B" for that scenario.
+   - Add unit tests covering borderline cases to guard against regressions.
+   - Re-run tests and ensure CI passes.
+
+Additional improvements / recommendations
+- Make the unit test more robust:
+  - If ordering is not important for the types returned, replace assertArrayEquals(...) with an assertion that verifies the sets are equal regardless of order (e.g., convert to Set and assert equals, or use Hamcrest containsInAnyOrder). This avoids spurious test failures caused by ordering differences.
+  - If duplicates are not expected, assert uniqueness as well.
+- Add a comment to the test describing the business rule (when each invoice type is expected) to make future maintenance easier.
+- If the test change is accepted, add a brief changelog entry noting the business rule change: "Factura B removed when both Empresa and Cliente discriminate IVA" (if that is the intention).
+
+Suggested immediate action items
+1. Confirm business expectation for getTipoFacturaVenta when both empresa and cliente discriminate IVA (should "Factura B" be included?).
+   - Ask product owner or check requirements.
+2. When confirmed:
+   - If test needs update: merge the patch shown in the Code Diff and re-run CI.
+   - If service needs fix: open a PR to modify FacturaService implementation and include an updated test that verifies the correct types.
+3. After fix, run entire test suite locally and in CI.
+
+Files / lines of interest
+- Test file (modified in patch): sic-api/src/test/java/sic/service/impl/FacturaServiceImplTest.java
+  - Failure reported at line ~122 (assertArrayEquals call).
+- Service under test: sic-api/src/main/java/.../FacturaServiceImpl.java (investigate getTipoFacturaVenta method)
+
+Summary of concrete change in diff
+- The provided patch removes "Factura B" from the expected array in the test, reducing expected count from 5 to 4. This change makes the test expectation match service behavior observed in CI.
+
+If you want, I can:
+- Produce a small patch PR that applies the test update (the diff you provided) and changes the assertion to use unordered comparison (Set-based) for future robustness.
+- Inspect the FacturaServiceImpl#getTipoFacturaVenta code (if you share it) and confirm whether returning 4 elements is correct per business rules, then propose changes to service logic or tests accordingly.

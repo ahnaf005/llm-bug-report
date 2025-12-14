@@ -1,0 +1,84 @@
+Title
+- AudioProperties setters do not validate illegal (<= 0) input — unit tests expecting IllegalArgumentException fail
+
+Steps to Reproduce
+1. Checkout the failing commit (the build used commit 0579589d...).
+2. Run the test suite: mvn install -Dmaven.javadoc.skip=true (or mvn test).
+3. Observe test failures in net.pms.formats.v2.AudioPropertiesTest.
+
+Triggering Input / Conditions
+- Unit tests call the AudioProperties setters with illegal values (zero or negative). The tests expect an IllegalArgumentException to be thrown for:
+  - setBitRate(...) with a value < 1
+  - setNumberOfChannels(...) with a value < 1
+  - setBitsperSample(...) with a value < 1
+  - setSampleFrequency(...) with a value < 1
+
+Expected Behavior
+- The AudioProperties setters should validate their parameters and throw IllegalArgumentException for invalid (<= 0) values so that callers (and unit tests) receive the expected exception.
+
+Observed Behavior
+- Prior to the patch in this diff, the setters accepted invalid values (did not throw). As a result, tests that expect IllegalArgumentException failed with assertion errors stating the expected exception was not thrown:
+  - java.lang.AssertionError: Expected exception: java.lang.IllegalArgumentException
+- Maven test run summary from the build log:
+  - Tests run: 302, Failures: 4 (all in AudioPropertiesTest), Errors: 0, Skipped: 0
+  - Build failed because of these test failures.
+
+Relevant excerpts from build log (failing tests)
+- Failures (repeated for each test):
+  - AudioPropertiesTest.testSetNumberOfChannels_withIllegalArgument(net.pms.formats.v2.AudioPropertiesTest)  Time elapsed: 0.006 sec  <<< FAILURE!
+    java.lang.AssertionError: Expected exception: java.lang.IllegalArgumentException
+  - AudioPropertiesTest.testSampleFrequency_withIllegalArgument(net.pms.formats.v2.AudioPropertiesTest)  Time elapsed: 0 sec  <<< FAILURE!
+    java.lang.AssertionError: Expected exception: java.lang.IllegalArgumentException
+  - AudioPropertiesTest.testBitsperSample_withIllegalArgument(net.pms.formats.v2.AudioPropertiesTest)  Time elapsed: 0.001 sec  <<< FAILURE!
+    java.lang.AssertionError: Expected exception: java.lang.IllegalArgumentException
+  - AudioPropertiesTest.testSetBitRate_withIllegalArgument(net.pms.formats.v2.AudioPropertiesTest)  Time elapsed: 0 sec  <<< FAILURE!
+    java.lang.AssertionError: Expected exception: java.lang.IllegalArgumentException
+
+Relevant Code Snippets (from provided diff)
+- The patch adds input validation to the AudioProperties setter methods. The new checks throw IllegalArgumentException when the provided value is less than 1.
+
+1) setBitRate
+--- before/after context:
+ public void setBitRate(int bitRate) {
++    if (bitRate < 1) {
++        throw new IllegalArgumentException("Bitrate can't be less than 1.");
++    }
+     this.bitRate = bitRate;
+ }
+
+2) setNumberOfChannels
+ public void setNumberOfChannels(int numberOfChannels) {
++    if (numberOfChannels < 1) {
++        throw new IllegalArgumentException("Channel number can't be less than 1.");
++    }
+     this.numberOfChannels = numberOfChannels;
+ }
+
+3) setBitsperSample
+ public void setBitsperSample(int bitsperSample) {
++    if (bitsperSample < 1) {
++        throw new IllegalArgumentException("Bits per sample can't be less than 1.");
++    }
+     this.bitsperSample = bitsperSample;
+ }
+
+4) setSampleFrequency
+ public void setSampleFrequency(int sampleFrequency) {
++    if (sampleFrequency < 1) {
++        throw new IllegalArgumentException("Sample frequency can't be less than 1 Hz.");
++    }
+     this.sampleFrequency = sampleFrequency;
+ }
+
+Suggested Fix / Patch
+- The diff included in this report already contains the appropriate fix: add guards in each setter to throw IllegalArgumentException when the argument is less than 1. Applying that patch should make the tests pass because tests expect IllegalArgumentException for illegal inputs.
+
+Suggested Additional Actions / Improvements
+- Confirm unit tests indeed call the setters with 0 or negative values. If they only test 0, the < 1 guards cover that case.
+- Consider adding clear test cases that assert that valid (positive) values are accepted without throwing.
+- Consider whether the minimum valid values could be 1 for all properties — if there are domain-specific minimums greater than 1 (e.g., a maximum or specific allowed set), extend validation to check ranges and include informative messages.
+- Add Javadoc comments to the setters to document the parameter constraints (e.g., "value must be >= 1, otherwise IllegalArgumentException").
+- Run the full test suite locally: mvn -DskipTests=false test to validate fixes before pushing.
+
+Root Cause Summary
+- The AudioProperties setters previously did not validate input; tests expected IllegalArgumentException when passing invalid values (<= 0). The missing validation caused the tests to fail. The provided patch adds the missing checks and throws IllegalArgumentException on invalid values, addressing the failing tests.

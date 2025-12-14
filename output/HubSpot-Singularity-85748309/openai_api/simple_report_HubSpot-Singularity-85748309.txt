@@ -1,0 +1,133 @@
+Title: Build failure in SingularityBase: incompatible types — possible lossy conversion from double to float (MesosTaskStatisticsObject.java)
+
+Summary
+- Maven build fails during compilation of SingularityBase with three errors in MesosTaskStatisticsObject.java:
+  incompatible types: possible lossy conversion from double to float (lines 60, 64, 68).
+- Failure blocks CI and prevents packaging/install for the project.
+
+Environment
+- Repository: HubSpot/Singularity, branch: hs_qa
+- Commit checked out: e8fd6892f326916c3da9359a216a7e0e06cd4f47
+- Build run on Travis CI container-based infrastructure
+- OS: Ubuntu 12.04.5 LTS (precise)
+- Java: switched to Oracle JDK8 (java version "1.8.0_31")
+- Maven: Apache Maven 3.2.5
+- Command used: mvn -Pbuild-swagger-documentation -DskipTests=true -B -q -fae install
+- Failing module: SingularityBase
+- Build log excerpt (errors):
+  /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[60,12] incompatible types: possible lossy conversion from double to float
+  /.../MesosTaskStatisticsObject.java:[64,12] incompatible types: possible lossy conversion from double to float
+  /.../MesosTaskStatisticsObject.java:[68,12] incompatible types: possible lossy conversion from double to float
+
+Reproduction steps
+1. Clone the repository and check out the same commit/branch:
+   git clone --branch hs_qa https://github.com/HubSpot/Singularity.git
+   git checkout e8fd6892f326916c3da9359a216a7e0e06cd4f47
+2. Ensure JDK8 is used (build used oraclejdk8).
+3. Run:
+   mvn -Pbuild-swagger-documentation -DskipTests=true -B -q -fae install
+4. Observe compile errors inside SingularityBase (MesosTaskStatisticsObject.java).
+
+Actual behavior
+- Maven build fails at compile time with three "possible lossy conversion from double to float" errors in MesosTaskStatisticsObject.java; build stops and artifact is not produced.
+
+Expected behavior
+- Project should compile successfully. JSON mapping / parsing in MesosTaskStatisticsObject.java should convert numeric JSON values without causing compile-time type errors.
+
+Root cause analysis
+- The Java compiler errors indicate code is assigning double expressions (or returning double) to variables/fields typed as float without an explicit cast.
+- Common causes:
+  - Using methods that return double (e.g., JsonNode.asDouble(), arithmetic with double literals) and assigning result directly to float typed variables.
+  - Floating-point literals in Java default to double unless suffixed with 'f' (e.g., 0.0 is double, 0.0f is float). Assigning a double literal to a float field requires a cast or an 'f' literal suffix.
+- In the context of a JSON-to-object mapping class (MesosTaskStatisticsObject), likely the code does something like:
+    private float cpus = json.get("cpus").asDouble(); // invalid without cast
+  or
+    private float someField = 0.0; // 0.0 is double
+- The compile-time check in Java 8 is stricter than in some other languages; explicit cast required for narrowing conversions from double -> float.
+
+Impact
+- High: CI build is failing, blocking any downstream builds or releases that depend on SingularityBase.
+- Potential runtime implications if code were to be forcibly cast incorrectly (loss of precision). But the immediate problem is compilation failure.
+
+Suggested fixes (pick one based on intended precision and API contract)
+1) Preferred: Use double for fields and variables where JSON/library returns double
+   - Rationale: JSON numeric values are typically represented as doubles; using double avoids lossy conversions and is safer unless explicit float precision is required.
+   - Example change:
+       // before
+       private float cpus;
+       // after
+       private double cpus;
+   - Change any getters/setters or method signatures accordingly (float -> double).
+   - Pros: avoids casts and precision loss; minimal risk for API if project already expects double semantics.
+   - Cons: may change public API types if these fields are part of public DTOs; ensure backward compatibility.
+
+2) Alternative: Explicit casts to float (if float precision is desired)
+   - Example change:
+       // before
+       this.cpus = json.get("cpus").asDouble();
+       // after
+       this.cpus = (float) json.get("cpus").asDouble();
+   - Or for literal initializers:
+       private float someField = 0.0f;
+   - Pros: maintains float types; explicit about narrowing conversion.
+   - Cons: risk of precision loss; requires adding casts in every assignment site.
+
+3) For numeric literals, append 'f' suffix:
+   - Replace 0.0 with 0.0f where the target type is float:
+       private float example = 0.0f;
+
+Concrete code-sample suggestions (hypothetical, because code diff was not provided)
+- If MesosTaskStatisticsObject.java looks like:
+    public class MesosTaskStatisticsObject {
+      private float cpuSeconds;
+      private float memMb;
+      private float diskMb;
+      public MesosTaskStatisticsObject(JsonNode node) {
+        this.cpuSeconds = node.get("cpu_seconds").asDouble();
+        this.memMb = node.get("mem_mb").asDouble();
+        this.diskMb = node.get("disk_mb").asDouble();
+      }
+    }
+  Change to:
+    public class MesosTaskStatisticsObject {
+      private double cpuSeconds;
+      private double memMb;
+      private double diskMb;
+      public MesosTaskStatisticsObject(JsonNode node) {
+        this.cpuSeconds = node.get("cpu_seconds").asDouble();
+        this.memMb = node.get("mem_mb").asDouble();
+        this.diskMb = node.get("disk_mb").asDouble();
+      }
+    }
+  OR if float is required:
+    this.cpuSeconds = (float) node.get("cpu_seconds").asDouble();
+
+Verification / How to test the fix
+1. Apply the change (either change types to double or add casts and 'f' suffixes).
+2. Run the same Maven command locally:
+   mvn -Pbuild-swagger-documentation -DskipTests=true -B -q -fae install
+3. Ensure build completes without compilation errors.
+4. Run unit tests (if available) to ensure behavior remains correct:
+   mvn -DskipTests=false test
+5. If types changed from float -> double and these classes are serialized/deserialized in public APIs, verify consumers (other modules/tests) compile and behavior is correct.
+
+Risk and notes
+- If MesosTaskStatisticsObject is part of a public API/DTO (used by other modules or external consumers), changing the type from float to double is a breaking API change. In that case:
+  - Prefer applying explicit (float) casts in the class while keeping the field types as float, or
+  - Update all dependent code to the new double types and run full integration tests.
+- If precision is important (statistical CPU/memory values), double is usually the safer default.
+- The provided CODE DIFF is a 404 JSON error — it does not contain the code change that caused this compile failure. The build log is authoritative for the failure.
+
+Suggested next steps for the team
+1. Inspect MesosTaskStatisticsObject.java around the reported lines (60, 64, 68) and decide whether fields should be float or double.
+2. Implement one of the fixes above and run the build locally and in CI.
+3. If public API changes are required, update module versioning / callers accordingly.
+4. Add or update unit tests to cover MesosTaskStatisticsObject JSON parsing to catch this error earlier.
+5. Re-run CI and merge the fix.
+
+Attachments / Logs
+- Relevant build log excerpt (from Travis, includes the three compile error lines) is available in the BUILD LOG section.
+- The CODE DIFF provided in the report is a 404 JSON response and contains no code changes to review.
+
+If you want, I can:
+- Propose a concrete patch (a git diff) changing the three float fields to double (or adding casts) if you can paste the current MesosTaskStatisticsObject.java content (around the first ~120 lines).

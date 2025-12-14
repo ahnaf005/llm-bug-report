@@ -1,0 +1,131 @@
+Title
+- Build fails: tests cannot find org.apache.commons.collections4 (CollectionUtils) after POM changes / intermittent Maven Central connection timeouts
+
+Summary (one-line)
+- After moving the commons-collections version property and adding commons-collections4 as a test dependency, the build fails during test compilation with "package org.apache.commons.collections4 does not exist" and "cannot find symbol CollectionUtils". The build log also shows an earlier Maven Central connection timeout, which likely caused missing artifacts in the local repository.
+
+Steps to Reproduce
+1. Check out commit be9c5219de8f24d82bba7dcae0fd65598e268aa6 (branch headers) or apply the POM changes in the diff.
+2. Run a Maven build from repository root:
+   - mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+   or run the project's normal CI build (same thing Travis ran).
+3. Observe the build failures during plugin resolution and/or test compilation.
+
+Triggering Input / Conditions
+- The repository state at SHA be9c5219... (as shown by the provided build log).
+- POM changes in the diff:
+  - Removed the commons-collections version property from java-manta-client/pom.xml.
+  - Added a test dependency org.apache.commons:commons-collections4 to java-manta-it/pom.xml using property ${dependency.commons-collections.version}.
+  - Added property <dependency.commons-collections.version>4.0</dependency.commons-collections.version> to the top-level pom.xml.
+
+Expected Behavior
+- Maven should download the commons-collections4 artifact and compile the test sources in java-manta-it successfully. The build should proceed past testCompile (or at least not fail due to missing org.apache.commons.collections4 package).
+
+Observed Behavior
+- Maven fails initially with a plugin resolution error due to a connection timeout to repo.maven.apache.org:
+  - "Could not transfer artifact commons-beanutils:commons-beanutils:jar:1.9.2 from/to central (https://repo.maven.apache.org/maven2): Connect to repo.maven.apache.org:443 [...] failed: Connection timed out"
+- On subsequent retries, the build fails at test compilation with these errors:
+  - "package org.apache.commons.collections4 does not exist"
+  - "cannot find symbol: variable CollectionUtils" (several occurrences in MantaHttpHeadersIT.java)
+- The build exits with failure after 3 attempts.
+
+Relevant Build Log / Stack Trace Excerpts
+- Plugin resolution / connection timeout:
+  - [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta: Execution checkstyle ... Could not transfer artifact commons-beanutils:commons-beanutils:jar:1.9.2 from/to central (https://repo.maven.apache.org/maven2): Connect to repo.maven.apache.org:443 [repo.maven.apache.org/199.27.76.215] failed: Connection timed out -> [Help 1]
+- Compilation errors (testCompile phase):
+  - [ERROR] COMPILATION ERROR :
+  - [ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java:[8,39] package org.apache.commons.collections4 does not exist
+  - [ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java:[111,14] cannot find symbol
+    symbol:   variable CollectionUtils
+    location: class com.joyent.manta.client.MantaHttpHeadersIT
+  - (repeated for several lines/locations)
+  - [ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.3:testCompile (default-testCompile) on project java-manta-it: Compilation failure
+
+Relevant Code Snippets (from the diff)
+- Removed property from java-manta-client/pom.xml:
+  --- a/java-manta-client/pom.xml
+  +++ b/java-manta-client/pom.xml
+  @@ -21,7 +21,6 @@
+          <!-- Dependency versions -->
+          <dependency.apache-http-client.version>4.5.1</dependency.apache-http-client.version>
+          <dependency.bouncycastle.version>1.53</dependency.bouncycastle.version>
+  -        <dependency.commons-collections.version>4.0</dependency.commons-collections.version>
+          <dependency.google-http-client.version>1.20.0</dependency.google-http-client.version>
+          <dependency.google-http-client-signature.version>1.0.0</dependency.google-http-client-signature.version>
+      </properties>
+
+- Added the commons-collections4 test dependency to java-manta-it/pom.xml:
+  --- a/java-manta-it/pom.xml
+  +++ b/java-manta-it/pom.xml
+  @@ -49,6 +49,12 @@
+              <version>${dependency.slfj.version}</version>
+              <scope>test</scope>
+          </dependency>
+  +        <dependency>
+  +            <groupId>org.apache.commons</groupId>
+  +            <artifactId>commons-collections4</artifactId>
+  +            <version>${dependency.commons-collections.version}</version>
+  +            <scope>test</scope>
+  +        </dependency>
+
+- Added the commons-collections property to the top-level pom.xml:
+  --- a/pom.xml
+  +++ b/pom.xml
+  @@ -109,6 +109,7 @@
+          <dependency.mockito.version>2.0.2-beta</dependency.mockito.version>
+          <dependency.slf4j.version>1.7.13</dependency.slf4j.version>
+          <dependency.testng.version>6.9.9</dependency.testng.version>
+  +        <dependency.commons-collections.version>4.0</dependency.commons-collections.version>
+      </properties>
+
+Possible Root Causes
+1. Transient network/Maven Central connectivity issues
+   - The build log shows a connection timeout to repo.maven.apache.org. If Maven was unable to download commons-collections4 (or other artifacts) during the run, compile would fail with "package ... does not exist".
+   - The initial error was a plugin resolution failure (commons-beanutils), which indicates network issues that could also prevent pulling commons-collections4.
+
+2. POM / property scoping or ordering problem
+   - The property ${dependency.commons-collections.version} was moved from module pom to parent pom. If the property addition in the parent pom was added in the wrong location (e.g., after module declarations or not in the effective parent used by the module), Maven might not resolve the property when building java-manta-it.
+   - If the property is unresolved, Maven may attempt to resolve a dependency with a literal ${...} version or fail to resolve it, producing missing-package compilation failures.
+
+3. Dependency not correctly declared for the module that needs it
+   - If java-manta-it's tests reference org.apache.commons.collections4 but the dependency wasn't actually available on the test classpath (wrong scope or missing artifact), compilation would fail. The diff shows the dependency has been added with scope test, which is correct for test compilation — but if the artifact wasn't downloaded (see 1.), or version property unresolved (see 2.), it will still be missing.
+
+Patches / Suggested Fixes
+Immediate actions (to get the build green / diagnose):
+1. Re-run the build (network problems can be transient)
+   - mvn -U clean install -DskipTests=true -Dmaven.javadoc.skip=true
+   - The -U forces updates from remote repositories and may recover from previous timeouts.
+
+2. Confirm artifact resolution locally (debug)
+   - Run mvn -X test-compile on the java-manta-it module to see full dependency resolution logs and confirm whether commons-collections4 artifact is being resolved and which version is used.
+
+3. If the property is not being resolved by Maven:
+   - Ensure the <dependency.commons-collections.version> property is defined in the parent POM in a <properties> section that is read by modules (preferably near the top-level <properties>, before <modules> or other sections that might affect interpolation).
+   - Alternatively, use an explicit version literal in java-manta-it/pom.xml temporarily:
+     <version>4.0</version>
+     This removes uncertainty from property resolution while debugging.
+
+4. If network is the root cause persistently:
+   - Consider adding a build retry for artifact resolution, a mirror repository, or ensuring CI environment has reliable connectivity to Maven Central.
+   - Add a repository mirror configuration in settings.xml if CI network to Maven Central is flaky.
+
+Longer-term / best practices suggestions:
+- Keep a single source of truth for dependency versions in the parent POM, but be careful to place properties before modules or ensure modules can see them.
+- Add integration test dependency declarations explicitly where needed (java-manta-it already does this).
+- Add a CI pre-step that checks ability to access Maven Central (simple curl to repo.maven.apache.org) and fail fast with a clear message.
+- Consider locking to specific versions (already done) but verify that properties are defined in the effective parent POM.
+
+Recommended concrete change (if property scoping is the issue)
+- Move the <dependency.commons-collections.version> declaration into the parent POM's <properties> block at top-level (if not already), ensuring it is present and defined before module builds occur. Or change the java-manta-it dependency to use the explicit version 4.0.
+
+Example safe temporary patch (makes java-manta-it independent of property resolution):
+- In java-manta-it/pom.xml, change:
+  <version>${dependency.commons-collections.version}</version>
+  to
+  <version>4.0</version>
+
+Why this addresses the problem
+- Using an explicit version avoids any parent property interpolation issues and ensures the artifact coordinates are correct. If the build then still fails with missing package, the cause is almost certainly a network/central-availability problem rather than POM configuration.
+
+Closing notes
+- The build log shows two distinct issues: a connection timeout to Maven Central (plugin resolution) and subsequent compilation errors about missing commons-collections4. They are likely related: transient connectivity prevented artifact download so test compilation failed. However, the recent POM refactor (moving the property/property location changes) could also have introduced a property scoping/order problem. The fastest route to a deterministic fix is to (a) verify artifact resolution with mvn -X, (b) re-run with -U, and (c) if necessary, hardcode the version temporarily while fixing property placement in the parent POM.

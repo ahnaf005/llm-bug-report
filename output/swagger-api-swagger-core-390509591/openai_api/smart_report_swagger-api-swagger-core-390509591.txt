@@ -1,0 +1,172 @@
+Title
+- NPE in PojosTest.testEqualsAndHashcodes after Responses/Paths refactor (unit test failure in swagger-models)
+
+Summary
+- After the changes to Responses and Paths (and an attempted test exclusion change), the module swagger-models unit tests fail: PojosTest.testEqualsAndHashcodes throws a NullPointerException and the build fails during "mvnw clean verify".
+
+Steps to reproduce
+1. Checkout the branch/commit that includes the diff (the failing run in the build log).
+2. Run from repo root:
+   - ./mvnw clean verify
+   - or run tests for the swagger-models module only:
+     - ./mvnw -pl modules/swagger-models -am test
+3. Observe test results — see one failing test (PojosTest.testEqualsAndHashcodes).
+
+Triggering input / conditions
+- Running the full verify/test goal for the project (mvnw clean verify) on the code after these changes:
+  - Changes made to modules/swagger-models/src/main/java/io/swagger/models/Responses.java
+  - Changes made to modules/swagger-models/src/main/java/io/swagger/models/Paths.java
+  - Changes made to modules/swagger-models/src/test/java/io/swagger/PojosTest.java (added Responses.class and Paths.class to excludedClasses)
+- Build run from the provided Travis log shows tests executed under OpenJDK7.
+
+Expected behavior
+- All unit tests in module swagger-models (and the whole project) pass.
+- In particular, PojosTest.testEqualsAndHashcodes should complete without throwing NullPointerException.
+
+Observed behavior
+- The test suite fails with an NPE in PojosTest.testEqualsAndHashcodes.
+- Build summary (relevant sections from the log):
+  - [ERROR] Failures: 
+  - [ERROR]   PojosTest.testEqualsAndHashcodes:113 » NullPointer
+  - [ERROR] Tests run: 249, Failures: 1, Errors: 0, Skipped: 0
+  - [ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.21.0:test (default-test) on project swagger-models: There are test failures.
+
+Stack traces / log excerpts
+- JVM & test output around failure (from build log):
+  - [ERROR] Failures: 
+  - [ERROR]   PojosTest.testEqualsAndHashcodes:113 » NullPointer
+  - ...
+  - [ERROR] Tests run: 249, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 10.073 s <<< FAILURE! - in TestSuite
+  - [ERROR] testEqualsAndHashcodes(io.swagger.PojosTest) Time elapsed: 0.092 s <<< FAILURE!
+  - java.lang.NullPointerException
+  -     at io.swagger.PojosTest.testEqualsAndHashcodes(PojosTest.java:113)
+
+- (Note: the test failure was in the swagger-models module; earlier unrelated warnings and a Jetty IncompatibleClassChangeError are present in the log but the build continued and completed the module compilation; the failing item is the NPE in PojosTest.)
+
+Relevant code snippets (from provided diff)
+- modules/swagger-models/src/main/java/io/swagger/models/Responses.java (key parts of the patch)
+  - Removed DEFAULT constant and removed getDefault()/setDefault() convenience methods
+  - Changed equals(), toString() class name:
+    ```
+    // removed:
+    // public static final String DEFAULT = "default";
+    // public Response getDefault() { return this.get(DEFAULT); }
+    // public void setDefault(Response _default) { addResponse(DEFAULT, _default); }
+    // public Responses _default(Response _default) { setDefault(_default); return this; }
+
+    // equals changed to:
+    Responses responses = (Responses) o;
+    return Objects.equals(this.vendorExtensions, responses.vendorExtensions) &&
+            super.equals(o);
+
+    // toString class header changed from "class ApiResponses" to "class Responses"
+    ```
+
+- modules/swagger-models/src/main/java/io/swagger/models/Paths.java (small patch)
+  - hashCode order changed and vendorExtensions now printed in toString:
+    ```
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), vendorExtensions);
+    }
+
+    // in toString:
+    sb.append("    ").append(toIndentedString(super.toString())).append("\n");
+    sb.append("    vendorExtensions: ").append(toIndentedString(vendorExtensions)).append("\n");
+    ```
+
+- modules/swagger-models/src/test/java/io/swagger/PojosTest.java (test change)
+  - The test adds Responses.class and Paths.class to excludedClasses:
+    ```
+    Set<Class<?>> excludedClasses = new HashSet<Class<?>>(
+            Arrays.asList(PropertyBuilder.class, Responses.class, Paths.class));
+    ```
+
+Analysis / probable causes
+1. Removal of the getDefault / setDefault / _default methods from Responses.java:
+   - These API convenience methods were present before and were removed by the diff. Test code or a reflection-based test utility in PojosTest / TestUtils may still expect the "default" accessor methods (or expect certain fields/methods to exist) and attempt to call them via reflection. If code uses reflection (e.g., TestUtils) and assumes presence, calling a method that no longer exists can cause failures (NoSuchMethodException) — but the observed is NPE, suggesting either:
+     - Reflection code is returning null for something and then dereferencing it;
+     - The test expects entries under key "default" in the map; removing the convenience methods means tests that used getDefault() would now retrieve null or attempt to call a non-existent method via reflection.
+2. equals/hashCode consistency:
+   - Responses.equals() was modified to include super.equals(o) (good), but there is no corresponding change to Responses.hashCode() in the diff. If equals uses super.equals(o) (which compares the LinkedHashMap content) and hashCode wasn't updated (i.e., still the previous implementation or absent), the equals/hashCode contract might be broken; some test utilities validate equals/hashCode and may rely on consistent fields/behavior. The failure in PojosTest.testEqualsAndHashcodes specifically suggests an issue in equals/hashCode testing for one or more POJOs.
+3. Test exclusions do not prevent the failing code path:
+   - The diff attempted to exclude Responses and Paths from the Pojo tests by adding them to excludedClasses. The NPE still occurs, so either:
+     - The exclusion didn't apply to the code path where the NPE occurs, or
+     - The NPE occurs earlier than the exclusion filter runs (e.g., during indexing or reflection over classes), or
+     - There are other POJOs that reference Response/Paths (or the test reflects over collections) and still cause a null deref.
+4. NPE in test at PojosTest:113:
+   - Without exact source line, likely the test or a helper invoked something (method or field) that became null or missing after the refactor. The build log shows many informational lines "No instance field named "_enum" could be found ..." — the test harness uses reflection extensively. Removing methods/accessors can cause reflection code to receive null and then dereference.
+
+Suggested fixes / patches
+(These suggestions are prioritized; the simplest is to restore compatibility)
+
+1. Restore the removed getDefault/setDefault/_default methods (backwards-compatibility fix)
+   - Reintroduce the convenience methods to Responses.java to preserve the public POJO API that tests (and possibly consumers) expect.
+   - Example (restore exactly what was removed):
+     ```
+     public static final String DEFAULT = "default";
+
+     public Response getDefault() {
+         return this.get(DEFAULT);
+     }
+
+     public void setDefault(Response _default) {
+         addResponse(DEFAULT, _default);
+     }
+
+     public Responses _default(Response _default) {
+         setDefault(_default);
+         return this;
+     }
+     ```
+   - Rationale: restores methods likely used by reflection-based tests.
+
+2. Make equals/hashCode consistent for Responses
+   - If equals uses super.equals(o) and vendorExtensions, ensure hashCode uses the same components:
+     ```
+     @Override
+     public int hashCode() {
+         return Objects.hash(super.hashCode(), vendorExtensions);
+     }
+     ```
+   - Rationale: maintain equals/hashCode contract; tests that validate equals/hashCode for POJOs will pass.
+
+3. Adjust tests / TestUtils to be robust to missing convenience methods
+   - If the removal was intentional, update PojosTest/TestUtils to check for method existence before invoking reflectively, and handle the absence gracefully (skip or treat as expected).
+   - For example, in TestUtils (or PojosTest), before invoking getDefault via reflection:
+     - Method m = clazz.getMethod("getDefault"); if not found, skip testing that accessor.
+   - Rationale: test harness should handle both presence/absence instead of NPE.
+
+4. Verify excludedClasses logic
+   - Ensure that the new excluded classes (Responses and Paths) are actually excluded in the part of the test that triggers the NPE, and add logging or assert checks to confirm the exclusion is applied before attempting reflection.
+   - Rationale: the attempt to exclude Responses and Paths in the patch indicates the intention to avoid testing them; if that approach is used, make sure the exclusion occurs early enough.
+
+Recommended immediate patch (minimal change to restore green tests)
+- Reintroduce the getDefault(), setDefault(), _default() methods to Responses.java AND add/ensure a hashCode() implementation consistent with equals (as above). This restores API compatibility for reflection-based tests and makes equals/hashCode consistent.
+- Optionally keep the PojosTest exclusion additions, but re-adding the methods is safer and least disruptive.
+
+Why this is the most likely fix
+- The build failure occurs in a reflection-heavy test that validates POJO equals/hashCode/ accessors.
+- The diff explicitly removed the default accessor methods from Responses and changed equals; removing expected accessor methods is a common reason for reflection-based tests to fail (either by missing method or by causing nulls).
+- The diff already attempted to exclude Responses and Paths in the test, suggesting the author was aware tests would be impacted — but exclusion alone did not prevent the failure, or it was incomplete. Restoring the removed methods preserves backwards compatibility and is less likely to break consumers.
+
+Files/lines that likely need change (quick reference)
+- modules/swagger-models/src/main/java/io/swagger/models/Responses.java
+  - Re-add DEFAULT constant and the getDefault/setDefault/_default methods.
+  - Add or update hashCode() to:
+    return Objects.hash(super.hashCode(), vendorExtensions);
+- modules/swagger-models/src/main/java/io/swagger/models/Paths.java
+  - Paths.hashCode in patch already uses Objects.hash(super.hashCode(), vendorExtensions); keep that.
+- modules/swagger-models/src/test/java/io/swagger/PojosTest.java
+  - Keep or verify additions to excludedClasses, and add defensive checks to TestUtils reflection code.
+
+Extra diagnostic steps you can run locally
+- Re-run only the failing test with debug/stack-trace:
+  - ./mvnw -Dtest=io.swagger.PojosTest#testEqualsAndHashcodes -pl modules/swagger-models test -X
+- Open PojosTest.java and inspect line 113 to find the exact call that returns or dereferences null.
+- Run the test in an IDE and set a breakpoint at the failing line to inspect variables and detect which value is null.
+- Grep for usages of "getDefault(" across codebase to find consumers expecting that method.
+
+If you want, I can
+- propose the exact patch to restore the removed default-accessor methods and add a matching hashCode() method in Responses.java (and include a diff),
+- or analyze the PojosTest.java source at the failing line if you paste it (so I can point to the exact null reference and the tidy fix).

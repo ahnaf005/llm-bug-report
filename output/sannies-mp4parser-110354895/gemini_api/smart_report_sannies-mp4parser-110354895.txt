@@ -1,0 +1,81 @@
+**Bug Report**
+
+---
+
+**1. Title:**
+Compilation Error: Cannot Assign Value to Final Variable `BUFFER` in `H264TrackImplTest.java`
+
+**2. Steps to Reproduce:**
+1.  Clone the `sannies/mp4parser` repository.
+2.  Checkout the commit `ca853b726e61355a8cf5b63f0a3ca6d90e7d5332`.
+3.  Execute the Maven build command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+**3. Triggering Input:**
+The bug is triggered by the declaration of the `BUFFER` variable as `final` in `muxer/src/main/java/org/mp4parser/muxer/tracks/AbstractH26XTrack.java`, while a test class (`H264TrackImplTest.java`) attempts to reassign a value to it.
+
+**4. Expected Behavior:**
+The project should compile successfully, and all modules, including the `File Muxer` module, should build without any compilation errors.
+
+**5. Observed Behavior:**
+The build fails during the `testCompile` phase of the `File Muxer` module (`muxer`). A compilation error occurs in `H264TrackImplTest.java` because it attempts to assign a value to the `BUFFER` variable, which is declared as `final` in `AbstractH26XTrack.java`.
+
+Error message:
+```
+/home/travis/build/sannies/mp4parser/muxer/src/test/java/org/mp4parser/muxer/tracks/H264TrackImplTest.java:[39,22] cannot assign a value to final variable BUFFER
+```
+
+**6. Relevant Code Snippets:**
+The problematic declaration in `muxer/src/main/java/org/mp4parser/muxer/tracks/AbstractH26XTrack.java` (at commit `ca853b726e61355a8cf5b63f0a3ca6d90e7d5332`):
+```java
+public abstract class AbstractH26XTrack extends AbstractTrack {
+    public static final int BUFFER = 65535 << 10; // This line causes the issue
+    protected long[] decodingTimes;
+    // ... other code ...
+}
+```
+The build log indicates an assignment attempt at line 39, column 22 in `H264TrackImplTest.java`.
+
+**7. Stack Traces:**
+```
+[INFO] -------------------------------------------------------------
+[ERROR] COMPILATION ERROR : 
+[INFO] -------------------------------------------------------------
+[ERROR] /home/travis/build/sannies/mp4parser/muxer/src/test/java/org/mp4parser/muxer/tracks/H264TrackImplTest.java:[39,22] cannot assign a value to final variable BUFFER
+[INFO] 1 error
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary:
+[INFO] 
+[INFO] ISO Parser ......................................... SUCCESS [ 49.868 s]
+[INFO] File Muxer ......................................... FAILURE [  8.505 s]
+[INFO] Stream Muxer ....................................... SKIPPED
+[INFO] MP4 Parser Project ................................. SKIPPED
+[INFO] ISO Parser Examples ................................ SKIPPED
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time: 58.613 s
+[INFO] Finished at: 2016-02-19T11:20:14+00:00
+[INFO] Final Memory: 30M/465M
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.2:testCompile (default-testCompile) on project muxer: Compilation failure
+[ERROR] /home/travis/build/sannies/mp4parser/muxer/src/test/java/org/mp4parser/muxer/tracks/H264TrackImplTest.java:[39,22] cannot assign a value to final variable BUFFER
+[ERROR] -> [Help 1]
+```
+
+**8. Patches / Suggested Fixes:**
+The issue can be resolved by removing the `final` keyword from the `BUFFER` variable declaration in `AbstractH26XTrack.java`, allowing it to be reassigned.
+
+```diff
+--- a/muxer/src/main/java/org/mp4parser/muxer/tracks/AbstractH26XTrack.java
++++ b/muxer/src/main/java/org/mp4parser/muxer/tracks/AbstractH26XTrack.java
+@@ -17,7 +17,7 @@ import java.util.List;
+  */
+ public abstract class AbstractH26XTrack extends AbstractTrack {
+ 
+-    public static final int BUFFER = 65535 << 10;
++    public static int BUFFER = 65535 << 10;
+     protected long[] decodingTimes;
+     protected List<CompositionTimeToSample.Entry> ctts = new ArrayList<CompositionTimeToSample.Entry>();
+     protected List<SampleDependencyTypeBox.Entry> sdtp = new ArrayList<SampleDependencyTypeBox.Entry>();
+```

@@ -1,0 +1,59 @@
+## Software Bug Report
+
+**Bug Title:** Build Failure: Checkstyle `MissingSwitchDefault` rule enforced despite removal from `checkstyle.xml`
+
+**Bug ID/Reference:** N/A
+
+**Project:** Byte Buddy (`raphw/byte-buddy`)
+
+**Version/Commit:** `0.8-SNAPSHOT` (Failed SHA: `664f65ccf2fc5b9d9c977f254cff39aade0a7734`)
+
+**Environment:**
+*   **Build System:** Travis CI (worker-linux-docker-86179f7f.prod.travis-ci.org)
+*   **Operating System:** Ubuntu 12.04.5 LTS (precise), Linux 3.13.0-29-generic
+*   **Java Version:** Oracle JDK 1.7.0_76 (java version "1.7.0_76")
+*   **Maven Version:** Apache Maven 3.2.5
+*   **Checkstyle Plugin Version:** `maven-checkstyle-plugin:2.17`
+*   **Checkstyle Version:** 6.11.2
+
+**Severity:** High (Build Failure)
+
+**Priority:** High (Blocks continuous integration and release process)
+
+---
+
+**Description:**
+The build for the `byte-buddy-dep` module is consistently failing due to Checkstyle errors related to `switch` statements missing a `default` clause. This occurs despite the provided code diff indicating that the `MissingSwitchDefault` module was explicitly removed from the `checkstyle.xml` configuration file. The build attempts to retry multiple times but fails each time with the same error.
+
+This suggests that the `maven-checkstyle-plugin` is either not picking up the updated `checkstyle.xml` configuration, or there is another configuration source (e.g., a parent POM, a cached configuration, or a default setting) that is re-introducing or enforcing this specific rule.
+
+**Steps to Reproduce:**
+1.  Clone the `raphw/byte-buddy` repository.
+2.  Checkout the failing commit: `git checkout 664f65ccf2fc5b9d9c977f254cff39aade0a7734`
+3.  Execute the Maven build command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+4.  Observe the build failure in the `byte-buddy-dep` module.
+
+**Expected Behavior:**
+Given that the `MissingSwitchDefault` module was removed from `checkstyle.xml` in the commit `664f65ccf2fc5b9d9c977f254cff39aade0a7734`, the `maven-checkstyle-plugin` should not report errors for `switch` statements lacking a `default` clause. The build for `byte-buddy-dep` should proceed without these specific Checkstyle failures.
+
+**Actual Behavior:**
+The build fails with the following Checkstyle errors in the `byte-buddy-dep` module:
+*   `/home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/asm/TypeConstantAdjustment.java:122:21: error: switch without "default" clause.`
+*   `/home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java:2343:25: error: switch without "default" clause.`
+
+The build log clearly shows `[INFO] Reactor Summary: ... Byte Buddy (with dependencies) ..................... FAILURE`. This indicates that the `MissingSwitchDefault` rule is still being applied by Checkstyle, contradicting the change made in `checkstyle.xml`.
+
+**Root Cause Analysis (Initial Hypothesis):**
+The most likely cause is a discrepancy between the `checkstyle.xml` file that was modified and the `checkstyle.xml` file that the `maven-checkstyle-plugin` is actually using during the build. Possible reasons include:
+1.  **Incorrect `configLocation`:** The `maven-checkstyle-plugin` might be configured to use a different `checkstyle.xml` file, or it's relying on a default location that hasn't been updated.
+2.  **Caching Issues:** Although less common for configuration files, there might be some caching preventing the plugin from seeing the latest `checkstyle.xml`.
+3.  **Parent POM Override:** A parent `pom.xml` or an imported Checkstyle configuration might be re-introducing the `MissingSwitchDefault` rule, overriding the local `checkstyle.xml` modification.
+4.  **Plugin Default Behavior:** The specific version of the `maven-checkstyle-plugin` (2.17) or Checkstyle (6.11.2) might have a strong default for this rule that requires explicit disabling rather than just removal from the configuration file.
+
+**Suggested Fix/Workaround:**
+1.  **Immediate Workaround:** Add a `default` clause to the `switch` statements in `net.bytebuddy.asm.TypeConstantAdjustment` (line 122) and `net.bytebuddy.dynamic.scaffold.TypeWriter` (line 2343) to allow the build to pass temporarily.
+2.  **Investigation & Long-term Fix:**
+    *   **Verify `checkstyle.xml` path:** Ensure the `maven-checkstyle-plugin` configuration in `byte-buddy-dep/pom.xml` (or its parent) explicitly sets `<configLocation>checkstyle.xml</configLocation>` to point to the correct file.
+    *   **Debug Checkstyle Configuration:** Run Maven with `-X` (e.g., `mvn install -X`) to get detailed debug output from the Checkstyle plugin, which might reveal which configuration file it's loading and what rules are active.
+    *   **Check Parent POMs:** Examine parent `pom.xml` files for any inherited Checkstyle configurations that might be overriding the local settings.
+    *   **Explicitly Disable Rule:** If simply removing the module doesn't work, try explicitly configuring the `MissingSwitchDefault` check to `severity="ignore"` or `enabled="false"` within the `checkstyle.xml` or plugin configuration.

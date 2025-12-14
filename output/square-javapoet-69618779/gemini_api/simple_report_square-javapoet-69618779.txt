@@ -1,0 +1,119 @@
+## Software Bug Report
+
+**Bug ID:** #298 (as referenced in code diff) - *New observation: JUnit @Ignore not respected*
+
+**Title:** Travis CI Build Failure: JUnit `@Ignore` Annotation Not Respected for `JavaFileTest.conflictingSimpleNames`
+
+**Summary:**
+The Travis CI build for the `jwilson_0705_imports_bug` branch of the `square/javapoet` repository is failing. The primary cause of the build failure is a `ComparisonFailure` in the `com.squareup.javapoet.JavaFileTest.conflictingSimpleNames` test. Critically, the provided code diff indicates that this specific test method was annotated with `@Ignore` in the failing commit (`c93fffb5d47cad00cd4e12eebcca71ee6207e11b`), explicitly linking to GitHub issue #298. However, the build log shows the test *running* and *failing*, rather than being skipped. This suggests a problem where the JUnit `@Ignore` annotation is not being respected by the test runner (Maven Surefire Plugin) in the Travis CI environment.
+
+**Environment:**
+*   **Repository:** `square/javapoet`
+*   **Branch:** `jwilson_0705_imports_bug`
+*   **Failing Commit SHA:** `c93fffb5d47cad00cd4e12eebcca71ee6207e11b`
+*   **Build System:** Travis CI (Container-based infrastructure)
+*   **Operating System:** Ubuntu 12.04.5 LTS (precise)
+*   **Linux Kernel:** 3.13.0-29-generic
+*   **Java Version:** Oracle JDK 1.7.0_76
+*   **Maven Version:** Apache Maven 3.2.5
+*   **JUnit Version:** (Implicitly used by Maven Surefire Plugin 2.12.4)
+
+**Steps to Reproduce:**
+1.  Clone the `square/javapoet` repository.
+2.  Checkout the specific failing commit: `git checkout c93fffb5d47cad00cd4e12eebcca71ee6207e11b`
+3.  Execute the Maven test phase: `mvn test -B`
+4.  Observe the build output.
+
+**Expected Behavior:**
+1.  The `com.squareup.javapoet.JavaFileTest.conflictingSimpleNames` test should be *skipped* due to the `@Ignore` annotation present in the `c93fffb5d47cad00cd4e12eebcca71ee6207e11b` commit.
+2.  The `mvn test -B` command should complete successfully (assuming no other tests fail).
+3.  The test summary should report `Skipped: 1` for this test, and `Failures: 0`.
+
+**Actual Behavior:**
+1.  The `com.squareup.javapoet.JavaFileTest.conflictingSimpleNames` test *runs* instead of being skipped.
+2.  The test fails with a `org.junit.ComparisonFailure`.
+3.  The overall `mvn test -B` command exits with an error code 1, causing the Travis CI build to fail.
+4.  The test summary reports `Failures: 1, Errors: 0, Skipped: 2` (the two skipped tests are unrelated to this issue).
+
+**Error Details (from Build Log):**
+
+```
+Running com.squareup.javapoet.JavaFileTest
+Tests run: 9, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.016 sec <<< FAILURE!
+conflictingSimpleNames(com.squareup.javapoet.JavaFileTest)  Time elapsed: 0.007 sec  <<< FAILURE!
+org.junit.ComparisonFailure: expected:<...    class C {
+      [A.]Twin.D d;
+    }
+  }
+...> but was:<...    class C {
+      []Twin.D d;
+    }
+  }
+...>
+	at com.google.common.truth.Platform.comparisonFailure(Platform.java:133)
+	at com.google.common.truth.Truth$1.failComparing(Truth.java:76)
+	at com.google.common.truth.StringSubject.isEqualTo(StringSubject.java:75)
+	at com.squareup.javapoet.JavaFileTest.conflictingSimpleNames(JavaFileTest.java:135)
+	... (rest of stack trace) ...
+
+Results :
+
+Failed tests:   conflictingSimpleNames(com.squareup.javapoet.JavaFileTest): expected:<...    class C {(..)
+
+Tests run: 173, Failures: 1, Errors: 0, Skipped: 2
+
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.12.4:test (default-test) on project javapoet: There are test failures.
+```
+
+**Code Changes (from Code Diff):**
+The provided `CODE DIFF` shows the changes introduced in the `failed_sha` (`c93fffb5d47cad00cd4e12eebcca71ee6207e11b`) relative to a previously passing commit (`12ffaab09687925b6fddf720dfd65facd63395f0`).
+
+```diff
+--- a/src/test/java/com/squareup/javapoet/JavaFileTest.java
++++ b/src/test/java/com/squareup/javapoet/JavaFileTest.java
+@@ -17,6 +17,7 @@ package com.squareup.javapoet;
+ 
+ import java.util.Date;
+ import javax.lang.model.element.Modifier;
++import org.junit.Ignore;
+ import org.junit.Test;
+ import org.junit.runner.RunWith;
+ import org.junit.runners.JUnit4;
+@@ -116,6 +117,7 @@ public final class JavaFileTest {
+         + "}\\n\");
+   }
+ 
++  @Ignore("https://github.com/square/javapoet/issues/298")
+   @Test public void conflictingSimpleNames() throws Exception {
+     String source = JavaFile.builder("com.squareup.tacos",
+         TypeSpec.classBuilder("A")
+```
+This diff clearly shows that the `conflictingSimpleNames()` test method was annotated with `@Ignore("https://github.com/square/javapoet/issues/298")` in the failing commit.
+
+**Analysis and Potential Root Cause:**
+There are two distinct issues here:
+
+1.  **Primary Issue (Build Failure): JUnit `@Ignore` not respected.**
+    *   The most immediate problem is that the `conflictingSimpleNames` test is running and failing, despite being explicitly marked with `@Ignore`. This indicates a misconfiguration or incompatibility with the JUnit runner (likely Maven Surefire Plugin 2.12.4) in the Travis CI environment, preventing it from recognizing and skipping ignored tests.
+    *   This could be due to:
+        *   An outdated JUnit dependency (though not explicitly visible, Maven Surefire 2.12.4 is quite old).
+        *   A specific Surefire plugin configuration that overrides or disables `@Ignore` processing.
+        *   An environment-specific issue on the Travis CI worker.
+
+2.  **Secondary Issue (Underlying Test Failure): Incorrect import resolution.**
+    *   The `ComparisonFailure` itself points to an issue within JavaPoet's code generation logic. The expected output includes `[A.]Twin.D d;` while the actual output is `[]Twin.D d;`. This suggests that JavaPoet is failing to correctly qualify the `Twin.D` type with its enclosing class `A` when there are conflicting simple names (e.g., another `Twin` class in a different package), leading to an incomplete or incorrect import resolution. The `@Ignore` annotation explicitly links to `https://github.com/square/javapoet/issues/298`, confirming this is a known, unresolved issue in the project.
+
+**Impact:**
+*   **High:** The build is failing, preventing successful integration and deployment of changes on this branch.
+*   The primary issue (ignored test running) indicates a potential flaw in the CI/CD pipeline's test execution setup, which could mask other known issues or lead to unexpected test behavior.
+
+**Suggested Action:**
+1.  **Investigate `@Ignore` behavior:**
+    *   Verify the JUnit dependency version used by Maven Surefire. Consider upgrading JUnit and/or Maven Surefire Plugin to a more recent version.
+    *   Review the `pom.xml` for any Surefire plugin configurations that might interfere with `@Ignore`.
+    *   Check Travis CI documentation or community forums for known issues with `@Ignore` and specific Java/Maven versions.
+2.  **Address the underlying `conflictingSimpleNames` bug:**
+    *   Once the `@Ignore` issue is resolved, the test will be skipped, but the underlying bug (issue #298) will remain. This should be addressed separately by fixing JavaPoet's import resolution logic for conflicting simple names.

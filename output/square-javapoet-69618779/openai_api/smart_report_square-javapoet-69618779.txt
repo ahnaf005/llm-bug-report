@@ -1,0 +1,113 @@
+Title
+- JavaFile name/import resolution omits necessary qualifier for conflicting simple names — failing test conflictingSimpleNames
+
+Steps to Reproduce
+1. Checkout the failing commit/branch (example from log): git clone --depth=50 --branch=jwilson_0705_imports_bug git://github.com/square/javapoet.git && cd javapoet && git checkout c93fffb5d47cad00cd4e12eebcca71ee6207e11b
+2. Ensure environment similar to CI: Oracle JDK7 (1.7.0_76), Maven 3.2.5, Linux (Ubuntu 12.04/14.04).
+3. Build and run tests: mvn test -B
+4. Observe test failures (see output below).
+
+Triggering Input / Conditions
+- Running the JavaPoet unit tests on commit c93fffb... under JDK7, specifically com.squareup.javapoet.JavaFileTest.conflictingSimpleNames.
+- The test builds a JavaFile for package com.squareup.tacos with a type hierarchy that causes a name conflict; the generated code is expected to qualify an inner type reference (A.Twin.D d) but the code produced lacks the outer qualifier (Twin.D d).
+
+Expected Behavior
+- JavaFile generation should disambiguate types when simple names conflict. In this test’s scenario the generated field declaration should be:
+    A.Twin.D d;
+  i.e. it should include the outer class qualifier ("A.") to avoid ambiguity / to reference the nested type within A explicitly.
+
+Observed Behavior
+- The produced code omits the required outer-class qualifier, producing:
+    Twin.D d;
+  The test asserts the expected output and fails with a ComparisonFailure because the actual generated source is missing "A." in front of Twin.D.
+
+Observed error (from test run)
+- Test failure summary:
+  Failed test: conflictingSimpleNames(com.squareup.javapoet.JavaFileTest)
+  junit.framework.ComparisonFailure (expected vs actual mismatch)
+
+Stack Trace (from build log)
+- The relevant portion of the surefire output:
+  -------------------------------------------------------
+   T E S T S
+  -------------------------------------------------------
+  ...
+  Running com.squareup.javapoet.JavaFileTest
+  Tests run: 9, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.016 sec <<< FAILURE!
+  conflictingSimpleNames(com.squareup.javapoet.JavaFileTest)  Time elapsed: 0.007 sec  <<< FAILURE!
+  org.junit.ComparisonFailure: expected:<...    class C {
+        [A.]Twin.D d;
+      }
+    }
+  ...> but was:<...    class C {
+        []Twin.D d;
+      }
+    }
+  ...>
+  	at com.google.common.truth.Platform.comparisonFailure(Platform.java:133)
+  	at com.google.common.truth.Truth$1.failComparing(Truth.java:76)
+  	at com.google.common.truth.StringSubject.isEqualTo(StringSubject.java:75)
+  	at com.squareup.javapoet.JavaFileTest.conflictingSimpleNames(JavaFileTest.java:135)
+  	... (test runner frames elided) ...
+
+Relevant Code Snippets (from diff and failure)
+- Diff shows the attempted test-side mitigation (adding @Ignore). The actual failing assertion is at JavaFileTest.java:135.
+
+Patch lines added in the diff:
+  --- a/src/test/java/com/squareup/javapoet/JavaFileTest.java
+  +++ b/src/test/java/com/squareup/javapoet/JavaFileTest.java
+  @@ -17,6 +17,7 @@ package com.squareup.javapoet;
+   
+   import java.util.Date;
+   import javax.lang.model.element.Modifier;
+  +import org.junit.Ignore;
+   import org.junit.Test;
+   import org.junit.runner.RunWith;
+   import org.junit.runners.JUnit4;
+  ...
+  @@ -116,6 +117,7 @@ public final class JavaFileTest {
+           + "}\\n");
+     }
+   
+  +  @Ignore("https://github.com/square/javapoet/issues/298")
+     @Test public void conflictingSimpleNames() throws Exception {
+       String source = JavaFile.builder("com.squareup.tacos",
+           TypeSpec.classBuilder("A")
+  (test method content continues...)
+
+- The failing assertion’s expected/actual snippet (from test output):
+  Expected (wanted "A." qualifier):
+    class C {
+      A.Twin.D d;
+    }
+  Actual (missing qualifier):
+    class C {
+      Twin.D d;
+    }
+
+Patches / Suggested Fixes
+1) Patch in diff (temporary / test-side workaround)
+   - The diff adds an import of org.junit.Ignore and annotates the failing test with:
+       @Ignore("https://github.com/square/javapoet/issues/298")
+     This effectively silences the test failure until the underlying cause is fixed.
+
+2) Recommended proper fixes (code-side)
+   - Fix JavaPoet’s name resolution / import selection logic so that when generating code it disambiguates nested types correctly in presence of conflicting simple names. Concrete actions:
+     - When emitting a type reference for a nested type (e.g., Twin.D) that is nested under a generated/declared top-level type in the same file (A.Twin.D), ensure the emitted reference is qualified with the containing top-level type (A.Twin.D) if an unqualified simple name would be ambiguous or refer to a different imported/top-level type.
+     - In the algorithm that decides whether to use simple class name vs. qualifying with package/outer class, add a check: if the simple name collides with another accessible type from imports or from a top-level type being generated, prefer a qualified reference (outerClass.simpleName + "." + innerName).
+     - Add unit tests covering various conflict scenarios (top-level import vs nested type in same file, nested types with same simple name in different outer classes, etc.) and ensure the code generator chooses the unambiguous form.
+
+Notes / Additional Context
+- The branch/commit shows this test failure is known and an issue was opened (link in @Ignore). The diff’s change is only to ignore the test — not a fix to generator logic. The correct fix should be applied in JavaFile / NameAllocator / Import handling components to avoid regressing code generation semantics.
+- Test location and line: JavaFileTest.conflictingSimpleNames at JavaFileTest.java:135 (per stack trace).
+- Environment from CI: Oracle JDK 1.7.0_76, Maven 3.2.5, Ubuntu (travis).
+
+Suggested next steps
+1. Reproduce locally: run mvn -Dtest=JavaFileTest#conflictingSimpleNames test and inspect the generated source string asserted by the test.
+2. Inspect JavaFile (and any helper classes handling imports and name collisions) to find where it decides to omit the outer qualifier and why it thinks "Twin.D" is unambiguous.
+3. Implement the disambiguation check described above and add tests covering multiple collision scenarios.
+4. Remove the @Ignore annotation once the generator behavior is corrected and tests pass.
+
+If you want, I can:
+- Propose a concrete code change in JavaFile (or NameAllocator) to implement the qualification check and produce a patch; or
+- Run through the logic in the generator classes (post the relevant files) and draft a targeted patch.

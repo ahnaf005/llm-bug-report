@@ -1,0 +1,66 @@
+## Software Bug Report
+
+**Bug ID:** DRUID-CI-BUILD-FAILURE-CHECKSTYLE-DELETED-FILE
+
+**Title:** CI Build Fails Due to Checkstyle Violations on a Deleted File (`IllegalSQLIndexFilter.java`)
+
+**Severity:** High
+**Priority:** High
+**Status:** New
+
+**Environment:**
+*   **Runner OS:** Ubuntu 22.04.4 LTS
+*   **Runner Image:** ubuntu-22.04, Version 20240422.1.0
+*   **Java Version:** Temurin JDK 17.0.10+7 (x64)
+*   **Maven Version:** (Implicitly used by `./mvnw` wrapper)
+*   **Git Commit SHA (Failed):** `9003085f558c134de5b7fe70ac4d54e75898eae6`
+*   **Git Commit SHA (Passed - for context):** `15b887e9ff1591b0e0f252aee7b55e74e9bd5792` (This is the parent SHA, implying the current commit introduced the issue)
+
+**Description:**
+The Continuous Integration (CI) build for the `alibaba/druid` repository is failing during the `clean package` phase. The failure is specifically caused by the `maven-checkstyle-plugin` reporting 9 violations. The critical observation is that all reported violations are for the file `src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java`, which, according to the provided code diff, was *deleted* in the `failed_sha` commit (`9003085f558c134de5b7fe70ac4d54e75898eae6`).
+
+This indicates a misconfiguration or unexpected behavior where the Checkstyle plugin attempts to analyze a file that no longer exists in the codebase for the current commit, leading to a build failure and preventing the successful compilation and testing of other modules.
+
+**Steps to Reproduce:**
+1.  Checkout the repository `alibaba/druid` at commit `9003085f558c134de5b7fe70ac4d54e75898eae6`.
+2.  Execute the Maven build command: `./mvnw -Penable-for-jdk17+,gen-code-cov clean package -B`
+
+**Expected Behavior:**
+1.  The build should complete successfully.
+2.  The `maven-checkstyle-plugin` should not report violations for files that have been deleted in the current commit.
+3.  If `IllegalSQLIndexFilter.java` and its associated test (`IllegalSQLIndexFilterExecuteTest.java`) were intentionally removed, the Checkstyle configuration should be updated to reflect this deletion and not attempt to analyze them.
+
+**Actual Behavior:**
+1.  The build fails with an `ERROR` message: `Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:3.1.2:check (checkstyle) on project druid-parent: You have 9 Checkstyle violations.`
+2.  All 9 Checkstyle violations are reported against `src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java`.
+    *   `src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[34] (regexp) RegexpMultiline: Line has trailing whitespace`
+    *   `src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[35] (regexp) RegexpMultiline: Line has trailing whitespace`
+    *   `src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[42] (regexp) RegexpMultiline: Line has trailing whitespace`
+    *   `src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[49] (regexp) RegexpMultiline: Blank line after opening brace`
+    *   `src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[83,51] (whitespace) WhitespaceAround: ':' is not preceded with whitespace.`
+    *   `src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[96,51] (whitespace) WhitespaceAround: ':' is not preceded with whitespace.`
+    *   `src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[107,66] (coding) EmptyStatement: Empty statement.`
+    *   `src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[117,45] (whitespace) WhitespaceAround: ':' is not preceded with whitespace.`
+    *   `src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[177] (regexp) RegexpMultiline: Blank line after opening brace`
+3.  The `druid-parent` module fails, causing all dependent modules (`druid`, `druid-spring-boot-starter`, etc.) to be SKIPPED.
+
+**Logs and Code Diff:**
+*   **BUILD LOG:** The provided build log clearly shows the Checkstyle errors and the build failure.
+    *   Relevant lines: `2024-05-04T12:44:30.9040236Z [INFO] There are 9 errors reported by Checkstyle 9.2 with src/checkstyle/druid-checks.xml ruleset.` and subsequent `[ERROR]` lines.
+    *   Failure summary: `2024-05-04T12:44:30.9142265Z [INFO] druid-parent 1.2.23-SNAPSHOT ....................... FAILURE [ 1.732 s]`
+*   **CODE DIFF:** The code diff confirms the deletion of the problematic file.
+    *   **Patch 4:** Shows `src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java` being deleted (`--- a/...` to `+++ /dev/null`).
+    *   **Patch 5:** Shows `src/test/java/com/alibaba/druid/bvt/filter/IllegalSQLIndexFilterExecuteTest.java` also being deleted.
+    *   Other patches (1, 2, 3) show changes to `SQLASTOutputVisitor.java`, `HiveCreateTableTest_12.java`, and the addition of `Issue5853.java`, which are unrelated to this specific Checkstyle failure but are part of the same commit.
+
+**Possible Cause:**
+The `maven-checkstyle-plugin` configuration in the `druid-parent` `pom.xml` likely still includes `src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java` in its scope for analysis, even though the file has been removed from the source tree in this commit. This could be due to:
+1.  A broad Checkstyle configuration that doesn't dynamically adjust to file deletions.
+2.  A cached state of the repository or build environment where the file still appears to exist to the plugin.
+3.  The `clean` phase not fully removing the file before Checkstyle runs, or Checkstyle running on a snapshot of the source that includes the deleted file.
+
+**Suggested Fix:**
+1.  Review the `pom.xml` file for the `druid-parent` module and specifically the configuration of the `maven-checkstyle-plugin`.
+2.  Ensure that the Checkstyle plugin's `sourceDirectory` or `includes` configuration is correctly set to only analyze existing files.
+3.  If there are explicit `includes` for `IllegalSQLIndexFilter.java`, these should be removed.
+4.  Verify that the Checkstyle plugin is running against the current state of the source code after any file deletions have been processed by the SCM.

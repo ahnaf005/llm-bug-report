@@ -1,0 +1,91 @@
+## Software Bug Report
+
+**Bug ID:** MP4PARSER-BUILD-001
+**Title:** Compilation Error: Cannot Assign Value to Final Variable 'BUFFER' in H264TrackImplTest.java
+
+**Project:** mp4parser
+**Module:** muxer
+**Version/Commit:** `ca853b726e61355a8cf5b63f0a3ca6d90e7d5332` (Failed Build Commit)
+
+**Environment:**
+*   **CI System:** Travis CI (worker-linux-docker-edecb714.prod.travis-ci.org)
+*   **Operating System:** Ubuntu 12.04.5 LTS (Precise)
+*   **Linux Kernel:** 3.13.0-29-generic
+*   **Java Version:** 1.7.0_76 (Oracle Corporation)
+*   **Maven Version:** Apache Maven 3.2.5
+
+**Severity:** High (Build Failure)
+**Priority:** High (Blocks continuous integration and deployment)
+
+---
+
+**Description:**
+The build process for the `mp4parser` project fails during the `testCompile` phase of the `muxer` module. The compilation error indicates an attempt to assign a value to a `final` variable named `BUFFER` within the `H264TrackImplTest.java` test class. This prevents the `muxer` module, and consequently the entire project, from compiling successfully. The build retries twice, failing with the exact same error each time.
+
+---
+
+**Steps to Reproduce:**
+1.  Clone the `mp4parser` repository.
+2.  Checkout the specific commit: `git checkout ca853b726e61355a8cf5b63f0a3ca6d90e7d5332`
+3.  Execute the Maven build command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+---
+
+**Expected Behavior:**
+The `mp4parser` project should compile successfully, including all its modules and test classes, without any compilation errors.
+
+**Actual Behavior:**
+The build fails during the `testCompile` phase of the `muxer` module with a `COMPILATION ERROR` related to reassigning a `final` variable.
+
+---
+
+**Error Message (from build log):**
+```
+[ERROR] COMPILATION ERROR : 
+[INFO] -------------------------------------------------------------
+[ERROR] /home/travis/build/sannies/mp4parser/muxer/src/test/java/org/mp4parser/muxer/tracks/H264TrackImplTest.java:[39,22] cannot assign a value to final variable BUFFER
+[INFO] 1 error
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary:
+[INFO] 
+[INFO] ISO Parser ......................................... SUCCESS [ 49.868 s]
+[INFO] File Muxer ......................................... FAILURE [  8.505 s]
+[INFO] Stream Muxer ....................................... SKIPPED
+[INFO] MP4 Parser Project ................................. SKIPPED
+[INFO] ISO Parser Examples ................................ SKIPPED
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+```
+
+---
+
+**Root Cause Analysis:**
+The compilation error `cannot assign a value to final variable BUFFER` in `H264TrackImplTest.java` at line 39 indicates that the test code is attempting to modify a variable that has been declared as `final`.
+
+Upon reviewing the provided `CODE DIFF`, it is evident that the `BUFFER` variable, which is a `public static` member of `AbstractH26XTrack.java`, was indeed declared as `final` in the failed commit (`ca853b726e61355a8cf5b63f0a3ca6d90e7d5332`). The diff shows a change from:
+`public static final int BUFFER = 65535 << 10;`
+to:
+`public static int BUFFER = 65535 << 10;`
+
+This change, which removes the `final` keyword, is present in the `passed_sha` (`b1196aeefdcdb5a7642c6192c0042ca071c5a35c`). This strongly suggests that the `H264TrackImplTest.java` test class (or a related component) was designed to modify the `BUFFER` variable, but the `AbstractH26XTrack.java` class in the failing commit incorrectly declared `BUFFER` as `final`, leading to the compilation error. The fix was introduced in a subsequent commit, but the current build is attempting to compile the state *before* this fix.
+
+---
+
+**Proposed Solution/Workaround:**
+The issue is already addressed in a later commit (`b1196aeefdcdb5a7642c6192c0042ca071c5a35c`). To resolve this specific build failure, the `final` keyword should be removed from the `BUFFER` variable declaration in `muxer/src/main/java/org/mp4parser/muxer/tracks/AbstractH26XTrack.java`.
+
+**Relevant Code Diff:**
+```diff
+--- a/muxer/src/main/java/org/mp4parser/muxer/tracks/AbstractH26XTrack.java
++++ b/muxer/src/main/java/org/mp4parser/muxer/tracks/AbstractH26XTrack.java
+@@ -17,7 +17,7 @@ import java.util.List;
+  */
+ public abstract class AbstractH26XTrack extends AbstractTrack {
+ 
+-    public static final int BUFFER = 65535 << 10;
++    public static int BUFFER = 65535 << 10;
+     protected long[] decodingTimes;
+     protected List<CompositionTimeToSample.Entry> ctts = new ArrayList<CompositionTimeToSample.Entry>();
+     protected List<SampleDependencyTypeBox.Entry> sdtp = new ArrayList<SampleDependencyTypeBox.Entry>();
+```

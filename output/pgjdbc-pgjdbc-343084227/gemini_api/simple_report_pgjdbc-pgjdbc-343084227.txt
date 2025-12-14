@@ -1,0 +1,192 @@
+## Software Bug Report
+
+**Bug ID:** PGJDBC-1130-BatchRewriteRegression (Assigned for tracking)
+**Status:** New / Open
+**Priority:** High
+**Severity:** Critical (Build Failure, Core Functionality Regression)
+**Product/Component:** PostgreSQL JDBC Driver (pgjdbc) - Core / Batch Execution / Query Parser
+**Version:** 42.2.2-SNAPSHOT (as per build log)
+**Affected SHA:** `dc7e2a3a05d48aa4c8a534463f410a66545433ad`
+**Last Known Good SHA:** `a4f26d5b88909a866b6d03154c884e59f3c22359`
+
+---
+
+### 1. Title
+
+**Regression: Batch Insert Rewrite Functionality Fails with Incorrect Row Counts and ArrayStoreException after Parser Logic Change**
+
+---
+
+### 2. Description
+
+The build is failing on Travis CI due to multiple test failures and one test error during the `maven-surefire-plugin` phase. The failures are concentrated in tests related to batch execution and insert rewrite functionality (`BatchExecuteTest`, `BatchedInsertReWriteEnabledTest`, `DeepBatchedInsertStatementTest`).
+
+The core issue appears to be a regression introduced by a recent code change in `org.postgresql.core.Parser.java`, which modifies how the driver identifies and processes `VALUES` clauses, particularly impacting the `insertRewrite` mechanism. This leads to incorrect row counts being returned by `executeBatch()` and a runtime `ArrayStoreException` in a related test.
+
+---
+
+### 3. Environment
+
+*   **Operating System:** Ubuntu 14.04.5 LTS (trusty)
+*   **Kernel Version:** 4.14.12-041412-generic
+*   **Java Version:** Oracle JDK 1.8.0_151 (Java HotSpot(TM) 64-Bit Server VM, build 25.151-b12)
+*   **Maven Version:** Apache Maven 3.5.2
+*   **PostgreSQL Version:** 9.3 (configured via `PG_VERSION=9.3` environment variable)
+*   **Build System:** Travis CI
+*   **Configuration:** `QUERY_MODE=extendedForPrepared`, `COVERAGE=Y`
+
+---
+
+### 4. Steps to Reproduce
+
+1.  Clone the `pgjdbc/pgjdbc` repository: `git clone https://github.com/pgjdbc/pgjdbc.git`
+2.  Navigate to the repository directory: `cd pgjdbc/pgjdbc`
+3.  Checkout the failing commit: `git checkout dc7e2a3a05d48aa4c8a534463f410a66545433ad`
+4.  Ensure a PostgreSQL 9.3 instance is running and accessible, with a user `travis` (password `travis`) and a database `travis` owned by `travis`.
+    *   (As per build log, this is handled by Travis CI scripts: `sudo service postgresql start 9.3`, `sudo -u postgres createuser -s -p 5432 travis`, `sudo -u postgres createdb -O travis -p 5432 travis`, `psql -U postgres -c "create user test with password 'test';"`, `psql -c 'create database test owner test;' -U postgres`)
+5.  Execute the Maven build command with the specified profiles and properties:
+    `mvn clean package -B -V -DpreferQueryMode=extendedForPrepared -P release,coverage`
+
+---
+
+### 5. Expected Results
+
+The Maven build should complete successfully, with all unit and integration tests passing. Specifically, batch execution tests should return expected row counts or `Statement.SUCCESS_NO_INFO` values, and no `ArrayStoreException` should occur.
+
+---
+
+### 6. Actual Results
+
+The Maven build fails during the `maven-surefire-plugin:2.18.1:test` phase with 8 test failures and 1 test error.
+
+**Summary of Failures/Errors:**
+
+*   **8 Test Failures:**
+    *   `org.postgresql.test.jdbc2.BatchExecuteTest.testBatchWithRepeatedInsertStatement`: Expected `-2` (Statement.SUCCESS_NO_INFO) but was `1`. Occurs for both `REGULAR` and `FORCE` binary modes when `insertRewrite = true`.
+    *   `org.postgresql.test.jdbc2.BatchExecuteTest.testBatchWithTwoMultiInsertStatements`: Expected `[[-2, -]2]` (indicating two statements, each inserting 2 rows, or SUCCESS_NO_INFO) but was `[[2, ]2]`. Occurs for both `REGULAR` and `FORCE` binary modes when `insertRewrite = true`.
+    *   `org.postgresql.test.jdbc2.BatchedInsertReWriteEnabledTest.testMultiValues1bind`: Expected `[[1, 1]]` (for two `addBatch` calls, each inserting 1 row) but was `[[2, 2]]`. Occurs for all combinations of `autoCommit` (YES/NO) and `binary` (REGULAR/FORCE).
+
+*   **1 Test Error:**
+    *   `org.postgresql.jdbc.DeepBatchedInsertStatementTest.testDeepInternalsBatchedQueryDecorator`: `java.lang.ArrayStoreException: null` at `java.util.ArrayList.toArray(ArrayList.java:411)` (called from `DeepBatchedInsertStatementTest.transformBQD:283`).
+
+**Detailed Error Messages from Build Log:**
+
+```
+Tests run: 4206, Failures: 8, Errors: 1, Skipped: 64, Time elapsed: 91.818 sec <<< FAILURE! - in org.postgresql.test.jdbc2.Jdbc2TestSuite
+testBatchWithRepeatedInsertStatement[binary = REGULAR, insertRewrite = true](org.postgresql.test.jdbc2.BatchExecuteTest)  Time elapsed: 0.023 sec  <<< FAILURE!
+java.lang.AssertionError: expected:<-2> but was:<1>
+	at org.junit.Assert.fail(Assert.java:88)
+	at org.junit.Assert.failNotEquals(Assert.java:834)
+	at org.junit.Assert.assertEquals(Assert.java:645)
+	at org.junit.Assert.assertEquals(Assert.java:631)
+	at org.postgresql.test.jdbc2.BatchExecuteTest.testBatchWithRepeatedInsertStatement(BatchExecuteTest.java:1240)
+
+testBatchWithTwoMultiInsertStatements[binary = REGULAR, insertRewrite = true](org.postgresql.test.jdbc2.BatchExecuteTest)  Time elapsed: 0.016 sec  <<< FAILURE!
+org.junit.ComparisonFailure: Inserting two multi-valued statements with two rows each. Expecting {2, 2} rows inserted (or SUCCESS_NO_INFO) expected:<[[-2, -]2]> but was:<[[2, ]2]>
+	at org.junit.Assert.assertEquals(Assert.java:115)
+	at org.postgresql.test.jdbc2.BatchExecuteTest.testBatchWithTwoMultiInsertStatements(BatchExecuteTest.java:1299)
+
+testBatchWithRepeatedInsertStatement[binary = FORCE, insertRewrite = true](org.postgresql.test.jdbc2.BatchExecuteTest)  Time elapsed: 0.012 sec  <<< FAILURE!
+java.lang.AssertionError: expected:<-2> but was:<1>
+	at org.junit.Assert.fail(Assert.java:88)
+	at org.junit.Assert.failNotEquals(Assert.java:834)
+	at org.junit.Assert.assertEquals(Assert.java:645)
+	at org.junit.Assert.assertEquals(Assert.java:631)
+	at org.postgresql.test.jdbc2.BatchExecuteTest.testBatchWithRepeatedInsertStatement(BatchExecuteTest.java:1240)
+
+testBatchWithTwoMultiInsertStatements[binary = FORCE, insertRewrite = true](org.postgresql.test.jdbc2.BatchExecuteTest)  Time elapsed: 0.01 sec  <<< FAILURE!
+org.junit.ComparisonFailure: Inserting two multi-valued statements with two rows each. Expecting {2, 2} rows inserted (or SUCCESS_NO_INFO) expected:<[[-2, -]2]> but was:<[[2, ]2]>
+	at org.junit.Assert.assertEquals(Assert.java:115)
+	at org.postgresql.test.jdbc2.BatchExecuteTest.testBatchWithTwoMultiInsertStatements(BatchExecuteTest.java:1299)
+
+testMultiValues1bind[0: autoCommit=YES, binary=REGULAR](org.postgresql.test.jdbc2.BatchedInsertReWriteEnabledTest)  Time elapsed: 0.008 sec  <<< FAILURE!
+org.junit.ComparisonFailure: 2 addBatch, 1 row each expected:<[[1, 1]]> but was:<[[2, 2]]>
+	at org.junit.Assert.assertEquals(Assert.java:115)
+	at org.postgresql.test.jdbc2.BatchExecuteTest.assertBatchResult(BatchExecuteTest.java:1329)
+	at org.postgresql.test.jdbc2.BatchExecuteTest.assertSimpleInsertBatch(BatchExecuteTest.java:1313)
+	at org.postgresql.test.jdbc2.BatchedInsertReWriteEnabledTest.testMultiValues1bind(BatchedInsertReWriteEnabledTest.java:291)
+
+testMultiValues1bind[1: autoCommit=YES, binary=FORCE](org.postgresql.test.jdbc2.BatchedInsertReWriteEnabledTest)  Time elapsed: 0.008 sec  <<< FAILURE!
+org.junit.ComparisonFailure: 2 addBatch, 1 row each expected:<[[1, 1]]> but was:<[[2, 2]]>
+	at org.junit.Assert.assertEquals(Assert.java:115)
+	at org.postgresql.test.jdbc2.BatchExecuteTest.assertBatchResult(BatchExecuteTest.java:1329)
+	at org.junit.Assert.assertEquals(Assert.java:1313)
+	at org.postgresql.test.jdbc2.BatchedInsertReWriteEnabledTest.testMultiValues1bind(BatchedInsertReWriteEnabledTest.java:291)
+
+testMultiValues1bind[2: autoCommit=NO, binary=REGULAR](org.postgresql.test.jdbc2.BatchedInsertReWriteEnabledTest)  Time elapsed: 0.008 sec  <<< FAILURE!
+org.junit.ComparisonFailure: 2 addBatch, 1 row each expected:<[[1, 1]]> but was:<[[2, 2]]>
+	at org.junit.Assert.assertEquals(Assert.java:115)
+	at org.postgresql.test.jdbc2.BatchExecuteTest.assertBatchResult(BatchExecuteTest.java:1329)
+	at org.junit.Assert.assertEquals(Assert.java:1313)
+	at org.postgresql.test.jdbc2.BatchedInsertReWriteEnabledTest.testMultiValues1bind(BatchedInsertReWriteEnabledTest.java:291)
+
+testMultiValues1bind[3: autoCommit=NO, binary=FORCE](org.postgresql.test.jdbc2.BatchedInsertReWriteEnabledTest)  Time elapsed: 0.009 sec  <<< FAILURE!
+org.junit.ComparisonFailure: 2 addBatch, 1 row each expected:<[[1, 1]]> but was:<[[2, 2]]>
+	at org.junit.Assert.assertEquals(Assert.java:115)
+	at org.postgresql.test.jdbc2.BatchExecuteTest.assertBatchResult(BatchExecuteTest.java:1329)
+	at org.junit.Assert.assertEquals(Assert.java:1313)
+	at org.postgresql.test.jdbc2.BatchedInsertReWriteEnabledTest.testMultiValues1bind(BatchedInsertReWriteEnabledTest.java:291)
+
+testDeepInternalsBatchedQueryDecorator(org.postgresql.jdbc.DeepBatchedInsertStatementTest)  Time elapsed: 0.014 sec  <<< ERROR!
+java.lang.ArrayStoreException: null
+	at java.util.Arrays.copyOf(Arrays.java:3213)
+	at java.util.ArrayList.toArray(ArrayList.java:411)
+	at org.postgresql.jdbc.DeepBatchedInsertStatementTest.transformBQD(DeepBatchedInsertStatementTest.java:283)
+	at org.postgresql.jdbc.DeepBatchedInsertStatementTest.testDeepInternalsBatchedQueryDecorator(DeepBatchedInsertStatementTest.java:88)
+```
+
+---
+
+### 7. Code Diff Analysis
+
+The provided code diff shows changes in `pgjdbc/src/main/java/org/postgresql/core/Parser.java`:
+
+```diff
+--- a/pgjdbc/src/main/java/org/postgresql/core/Parser.java
++++ b/pgjdbc/src/main/java/org/postgresql/core/Parser.java
+@@ -149,7 +149,7 @@ public class Parser {
+                   nativeQueries = new ArrayList<NativeQuery>();
+                 }
+ 
+-                if (!isValuesFound || !isCurrentReWriteCompatible || !valuesBraceCloseFound
++                if (!isValuesFound || !isCurrentReWriteCompatible || valuesBraceClosePosition == -1
+                     || (bindPositions != null
+                     && valuesBraceClosePosition < bindPositions.get(bindPositions.size() - 1))) {
+                   valuesBraceOpenPosition = -1;
+@@ -244,7 +244,7 @@ public class Parser {\n       }\n     }\n 
+-    if (!isValuesFound || !isCurrentReWriteCompatible || !valuesBraceCloseFound
++    if (!isValuesFound || !isCurrentReWriteCompatible || valuesBraceClosePosition == -1
+         || (bindPositions != null
+         && valuesBraceClosePosition < bindPositions.get(bindPositions.size() - 1))) {
+       valuesBraceOpenPosition = -1;
+```
+
+The change replaces the boolean flag `!valuesBraceCloseFound` with a check `valuesBraceClosePosition == -1`. This logic is part of a conditional block that determines if a `VALUES` clause is considered valid for query rewriting or other parsing logic.
+
+---
+
+### 8. Root Cause Analysis (Hypothesis)
+
+The failures are directly linked to batch execution and insert rewrite functionality, which heavily relies on the `Parser` class to correctly identify and structure SQL statements. The change from a boolean flag `valuesBraceCloseFound` to an integer position check `valuesBraceClosePosition == -1` in `Parser.java` likely introduced a subtle but critical regression.
+
+1.  **Incorrect Query Rewriting:** The modified condition `valuesBraceClosePosition == -1` might be evaluating differently than the original `!valuesBraceCloseFound`. This could lead to:
+    *   The driver incorrectly determining that a batch insert statement is *not* rewrite-compatible when it should be, or vice-versa.
+    *   If the statement is not rewritten, `executeBatch()` might return actual row counts (e.g., `1` or `2`) instead of `Statement.SUCCESS_NO_INFO` (`-2`), leading to the `AssertionError` and `ComparisonFailure` in `BatchExecuteTest`.
+    *   In `BatchedInsertReWriteEnabledTest.testMultiValues1bind`, the expected `[[1, 1]]` vs. actual `[[2, 2]]` suggests that the batching mechanism might be misinterpreting the number of rows inserted per `addBatch` call, possibly treating a single `VALUES` clause as inserting multiple rows when it should be one, or vice-versa, due to parsing errors.
+
+2.  **`ArrayStoreException`:** The `ArrayStoreException` in `DeepBatchedInsertStatementTest` occurs when `ArrayList.toArray()` is called. This error typically happens when attempting to convert an `ArrayList` containing elements of a specific type into an array of an incompatible type. This strongly suggests that the parsing logic, after the change, is populating internal data structures (likely `ArrayList`s used for batching or query components) with unexpected or mixed types, or that the subsequent code attempting to convert these lists to arrays is using an incorrect target array type, all stemming from a misinterpretation of the SQL structure by the `Parser`.
+
+The change in `Parser.java` directly impacts the conditions under which `VALUES` clauses are processed, which is central to the batch insert rewrite feature.
+
+---
+
+### 9. Proposed Solution/Fix
+
+1.  **Immediate Revert:** As a temporary measure, revert the change in `pgjdbc/src/main/java/org/postgresql/core/Parser.java` from `valuesBraceClosePosition == -1` back to `!valuesBraceCloseFound` and re-run the tests. If this resolves the issue, it confirms the change as the root cause.
+2.  **Thorough Review of Parser Logic:** If the change was intentional (e.g., part of a larger refactoring), a detailed review of the `Parser` class logic is required.
+    *   Verify the initialization and updates of `valuesBraceClosePosition` to ensure it accurately reflects the presence or absence of a closing brace for `VALUES` clauses.
+    *   Carefully examine how `isCurrentReWriteCompatible` interacts with `valuesBraceClosePosition` to ensure the conditions for query rewriting are correctly met.
+    *   Debug the failing tests to understand the exact state of the `Parser` and the resulting internal query structures when the `AssertionError`, `ComparisonFailure`, and `ArrayStoreException` occur.
+    *   Ensure that any `ArrayList`s being converted to arrays have consistent element types compatible with the target array type, especially in the context of `DeepBatchedInsertStatementTest`.
+
+This bug represents a regression in a critical performance feature (batch insert rewrite) and needs immediate attention.

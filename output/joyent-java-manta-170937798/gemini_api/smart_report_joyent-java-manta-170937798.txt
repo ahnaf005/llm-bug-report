@@ -1,0 +1,80 @@
+## Bug Report: Checkstyle Violation - Missing `package-info.java`
+
+### 1. Title
+Build Fails Due to Checkstyle `JavadocPackage` Violation: Missing `package-info.java` in `com.joyent.manta.client.multipart`
+
+### 2. Steps to Reproduce
+1.  Clone the `joyent/java-manta` repository.
+2.  Checkout the commit `a61829b9dbcc2195859716d626ca09a828c3a2d4`.
+3.  Ensure Java 8 and Maven 3.2.5 are installed and configured.
+4.  Navigate to the `joyent/java-manta` directory.
+5.  Execute the Maven build command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+### 3. Triggering Input
+The build is triggered by the Maven `install` goal, which includes the `checkstyle:check` goal. The `JavadocPackage` Checkstyle rule is configured to require a `package-info.java` file for all packages. The `com.joyent.manta.client.multipart` package is missing this file.
+
+### 4. Expected Behavior
+The Maven build should complete successfully, indicating that all code quality checks, including Checkstyle, have passed.
+
+### 5. Observed Behavior
+The Maven build fails with a `MojoFailureException` from the `maven-checkstyle-plugin`. The specific error reported is a `JavadocPackage` violation, indicating that the `package-info.java` file is missing for the `com.joyent.manta.client.multipart` package. The build attempts to retry but fails consistently.
+
+**Error Message:**
+```
+[ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[0] (javadoc) JavadocPackage: Missing package-info.java file.
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation. -> [Help 1]
+```
+
+### 6. Relevant Code Snippets
+The build log indicates the error originates from the `com.joyent.manta.client.multipart` package, specifically referencing `MantaMultipartManager.java` as the file within that package that triggered the check.
+
+The relevant code snippet from the diff that *resolves* this issue is the addition of the `package-info.java` file:
+
+```diff
+--- /dev/null
++++ b/java-manta-client/src/main/java/com/joyent/manta/client/multipart/package-info.java
+@@ -0,0 +1,8 @@
++/**
++ * Package containing all of the classes used as part of the Manta Multipart
++ * upload API.
++ *
++ * @author <a href="https://github.com/dekobon">Elijah Zupancic</a>
++ * @since 2.5.0
++ */
++package com.joyent.manta.client.multipart;
+```
+
+### 7. Stack Traces
+The build log provides the following error output from the `maven-checkstyle-plugin`:
+
+```
+[ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[0] (javadoc) JavadocPackage: Missing package-info.java file.
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation. -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+[ERROR] 
+[ERROR] After correcting the problems, you can resume the build with the command
+[ERROR]   mvn <goals> -rf :java-manta-client
+```
+
+### 8. Patches / Suggested Fixes
+The provided code diff includes a patch that addresses this issue by adding a `package-info.java` file to the `com.joyent.manta.client.multipart` package. This file provides package-level Javadoc, satisfying the `JavadocPackage` Checkstyle rule.
+
+**Patch Content:**
+```diff
+--- /dev/null
++++ b/java-manta-client/src/main/java/com/joyent/manta/client/multipart/package-info.java
+@@ -0,0 +1,8 @@
++/**
++ * Package containing all of the classes used as part of the Manta Multipart
++ * upload API.
++ *
++ * @author <a href="https://github.com/dekobon">Elijah Zupancic</a>
++ * @since 2.5.0
++ */
++package com.joyent.manta.client.multipart;
+```

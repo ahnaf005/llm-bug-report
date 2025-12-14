@@ -1,0 +1,581 @@
+
+========================
+BUILD LOG
+========================
+﻿2025-01-03T19:30:22.5189202Z Current runner version: '2.321.0'
+2025-01-03T19:30:22.5215345Z ##[group]Operating System
+2025-01-03T19:30:22.5216126Z Ubuntu
+2025-01-03T19:30:22.5216561Z 24.04.1
+2025-01-03T19:30:22.5217213Z LTS
+2025-01-03T19:30:22.5217743Z ##[endgroup]
+2025-01-03T19:30:22.5218273Z ##[group]Runner Image
+2025-01-03T19:30:22.5218980Z Image: ubuntu-24.04
+2025-01-03T19:30:22.5219533Z Version: 20241215.1.0
+2025-01-03T19:30:22.5220542Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20241215.1/images/ubuntu/Ubuntu2404-Readme.md
+2025-01-03T19:30:22.5222098Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20241215.1
+2025-01-03T19:30:22.5223059Z ##[endgroup]
+2025-01-03T19:30:22.5223559Z ##[group]Runner Image Provisioner
+2025-01-03T19:30:22.5224433Z 2.0.404.1
+2025-01-03T19:30:22.5224948Z ##[endgroup]
+2025-01-03T19:30:22.5227330Z ##[group]GITHUB_TOKEN Permissions
+2025-01-03T19:30:22.5229591Z Actions: write
+2025-01-03T19:30:22.5230440Z Attestations: write
+2025-01-03T19:30:22.5231102Z Checks: write
+2025-01-03T19:30:22.5231620Z Contents: write
+2025-01-03T19:30:22.5232216Z Deployments: write
+2025-01-03T19:30:22.5232730Z Discussions: write
+2025-01-03T19:30:22.5233181Z Issues: write
+2025-01-03T19:30:22.5233759Z Metadata: read
+2025-01-03T19:30:22.5234541Z Packages: write
+2025-01-03T19:30:22.5235002Z Pages: write
+2025-01-03T19:30:22.5235591Z PullRequests: write
+2025-01-03T19:30:22.5236113Z RepositoryProjects: write
+2025-01-03T19:30:22.5236621Z SecurityEvents: write
+2025-01-03T19:30:22.5237211Z Statuses: write
+2025-01-03T19:30:22.5237709Z ##[endgroup]
+2025-01-03T19:30:22.5240869Z Secret source: Actions
+2025-01-03T19:30:22.5241697Z Prepare workflow directory
+2025-01-03T19:30:22.5704394Z Prepare all required actions
+2025-01-03T19:30:22.5743365Z Getting action download info
+2025-01-03T19:30:22.7744295Z Download action repository 'actions/checkout@v4' (SHA:11bd71901bbe5b1630ceea73d27597364c9af683)
+2025-01-03T19:30:22.8637061Z Download action repository 'actions/setup-java@v4.5.0' (SHA:8df1039502a15bceb9433410b1a100fbe190c53b)
+2025-01-03T19:30:23.1618634Z Download action repository 'WebFreak001/deploy-nightly@v3.2.0' (SHA:46ecbabd7fad70d3e7d2c97fe8cd54e7a52e215b)
+2025-01-03T19:30:23.5256059Z Download action repository 'actions/upload-artifact@v4.4.3' (SHA:b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882)
+2025-01-03T19:30:23.6917999Z Complete job name: build
+2025-01-03T19:30:23.7666524Z ##[group]Run actions/checkout@v4
+2025-01-03T19:30:23.7667789Z with:
+2025-01-03T19:30:23.7668273Z   repository: MarginallyClever/Makelangelo-software
+2025-01-03T19:30:23.7669147Z   token: ***
+2025-01-03T19:30:23.7669532Z   ssh-strict: true
+2025-01-03T19:30:23.7669915Z   ssh-user: git
+2025-01-03T19:30:23.7670306Z   persist-credentials: true
+2025-01-03T19:30:23.7670736Z   clean: true
+2025-01-03T19:30:23.7671266Z   sparse-checkout-cone-mode: true
+2025-01-03T19:30:23.7671763Z   fetch-depth: 1
+2025-01-03T19:30:23.7672226Z   fetch-tags: false
+2025-01-03T19:30:23.7672715Z   show-progress: true
+2025-01-03T19:30:23.7673155Z   lfs: false
+2025-01-03T19:30:23.7673613Z   submodules: false
+2025-01-03T19:30:23.7674210Z   set-safe-directory: true
+2025-01-03T19:30:23.7675097Z env:
+2025-01-03T19:30:23.7676210Z   UPLOAD_URL: https://uploads.github.com/repos/MarginallyClever/Makelangelo-software/releases/54908875/assets{?name,label}
+2025-01-03T19:30:23.7677321Z   RELEASE_ID: 54908875
+2025-01-03T19:30:23.7677796Z ##[endgroup]
+2025-01-03T19:30:23.9686499Z Syncing repository: MarginallyClever/Makelangelo-software
+2025-01-03T19:30:23.9689656Z ##[group]Getting Git version info
+2025-01-03T19:30:23.9691319Z Working directory is '/home/runner/work/Makelangelo-software/Makelangelo-software'
+2025-01-03T19:30:23.9693612Z [command]/usr/bin/git version
+2025-01-03T19:30:23.9694967Z git version 2.47.1
+2025-01-03T19:30:23.9698074Z ##[endgroup]
+2025-01-03T19:30:23.9709373Z Temporarily overriding HOME='/home/runner/work/_temp/dd4af89d-edee-48cd-bd0c-5080458b7606' before making global git config changes
+2025-01-03T19:30:23.9712029Z Adding repository directory to the temporary git global config as a safe directory
+2025-01-03T19:30:23.9716121Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Makelangelo-software/Makelangelo-software
+2025-01-03T19:30:23.9752606Z Deleting the contents of '/home/runner/work/Makelangelo-software/Makelangelo-software'
+2025-01-03T19:30:23.9757014Z ##[group]Initializing the repository
+2025-01-03T19:30:23.9762221Z [command]/usr/bin/git init /home/runner/work/Makelangelo-software/Makelangelo-software
+2025-01-03T19:30:23.9829830Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-01-03T19:30:23.9831239Z hint: is subject to change. To configure the initial branch name to use in all
+2025-01-03T19:30:23.9832218Z hint: of your new repositories, which will suppress this warning, call:
+2025-01-03T19:30:23.9833336Z hint:
+2025-01-03T19:30:23.9834406Z hint: 	git config --global init.defaultBranch <name>
+2025-01-03T19:30:23.9835152Z hint:
+2025-01-03T19:30:23.9836294Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-01-03T19:30:23.9838209Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-01-03T19:30:23.9839695Z hint:
+2025-01-03T19:30:23.9840539Z hint: 	git branch -m <name>
+2025-01-03T19:30:23.9842335Z Initialized empty Git repository in /home/runner/work/Makelangelo-software/Makelangelo-software/.git/
+2025-01-03T19:30:23.9848506Z [command]/usr/bin/git remote add origin https://github.com/MarginallyClever/Makelangelo-software
+2025-01-03T19:30:23.9883778Z ##[endgroup]
+2025-01-03T19:30:23.9885450Z ##[group]Disabling automatic garbage collection
+2025-01-03T19:30:23.9888902Z [command]/usr/bin/git config --local gc.auto 0
+2025-01-03T19:30:23.9918461Z ##[endgroup]
+2025-01-03T19:30:23.9919892Z ##[group]Setting up auth
+2025-01-03T19:30:23.9925921Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-01-03T19:30:23.9958577Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-01-03T19:30:24.0268225Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-01-03T19:30:24.0299574Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-01-03T19:30:24.0535125Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-01-03T19:30:24.0574164Z ##[endgroup]
+2025-01-03T19:30:24.0575677Z ##[group]Fetching the repository
+2025-01-03T19:30:24.0584616Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +5f7a8ca2218ba64fd6eb5be385cafc51dd5f866a:refs/remotes/pull/764/merge
+2025-01-03T19:30:24.7979913Z From https://github.com/MarginallyClever/Makelangelo-software
+2025-01-03T19:30:24.7982948Z  * [new ref]         5f7a8ca2218ba64fd6eb5be385cafc51dd5f866a -> pull/764/merge
+2025-01-03T19:30:24.8014517Z ##[endgroup]
+2025-01-03T19:30:24.8016338Z ##[group]Determining the checkout info
+2025-01-03T19:30:24.8018421Z ##[endgroup]
+2025-01-03T19:30:24.8022449Z [command]/usr/bin/git sparse-checkout disable
+2025-01-03T19:30:24.8066626Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2025-01-03T19:30:24.8098792Z ##[group]Checking out the ref
+2025-01-03T19:30:24.8101834Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/764/merge
+2025-01-03T19:30:24.9593680Z Note: switching to 'refs/remotes/pull/764/merge'.
+2025-01-03T19:30:24.9595328Z 
+2025-01-03T19:30:24.9596489Z You are in 'detached HEAD' state. You can look around, make experimental
+2025-01-03T19:30:24.9599393Z changes and commit them, and you can discard any commits you make in this
+2025-01-03T19:30:24.9602304Z state without impacting any branches by switching back to a branch.
+2025-01-03T19:30:24.9604190Z 
+2025-01-03T19:30:24.9605356Z If you want to create a new branch to retain commits you create, you may
+2025-01-03T19:30:24.9607386Z do so (now or later) by using -c with the switch command. Example:
+2025-01-03T19:30:24.9608755Z 
+2025-01-03T19:30:24.9609226Z   git switch -c <new-branch-name>
+2025-01-03T19:30:24.9609997Z 
+2025-01-03T19:30:24.9610492Z Or undo this operation with:
+2025-01-03T19:30:24.9611198Z 
+2025-01-03T19:30:24.9611646Z   git switch -
+2025-01-03T19:30:24.9612341Z 
+2025-01-03T19:30:24.9613387Z Turn off this advice by setting config variable advice.detachedHead to false
+2025-01-03T19:30:24.9614925Z 
+2025-01-03T19:30:24.9616466Z HEAD is now at 5f7a8ca Merge 27fb3b8abe90ca2c40b7788c176cafea0f2d63d9 into 2c97a3a6c0c546642844cfd95598b2144630229f
+2025-01-03T19:30:24.9621066Z ##[endgroup]
+2025-01-03T19:30:24.9653067Z [command]/usr/bin/git log -1 --format=%H
+2025-01-03T19:30:24.9677267Z 5f7a8ca2218ba64fd6eb5be385cafc51dd5f866a
+2025-01-03T19:30:25.0023655Z ##[group]Run actions/setup-java@v4.5.0
+2025-01-03T19:30:25.0025005Z with:
+2025-01-03T19:30:25.0025768Z   distribution: temurin
+2025-01-03T19:30:25.0026653Z   java-version: 17
+2025-01-03T19:30:25.0027460Z   cache: maven
+2025-01-03T19:30:25.0028269Z   java-package: jdk
+2025-01-03T19:30:25.0029109Z   check-latest: false
+2025-01-03T19:30:25.0030009Z   server-id: github
+2025-01-03T19:30:25.0030868Z   server-username: GITHUB_ACTOR
+2025-01-03T19:30:25.0031897Z   server-password: GITHUB_TOKEN
+2025-01-03T19:30:25.0032917Z   overwrite-settings: true
+2025-01-03T19:30:25.0033850Z   job-status: success
+2025-01-03T19:30:25.0035059Z   token: ***
+2025-01-03T19:30:25.0035809Z env:
+2025-01-03T19:30:25.0037720Z   UPLOAD_URL: https://uploads.github.com/repos/MarginallyClever/Makelangelo-software/releases/54908875/assets{?name,label}
+2025-01-03T19:30:25.0039982Z   RELEASE_ID: 54908875
+2025-01-03T19:30:25.0040819Z ##[endgroup]
+2025-01-03T19:30:25.1904925Z ##[group]Installed distributions
+2025-01-03T19:30:25.1947797Z Resolved Java 17.0.13+11 from tool-cache
+2025-01-03T19:30:25.1948381Z Setting Java 17.0.13+11 as the default
+2025-01-03T19:30:25.1962371Z Creating toolchains.xml for JDK version 17 from temurin
+2025-01-03T19:30:25.2038235Z Writing to /home/runner/.m2/toolchains.xml
+2025-01-03T19:30:25.2038737Z 
+2025-01-03T19:30:25.2038954Z Java configuration:
+2025-01-03T19:30:25.2039444Z   Distribution: temurin
+2025-01-03T19:30:25.2040127Z   Version: 17.0.13+11
+2025-01-03T19:30:25.2040868Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.13-11/x64
+2025-01-03T19:30:25.2043009Z 
+2025-01-03T19:30:25.2043672Z ##[endgroup]
+2025-01-03T19:30:25.2060070Z Creating settings.xml with server-id: github
+2025-01-03T19:30:25.2063719Z Writing to /home/runner/.m2/settings.xml
+2025-01-03T19:30:25.7670809Z Cache Size: ~92 MB (96548534 B)
+2025-01-03T19:30:25.7724652Z [command]/usr/bin/tar -xf /home/runner/work/_temp/a3d681e2-1880-4439-9300-3d8ed2a41ab1/cache.tzst -P -C /home/runner/work/Makelangelo-software/Makelangelo-software --use-compress-program unzstd
+2025-01-03T19:30:26.1543383Z Cache restored successfully
+2025-01-03T19:30:26.1745942Z Cache restored from key: setup-java-Linux-x64-maven-1cb77c1184d40e937eeaf7929e00c4983bc1ba5a527e46b5c731549150b0503c
+2025-01-03T19:30:26.3962148Z Received 96548534 of 96548534 (100.0%), 92.0 MBs/sec
+2025-01-03T19:30:26.4144521Z ##[group]Run ./mvnw -B test -Djava.awt.headless=true
+2025-01-03T19:30:26.4145004Z [36;1m./mvnw -B test -Djava.awt.headless=true[0m
+2025-01-03T19:30:26.4177271Z shell: /usr/bin/bash -e {0}
+2025-01-03T19:30:26.4177511Z env:
+2025-01-03T19:30:26.4178010Z   UPLOAD_URL: https://uploads.github.com/repos/MarginallyClever/Makelangelo-software/releases/54908875/assets{?name,label}
+2025-01-03T19:30:26.4178552Z   RELEASE_ID: 54908875
+2025-01-03T19:30:26.4178861Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.13-11/x64
+2025-01-03T19:30:26.4179308Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.13-11/x64
+2025-01-03T19:30:26.4179645Z ##[endgroup]
+2025-01-03T19:30:27.9559855Z [INFO] Scanning for projects...
+2025-01-03T19:30:28.0203267Z [INFO] 
+2025-01-03T19:30:28.0215041Z [INFO] ------------------< com.marginallyclever:Makelangelo >------------------
+2025-01-03T19:30:28.0217057Z [INFO] Building Makelangelo 7.62.0
+2025-01-03T19:30:28.0244840Z [INFO] --------------------------------[ jar ]---------------------------------
+2025-01-03T19:30:28.3918686Z [INFO] 
+2025-01-03T19:30:28.3920608Z [INFO] --- maven-enforcer-plugin:3.0.0-M3:enforce (enforce-maven) @ Makelangelo ---
+2025-01-03T19:30:28.5436174Z [INFO] 
+2025-01-03T19:30:28.5452059Z [INFO] --- maven-enforcer-plugin:3.0.0-M3:enforce (enforce-java) @ Makelangelo ---
+2025-01-03T19:30:28.5485561Z [INFO] 
+2025-01-03T19:30:28.5502500Z [INFO] --- git-commit-id-maven-plugin:5.0.0:revision (get-the-git-infos) @ Makelangelo ---
+2025-01-03T19:30:28.6734860Z [INFO] dotGitDirectory /home/runner/work/Makelangelo-software/Makelangelo-software/.git
+2025-01-03T19:30:31.9051484Z [INFO] Using environment variable based branch name. GITHUB_HEAD_REF = better-plotter-settings-panel
+2025-01-03T19:30:31.9053046Z [INFO] Collected git.branch with value better-plotter-settings-panel
+2025-01-03T19:30:31.9063301Z [INFO] Collected git.commit.id.full with value 5f7a8ca2218ba64fd6eb5be385cafc51dd5f866a
+2025-01-03T19:30:31.9078868Z [INFO] Collected git.commit.id.abbrev with value 5f7a8ca
+2025-01-03T19:30:31.9908395Z [INFO] Collected git.dirty with value false
+2025-01-03T19:30:32.0058032Z [INFO] Collected git.build.time with value 2025-01-03T19:30:32+0000
+2025-01-03T19:30:32.0062132Z [INFO] Collected git.build.version with value 7.62.0
+2025-01-03T19:30:32.0079940Z [INFO] including property git.build.version in results
+2025-01-03T19:30:32.0081064Z [INFO] including property git.commit.id.full in results
+2025-01-03T19:30:32.0083065Z [INFO] including property git.commit.id.abbrev in results
+2025-01-03T19:30:32.0083808Z [INFO] including property git.branch in results
+2025-01-03T19:30:32.0084697Z [INFO] including property git.build.time in results
+2025-01-03T19:30:32.0085471Z [INFO] including property git.dirty in results
+2025-01-03T19:30:32.0133360Z [INFO] Writing properties file to [/home/runner/work/Makelangelo-software/Makelangelo-software/target/classes/git.properties] (for module Makelangelo)...
+2025-01-03T19:30:32.0222326Z [INFO] 
+2025-01-03T19:30:32.0274982Z [INFO] --- jacoco-maven-plugin:0.8.11:prepare-agent (default) @ Makelangelo ---
+2025-01-03T19:30:32.0813436Z [INFO] argLine set to -javaagent:/home/runner/.m2/repository/org/jacoco/org.jacoco.agent/0.8.11/org.jacoco.agent-0.8.11-runtime.jar=destfile=/home/runner/work/Makelangelo-software/Makelangelo-software/target/jacoco.exec
+2025-01-03T19:30:32.0815685Z [INFO] 
+2025-01-03T19:30:32.0816544Z [INFO] --- maven-resources-plugin:3.2.0:resources (default-resources) @ Makelangelo ---
+2025-01-03T19:30:32.1565876Z [INFO] Using 'UTF-8' encoding to copy filtered resources.
+2025-01-03T19:30:32.1566591Z [INFO] Using 'UTF-8' encoding to copy filtered properties files.
+2025-01-03T19:30:32.1603334Z [INFO] Copying 2 resources
+2025-01-03T19:30:32.1746333Z [INFO] Copying 74 resources
+2025-01-03T19:30:32.1970392Z [INFO] The encoding used to copy filtered properties files have not been set. This means that the same encoding will be used to copy filtered properties files as when copying other filtered resources. This might not be what you want! Run your build with --debug to see which files might be affected. Read more at https://maven.apache.org/plugins/maven-resources-plugin/examples/filtering-properties-files.html
+2025-01-03T19:30:32.1973351Z [INFO] 
+2025-01-03T19:30:32.1975237Z [INFO] --- maven-compiler-plugin:3.8.1:compile (default-compile) @ Makelangelo ---
+2025-01-03T19:30:32.4433658Z [INFO] Required filename-based automodules detected: [jogl-all-2.5.0-rc-20230523.jar, jrpicam-0.2.0.jar, kabeja-0.4.jar, vecmath-1.5.2.jar, batik-all-1.18.jar, xml-apis-ext-1.3.04.jar]. Please don't publish this project to a public artifact repository!
+2025-01-03T19:30:32.4436368Z [INFO] Compiling 287 source files to /home/runner/work/Makelangelo-software/Makelangelo-software/target/classes
+2025-01-03T19:30:37.5077812Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/convenience/ColorHSB.java:[31,21] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5081179Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterThresholdFancy.java:[44,17] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5084964Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterThresholdFancy.java:[44,37] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5088738Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/applicationsettings/ApplicationSettings.java:[68,131] LEGACY_MAKELANGELO_ROOT in com.marginallyclever.util.PreferencesHelper.MakelangeloPreferenceKey has been deprecated
+2025-01-03T19:30:37.5092667Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/applicationsettings/ApplicationSettings.java:[82,131] LEGACY_MAKELANGELO_ROOT in com.marginallyclever.util.PreferencesHelper.MakelangeloPreferenceKey has been deprecated
+2025-01-03T19:30:37.5096565Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/applicationsettings/ApplicationSettings.java:[96,131] LEGACY_MAKELANGELO_ROOT in com.marginallyclever.util.PreferencesHelper.MakelangeloPreferenceKey has been deprecated
+2025-01-03T19:30:37.5102473Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterSubtract.java:[36,17] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5107618Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterSubtract.java:[36,37] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5112415Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterSubtract.java:[37,17] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5120263Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterSubtract.java:[37,38] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5131030Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/io/SaveSVG.java:[77,75] com.marginallyclever.convenience.ColorPalette in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5135156Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterScale.java:[33,17] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5139078Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterScale.java:[33,37] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5143076Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterInvert.java:[37,17] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5147210Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterInvert.java:[37,38] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5150970Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterThreshold.java:[33,17] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5156284Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterThreshold.java:[33,37] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5189892Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterExtendedDifferenceOfGaussians.java:[48,9] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5193765Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterExtendedDifferenceOfGaussians.java:[48,29] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5197837Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterExtendedDifferenceOfGaussians.java:[51,17] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5201736Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterExtendedDifferenceOfGaussians.java:[51,40] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5205830Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterExtendedDifferenceOfGaussians.java:[52,17] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5210855Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/main/java/com/marginallyclever/makelangelo/makeart/imagefilter/FilterExtendedDifferenceOfGaussians.java:[52,39] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:37.5213039Z [INFO] 
+2025-01-03T19:30:37.5213744Z [INFO] --- maven-resources-plugin:3.2.0:testResources (default-testResources) @ Makelangelo ---
+2025-01-03T19:30:37.5224230Z [INFO] Using 'UTF-8' encoding to copy filtered resources.
+2025-01-03T19:30:37.5224912Z [INFO] Using 'UTF-8' encoding to copy filtered properties files.
+2025-01-03T19:30:37.5239894Z [INFO] Copying 82 resources
+2025-01-03T19:30:37.5817691Z [INFO] 
+2025-01-03T19:30:37.5831309Z [INFO] --- maven-compiler-plugin:3.8.1:testCompile (default-testCompile) @ Makelangelo ---
+2025-01-03T19:30:37.6583094Z [INFO] Compiling 48 source files to /home/runner/work/Makelangelo-software/Makelangelo-software/target/test-classes
+2025-01-03T19:30:38.4136795Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/test/java/com/marginallyclever/convenience/TestColorRGB.java:[7,36] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:38.4140015Z [WARNING] /home/runner/work/Makelangelo-software/Makelangelo-software/src/test/java/com/marginallyclever/convenience/TestColorRGB.java:[15,31] com.marginallyclever.convenience.ColorRGB in com.marginallyclever.convenience has been deprecated
+2025-01-03T19:30:38.4141764Z [INFO] 
+2025-01-03T19:30:38.4142274Z [INFO] --- maven-surefire-plugin:3.0.0-M5:test (default-test) @ Makelangelo ---
+2025-01-03T19:30:38.9854164Z [INFO] 
+2025-01-03T19:30:38.9858654Z [INFO] -------------------------------------------------------
+2025-01-03T19:30:38.9862914Z [INFO]  T E S T S
+2025-01-03T19:30:38.9877817Z [INFO] -------------------------------------------------------
+2025-01-03T19:30:40.3079413Z [INFO] Running com.marginallyclever.communications.SerialTransportLayerTest
+2025-01-03T19:30:41.9383031Z [INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.58 s - in com.marginallyclever.communications.SerialTransportLayerTest
+2025-01-03T19:30:41.9413172Z [INFO] Running com.marginallyclever.makelangelo.MakelangeloTest
+2025-01-03T19:30:41.9569113Z [INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.042 s - in com.marginallyclever.makelangelo.MakelangeloTest
+2025-01-03T19:30:41.9581685Z [INFO] Running com.marginallyclever.makelangelo.select.SelectGUITest
+2025-01-03T19:30:43.5169469Z [INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.565 s - in com.marginallyclever.makelangelo.select.SelectGUITest
+2025-01-03T19:30:43.5172156Z [INFO] Running com.marginallyclever.makelangelo.select.SelectDoubleTest
+2025-01-03T19:30:45.7150590Z [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.2 s - in com.marginallyclever.makelangelo.select.SelectDoubleTest
+2025-01-03T19:30:45.7206882Z [INFO] Running com.marginallyclever.makelangelo.turtle.TurtleTest
+2025-01-03T19:30:45.7665831Z [ERROR] Tests run: 16, Failures: 0, Errors: 16, Skipped: 0, Time elapsed: 0.031 s <<< FAILURE! - in com.marginallyclever.makelangelo.turtle.TurtleTest
+2025-01-03T19:30:45.7668088Z [ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.notEqualsTwoTurtles  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:45.7706107Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+2025-01-03T19:30:45.7708222Z 
+2025-01-03T19:30:45.7709116Z [ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.equalsTwoTurtles  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:45.7711539Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+2025-01-03T19:30:45.7713674Z 
+2025-01-03T19:30:45.7714564Z [ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.bounds  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:45.7716656Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+2025-01-03T19:30:45.7718324Z 
+2025-01-03T19:30:45.7718854Z [ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.travel  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:45.7721448Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+2025-01-03T19:30:45.7723143Z 
+2025-01-03T19:30:45.7723703Z [ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.toolChange  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:45.7726027Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+2025-01-03T19:30:45.7727629Z 
+2025-01-03T19:30:45.7728193Z [ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.moveAndDraw  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:45.7730357Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+2025-01-03T19:30:45.7732249Z 
+2025-01-03T19:30:45.7732808Z [ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.firstColor  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:45.7816205Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+2025-01-03T19:30:45.7844350Z 
+2025-01-03T19:30:45.7845140Z [ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.addTurtle  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:45.7847300Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+2025-01-03T19:30:45.7848936Z 
+2025-01-03T19:30:45.7849461Z [ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.angle  Time elapsed: 0.001 s  <<< ERROR!
+2025-01-03T19:30:45.7851726Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+2025-01-03T19:30:45.7853414Z 
+2025-01-03T19:30:45.7854107Z [ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.empty  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:45.7856302Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+2025-01-03T19:30:45.7857985Z 
+2025-01-03T19:30:45.7858497Z [ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.scale  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:45.7860711Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+2025-01-03T19:30:45.7862377Z 
+2025-01-03T19:30:45.7862997Z [ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.penDownLinePenUp  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:45.7865538Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+2025-01-03T19:30:45.7867227Z 
+2025-01-03T19:30:45.7867796Z [ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.colorChange  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:45.7870007Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+2025-01-03T19:30:45.7871963Z 
+2025-01-03T19:30:45.7921218Z [ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.splitByToolChange  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:45.7925493Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+2025-01-03T19:30:45.7928721Z 
+2025-01-03T19:30:45.7931155Z [ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.translate  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:45.7934758Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+2025-01-03T19:30:45.7939911Z 
+2025-01-03T19:30:45.7940548Z [ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.testInterpolate  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:45.7942837Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+2025-01-03T19:30:45.7944705Z 
+2025-01-03T19:30:45.7945070Z [INFO] Running com.marginallyclever.makelangelo.TranslationsUnusedTest
+2025-01-03T19:30:46.1022898Z testing /home/runner/work/Makelangelo-software/Makelangelo-software/target/classes/languages/german.xml
+2025-01-03T19:30:46.1047805Z testing /home/runner/work/Makelangelo-software/Makelangelo-software/target/classes/languages/chinese.xml
+2025-01-03T19:30:46.1049162Z testing /home/runner/work/Makelangelo-software/Makelangelo-software/target/classes/languages/french.xml
+2025-01-03T19:30:46.1050488Z testing /home/runner/work/Makelangelo-software/Makelangelo-software/target/classes/languages/english.xml
+2025-01-03T19:30:46.1051809Z testing /home/runner/work/Makelangelo-software/Makelangelo-software/target/classes/languages/arabic.xml
+2025-01-03T19:30:46.1053108Z testing /home/runner/work/Makelangelo-software/Makelangelo-software/target/classes/languages/dutch.xml
+2025-01-03T19:30:46.1217592Z [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.355 s - in com.marginallyclever.makelangelo.TranslationsUnusedTest
+2025-01-03T19:30:46.1244944Z [INFO] Running com.marginallyclever.makelangelo.RandomSeedTest
+2025-01-03T19:30:46.1295482Z [INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.003 s - in com.marginallyclever.makelangelo.RandomSeedTest
+2025-01-03T19:30:46.1296623Z [INFO] Running com.marginallyclever.makelangelo.TranslationsMissingTest
+2025-01-03T19:30:46.3839099Z 19:30:46.350 [main] INFO  c.m.makelangelo.Translator - starting translator...
+2025-01-03T19:30:46.3850678Z Jan 03, 2025 7:30:46 PM java.util.prefs.FileSystemPreferences$1 run
+2025-01-03T19:30:46.3853815Z INFO: Created user preferences directory.
+2025-01-03T19:30:46.3903701Z 19:30:46.353 [main] INFO  c.m.makelangelo.Translator - Default language = English
+2025-01-03T19:30:46.3905413Z 19:30:46.384 [main] WARN  c.m.makelangelo.Translator - Missing translation 'unknownKey' in language 'English'
+2025-01-03T19:30:46.3906800Z 19:30:46.384 [main] WARN  c.m.makelangelo.Translator - Missing translation 'valueToBeFilledIn" , "aValue' in language 'English'
+2025-01-03T19:30:46.4729466Z 19:30:46.430 [main] INFO  c.m.m.TranslationsMissingTest - translations missing in target/classes/languages/german.xml: [MenuItemTranslate]
+2025-01-03T19:30:46.4921262Z 19:30:46.439 [main] INFO  c.m.m.TranslationsMissingTest - translations missing in target/classes/languages/chinese.xml: [Generator_Spiral.radius, pass75, Generator_FlowField.scaleX, Size, Generator_FlowField.scaleY, Converter_TruchetFromImage.linesPerTile, Converter_Voronoi.Name, InfoTitle, PlotterSettingsPanel.TabGCode, MenuGenerate.Mazes, Converter_IntensityToHeight.sampleRate, LogPanel.Title, PaperSettings.Landscape, PlotterSettingsPanel.Title, PlotterControls.ProgramTab, MenuImportFile, Converter_EdgeDetection.border, LineWeightByImageIntensity.image, MenuManual, Converter_QuadTreeInstant.maxDepth, Generator_TruchetTiles.LineSpacing, PlotterControls.communicationFailure, Polyeder, MarlinSimulationVisualizer.name, PlotterSettingsPanel.TabSimulation, PlotterSettingsPanel.AdjustAcceleration, CartesianButtons.buttonCenter, PlotterSettings.minSegTime, FirmwareUploaderPanel.startHuge, pass90, PlotterSettings.minSegmentLength, Generator_GridFit.Name, PlotterSettingsPanel.StepperLengthNeeded, Open, MenuGenerate.Fractals, VoronoiZigZag.optimizePath, QuestionTitle, PlotterSettings.blockBufferSize, TurtleGenerators.LearnMore.Link.Text, Length, PlotterSettingsPanel.pen up color, FirmwareUploaderPanel.status, PlotterSettings.handleSmallSegments, Converter_Voronoi.ShowCenters, PlotterControls.ConnectControls, PlotterSettingsPanel.TabEssential, PlotterSettings.minAcceleration, PlotterControls.DrawControls, Generator_GridFit.margin, Port, PlotterSettingsManagerPanel.RemoveProfile, PlotterSettingsPanel.BeltLengthNeeded, FirmwareUploader.help, Generator_GridFit.cellsWide, Generator_GridHexagons.Name, LogPanel.CopyClipboard, LineWeightByImageIntensity.thickness, FirmwareUploaderPanel.downloadFailed, PlotterControls.Title, PaperSettings.Title, PlotterSettingsPanel.penToolMaxFeedRate, LineWeightByImageIntensity.name, PlotterSettingsPanel.MachineHeight, SpiralPulse.intensity, RobotMenu.RobotStyle, Converter_IntensityToHeight.waveIntensity, Generator.randomSeed, penDiameter, PlotterSettingsPanel.penToolDown, ConvertImagePaperCenter, Generator_FlowField.name, Converter_TruchetFromImage.name, PlotterSettingsPanel.pen down color, Reorder, PlotterSettingsManagerPanel.NewProfileNameCannotBeBlank, Converter_CMYK_Spiral.Name, SaveGCode.splitGCodeQuestion, BarberPoleTurtleRenderer.name, SeparateLoopTurtleRenderer.name, OpenPaperSettings, PlotterControls.AdvancedControls, Generator_MazeCircle.rings, PlotterControls.FindHome, Generator_FlowField.stepVariation, MenuGenerate.Grids, OpenLogFolder, LoadFilePanel.title, Converter_CMYK_Crosshatch.Passes, MenuItemPayPalDonation, FirmwareUploaderPanel.startM5, MenuGenerate.SpaceFillers, OpenPlotterSettings, ReportBug, Generator_TruchetTiles.LinesPerTile, Converter_EdgeDetection.sampleSize, PaperSettings.Rotation, ErrorTitle, DefaultTurtleRenderer.name, Generator_FlowField.rightAngle, GraphPaperName, ConversationHistory.Clear, Generator_MazeRectangle.name, MenuSaveFile, Converter_CMYK_Circles.maxCircleSize, FontFace, DirectionLoopTurtleRenderer.name, PlotterControls.homeXYFirst, pass45, PlotterControls.JogTab, PlotterSettingsPanel.penToolDiameter, PlotterControls.halted, FirmwareUploaderPanel.notFound, Converter_EdgeDetection.name, Generator_Spiral.name, Generator_MazeRectangle.columns, RobotMenu.RenderStyle, Converter_EdgeDetection.stepSize, PlotterSettingsPanel.ServoLengthNeeded, Converter_PulseCMYK.SampleRate, Translate, PlotterSettingsPanel.TabPen, Generator_FlowField.offsetY, JogInterface.FindHome, ChooseConnection.ButtonConnect, Generator_FlowField.offsetX, PlotterSettingsPanel.penToolUp, Generator_GridHexagons.radius, PaperSettings.ShiftY, PaperSettings.ShiftX, Converter_QuadTreeInstant, Package, Converter_IntensityToHeight.spacing, Converter_CMYK_Crosshatch.Name, Generator_TruchetTiles.Name, PlotterSettingsManagerPanel.NewProfileNameAlreadyExists, Generator_MazeRectangle.rows, Rotate, ChooseConnection.ButtonDisconnect, FileTypeScratch3, SelectImageConverterPanel.Contrast, Converter_EdgeDetection.passes, Direction, PlotterSettings.StartGcode, FirmwareUploaderPanel.failed, Converter_QuadTreeInstant.baseCutOff, PlotterSettingsManagerPanel.AddProfile, EstimatedTimeIs, Width, pass15, GFXPreferences.dragSpeed, PlotterSettings.minimumPlannerSpeed, Generator_FlowField.fromEdge, PlotterSettings.zMotorType.servo, FirmwareUploaderPanel.noPortSelected, PlotterSettingsPanel.MachineWidth, Model, PlotterControls.didNotFind, Generator_TruchetTiles.allow, PaperSettings.PaperSize, LSystemNoise, PlotterControls.EmergencyStop, Converter_QuadTreeInstant.cutOffIncrement, Generator_FlowField.stepLength, PlotterControls.MarlinTab, Generator_GridFit.cellsHigh, PlotterSettings.zMotorType, LogPanel.LogFiles, Generator_FlowField.stepSize, PlotterControls.Step, Converter_CMYK_Crosshatch.Note, PlotterSettingsPanel.penToolLowerSpeed, Generator_MazeHoneycomb.name, Flap, Converter_IntensityToHeight.name, RobotMenu.GetTimeEstimate, PlotterSettings.zMotorType.stepper, PlotterSettingsPanel.penToolLiftSpeed, PaperSettings.PaperMargin, FirmwareUploaderPanel.finished, Generator_FlowField.noiseType, Converter_CMYK_Circles.name, FirmwareUploaderPanel.avrdudeNotDownloaded, Height, PlotterSettings.EndGcode, OK, ConversationHistory.Save, SandyNoble.rings, SandyNoble.center, Simplify, Converter_PulseCMYK.Name, PlotterSettingsPanel.Speed, Scale, MenuItemTranslate, ConversationHistory.Copy, Generator_MazeCircle.name, PlotterSettingsManagerPanel.NewProfileName, LoadScratch3.foreverNotAllowed, FirmwareUpdate, PlotterSettings.segmentsPerSecond, PlotterSettings.FindHomeGcode, SaveGCode.splitGCodeTitle, Converter_TruchetFromImage.spacing, InfillTurtleAction.title]
+2025-01-03T19:30:46.5179412Z 19:30:46.448 [main] INFO  c.m.m.TranslationsMissingTest - translations missing in target/classes/languages/french.xml: [Generator_Spiral.radius, Generator_FlowField.scaleX, Generator_FlowField.scaleY, Converter_TruchetFromImage.linesPerTile, Converter_Voronoi.Name, MenuGenerate.Mazes, Converter_IntensityToHeight.sampleRate, MenuImportFile, Converter_EdgeDetection.border, LineWeightByImageIntensity.image, MenuManual, Converter_QuadTreeInstant.maxDepth, Generator_TruchetTiles.LineSpacing, PlotterControls.communicationFailure, MarlinSimulationVisualizer.name, PlotterSettingsPanel.TabSimulation, PlotterSettingsPanel.AdjustAcceleration, FirmwareUploaderPanel.startHuge, Generator_GridFit.Name, PlotterSettingsPanel.StepperLengthNeeded, MenuGenerate.Fractals, VoronoiZigZag.optimizePath, PlotterSettingsPanel.pen up color, FirmwareUploaderPanel.status, Converter_Voronoi.ShowCenters, PlotterSettingsPanel.TabEssential, Generator_GridFit.margin, PlotterSettingsManagerPanel.RemoveProfile, PlotterSettingsPanel.BeltLengthNeeded, FirmwareUploader.help, Generator_GridFit.cellsWide, Generator_GridHexagons.Name, LineWeightByImageIntensity.thickness, FirmwareUploaderPanel.downloadFailed, PlotterSettingsPanel.penToolMaxFeedRate, LineWeightByImageIntensity.name, PlotterSettingsPanel.MachineHeight, Converter_IntensityToHeight.waveIntensity, Generator.randomSeed, PlotterSettingsPanel.penToolDown, ConvertImagePaperCenter, Generator_FlowField.name, Converter_TruchetFromImage.name, PlotterSettingsPanel.pen down color, PlotterSettingsManagerPanel.NewProfileNameCannotBeBlank, Converter_CMYK_Spiral.Name, SaveGCode.splitGCodeQuestion, BarberPoleTurtleRenderer.name, SeparateLoopTurtleRenderer.name, Generator_MazeCircle.rings, Generator_FlowField.stepVariation, MenuGenerate.Grids, OpenLogFolder, Converter_CMYK_Crosshatch.Passes, FirmwareUploaderPanel.startM5, MenuGenerate.SpaceFillers, ReportBug, Generator_TruchetTiles.LinesPerTile, Converter_EdgeDetection.sampleSize, DefaultTurtleRenderer.name, Generator_FlowField.rightAngle, Generator_MazeRectangle.name, Converter_CMYK_Circles.maxCircleSize, DirectionLoopTurtleRenderer.name, PlotterSettingsPanel.penToolDiameter, PlotterControls.halted, FirmwareUploaderPanel.notFound, Converter_EdgeDetection.name, Generator_Spiral.name, Generator_MazeRectangle.columns, Converter_EdgeDetection.stepSize, PlotterSettingsPanel.ServoLengthNeeded, Converter_PulseCMYK.SampleRate, Translate, PlotterSettingsPanel.TabPen, Generator_FlowField.offsetY, ChooseConnection.ButtonConnect, Generator_FlowField.offsetX, PlotterSettingsPanel.penToolUp, Generator_GridHexagons.radius, Converter_QuadTreeInstant, Converter_IntensityToHeight.spacing, Converter_CMYK_Crosshatch.Name, Generator_TruchetTiles.Name, PlotterSettingsManagerPanel.NewProfileNameAlreadyExists, Generator_MazeRectangle.rows, Rotate, ChooseConnection.ButtonDisconnect, SelectImageConverterPanel.Contrast, Converter_EdgeDetection.passes, FirmwareUploaderPanel.failed, Converter_QuadTreeInstant.baseCutOff, PlotterSettingsManagerPanel.AddProfile, Generator_FlowField.fromEdge, PlotterSettings.zMotorType.servo, FirmwareUploaderPanel.noPortSelected, PlotterSettingsPanel.MachineWidth, PlotterControls.didNotFind, Generator_TruchetTiles.allow, Converter_QuadTreeInstant.cutOffIncrement, Generator_FlowField.stepLength, Generator_GridFit.cellsHigh, PlotterSettings.zMotorType, Generator_FlowField.stepSize, Converter_CMYK_Crosshatch.Note, PlotterSettingsPanel.penToolLowerSpeed, Generator_MazeHoneycomb.name, ConverterIntensity, Converter_IntensityToHeight.name, PlotterSettings.zMotorType.stepper, PlotterSettingsPanel.penToolLiftSpeed, FirmwareUploaderPanel.finished, Generator_FlowField.noiseType, Converter_CMYK_Circles.name, FirmwareUploaderPanel.avrdudeNotDownloaded, Converter_PulseCMYK.Name, PlotterSettingsPanel.Speed, MenuItemTranslate, ConversationHistory.Copy, Generator_MazeCircle.name, PlotterSettingsManagerPanel.NewProfileName, LoadScratch3.foreverNotAllowed, PlotterSettings.FindHomeGcode, SaveGCode.splitGCodeTitle, Converter_TruchetFromImage.spacing]
+2025-01-03T19:30:46.5244904Z 19:30:46.464 [main] INFO  c.m.m.TranslationsMissingTest - translations missing in target/classes/languages/arabic.xml: [Generator_Spiral.radius, Converter_TruchetFromImage.linesPerTile, MenuGenerate.Mazes, MenuImportFile, Converter_EdgeDetection.border, LineWeightByImageIntensity.image, MenuManual, MenuGenerate.Fractals, Converter_Voronoi.ShowCenters, Generator_GridHexagons.Name, LineWeightByImageIntensity.thickness, LineWeightByImageIntensity.name, Generator.randomSeed, ConvertImagePaperCenter, Converter_TruchetFromImage.name, Generator_MazeCircle.rings, MenuGenerate.Grids, OpenLogFolder, MenuGenerate.SpaceFillers, ReportBug, Generator_MazeRectangle.name, DirectionLoopTurtleRenderer.name, Generator_Spiral.name, Generator_MazeRectangle.columns, Converter_PulseCMYK.SampleRate, Generator_GridHexagons.radius, Generator_MazeRectangle.rows, Generator_TruchetTiles.allow, Generator_MazeHoneycomb.name, Converter_PulseCMYK.Name, MenuItemTranslate, Generator_MazeCircle.name, PlotterSettings.FindHomeGcode, Converter_TruchetFromImage.spacing]
+2025-01-03T19:30:46.5521538Z 19:30:46.470 [main] INFO  c.m.m.TranslationsMissingTest - translations missing in target/classes/languages/dutch.xml: [ConfirmQuitTitle, Generator_Spiral.radius, pass75, Generator_FlowField.scaleX, Size, Generator_FlowField.scaleY, firmwareVersionBadMessage, Converter_TruchetFromImage.linesPerTile, Converter_Voronoi.Name, PiCaptureAction.Backlight, InfoTitle, MetricsPreferences.collectAnonymousMetrics, PlotterSettingsPanel.TabGCode, MenuGenerate.Mazes, Converter_IntensityToHeight.sampleRate, LogPanel.Title, PaperSettings.Landscape, PlotterSettingsPanel.Title, PlotterControls.ProgramTab, MenuImportFile, Converter_EdgeDetection.border, LineWeightByImageIntensity.image, MenuManual, Converter_QuadTreeInstant.maxDepth, Generator_TruchetTiles.LineSpacing, PlotterControls.communicationFailure, Polyeder, MarlinSimulationVisualizer.name, PiCaptureAction.DRC, PlotterSettingsPanel.TabSimulation, PiCaptureAction.Horizon, PlotterSettingsPanel.AdjustAcceleration, LissajousA, CartesianButtons.buttonCenter, LissajousB, PlotterSettings.minSegTime, PiCaptureAction.Incandescent, FirmwareUploaderPanel.startHuge, PiCaptureAction.Spotlight, ConverterMultipassName, PiCaptureAction.Exposure, pass90, PlotterSettings.minSegmentLength, Generator_GridFit.Name, PlotterSettingsPanel.StepperLengthNeeded, Open, LSystemBranches, MenuReopenFile, PaperSettings.PaperColor, PiCaptureAction.Antishake, MenuGenerate.Fractals, VoronoiZigZag.optimizePath, QuestionTitle, firmwareVersionBadTitle, SpiralPulse.height, PlotterSettings.blockBufferSize, TurtleGenerators.LearnMore.Link.Text, ConverterWanderName, LoadError, Length, PlotterSettingsPanel.pen up color, VoronoiZigZagName, ConverterMultipassAngle, FirmwareUploaderPanel.status, PlotterSettings.handleSmallSegments, Converter_Voronoi.ShowCenters, PlotterControls.ConnectControls, PlotterSettingsPanel.TabEssential, SierpinskiTriangleName, PlotterSettings.minAcceleration, PlotterControls.DrawControls, Generator_GridFit.margin, Port, LissajousName, PlotterSettingsManagerPanel.RemoveProfile, PlotterSettingsPanel.BeltLengthNeeded, Art Pipeline, ConverterRandomLinesName, FirmwareUploader.help, Generator_GridFit.cellsWide, Generator_GridHexagons.Name, horizontal, LogPanel.CopyClipboard, LineWeightByImageIntensity.thickness, FirmwareUploaderPanel.downloadFailed, PlotterControls.Title, PaperSettings.Title, PlotterSettingsPanel.penToolMaxFeedRate, SaveError, PiCaptureAction.CaptureImageTitle, GosperCurveName, LineWeightByImageIntensity.name, PlotterSettingsPanel.MachineHeight, SpiralPulse.intensity, RobotMenu.RobotStyle, Converter_IntensityToHeight.waveIntensity, PiCaptureAction.Verylong, Generator.randomSeed, penDiameter, PlotterSettingsPanel.penToolDown, ConvertImagePaperCenter, Generator_FlowField.name, SpirographEpitrochoid, ConfirmQuitQuestion, FibonacciSpiralName, Converter_TruchetFromImage.name, PlotterSettingsPanel.pen down color, Reorder, PlotterSettingsManagerPanel.NewProfileNameCannotBeBlank, Converter_CMYK_Spiral.Name, SaveGCode.splitGCodeQuestion, BarberPoleTurtleRenderer.name, SeparateLoopTurtleRenderer.name, OpenPaperSettings, PlotterControls.AdvancedControls, Generator_MazeCircle.rings, PiCaptureAction.Off, PlotterControls.FindHome, Generator_FlowField.stepVariation, MenuGenerate.Grids, vertical, PiCaptureAction.Sports, ConverterWanderCMYK, OpenLogFolder, LoadFilePanel.title, Converter_CMYK_Crosshatch.Passes, MenuItemPayPalDonation, FirmwareUploaderPanel.startM5, bottom right, MenuGenerate.SpaceFillers, PiCaptureAction.CaptureImage, top right, OpenPlotterSettings, ReportBug, Generator_TruchetTiles.LinesPerTile, bottom left, ConversionFill, Converter_EdgeDetection.sampleSize, PaperSettings.Rotation, MoireName, center, ErrorTitle, TextSize, DefaultTurtleRenderer.name, Generator_FlowField.rightAngle, GraphPaperName, ConversationHistory.Clear, PiCaptureAction.Low, PiCaptureAction.Beach, Generator_MazeRectangle.name, MenuSaveFile, Converter_CMYK_Circles.maxCircleSize, FontFace, DirectionLoopTurtleRenderer.name, PiCaptureAction.Tungsten, PlotterControls.homeXYFirst, pass45, PlotterControls.JogTab, PiCaptureAction.Quality, top left, Import, LSystemAngle, PlotterSettingsPanel.penToolDiameter, PlotterControls.halted, MenuForums, FirmwareUploaderPanel.notFound, PiCaptureAction.Shade, Converter_EdgeDetection.name, Generator_Spiral.name, Generator_MazeRectangle.columns, RobotMenu.RenderStyle, Converter_EdgeDetection.stepSize, ConvertImagePaperFill, PlotterSettingsPanel.ServoLengthNeeded, PiCaptureAction.CancelCapture, Converter_PulseCMYK.SampleRate, Translate, PlotterSettingsPanel.TabPen, ConvertImagePaperFit, SpirographMajorRadius, Generator_FlowField.offsetY, JogInterface.FindHome, ChooseConnection.ButtonConnect, Generator_FlowField.offsetX, PlotterSettingsPanel.penToolUp, Generator_GridHexagons.radius, FillPageName, PaperSettings.ShiftY, PaperSettings.ShiftX, Converter_QuadTreeInstant, PiCaptureAction.Snow, PiCaptureAction.NightPreview, Package, MenuCaptureImage, BoxGeneratorCutoff, Converter_IntensityToHeight.spacing, Converter_CMYK_Crosshatch.Name, Generator_TruchetTiles.Name, Help, PlotterSettingsManagerPanel.NewProfileNameAlreadyExists, Generator_MazeRectangle.rows, PiCaptureAction.AWB, Rotate, ChooseConnection.ButtonDisconnect, PiCaptureAction.UseCapture, Spiral.toCorners, FileTypeScratch3, PiCaptureAction.Auto, SelectImageConverterPanel.Contrast, Converter_EdgeDetection.passes, Direction, SandyNoble.title, PlotterSettings.StartGcode, FirmwareUploaderPanel.failed, FlipH, Converter_QuadTreeInstant.baseCutOff, Export, PlotterSettingsManagerPanel.AddProfile, EstimatedTimeIs, Width, LissajousDelta, PiCaptureAction.Contrast, PiCaptureAction.High, SpirographNumSamples, pass15, Converter_VoronoiStippling.DrawBorders, GFXPreferences.dragSpeed, PlotterSettings.minimumPlannerSpeed, BorderName, FlipV, Generator_FlowField.fromEdge, PiCaptureAction.Fluorescent, PlotterSettings.zMotorType.servo, ConverterWanderLineCount, FirmwareUploaderPanel.noPortSelected, PiCaptureAction.Night, PlotterSettingsPanel.MachineWidth, Model, MetricsPreferences.Title, PlotterControls.didNotFind, ConverterRandomLinesCount, Generator_TruchetTiles.allow, SpirographName, StartAtExactly, PaperSettings.PaperSize, LSystemNoise, PlotterControls.EmergencyStop, LSystemOrderScale, PiCaptureAction.Fireworks, Converter_QuadTreeInstant.cutOffIncrement, ConverterMultipassLevels, StartAtAddPenDown, Generator_FlowField.stepLength, PlotterControls.MarlinTab, PiCaptureAction.Flash, DialogAbout.AboutHTML, Converter_VoronoiStippling.Cutoff, Generator_GridFit.cellsHigh, PlotterSettings.zMotorType, Reset, LogPanel.LogFiles, PiCaptureAction.Sharpness, Generator_FlowField.stepSize, PiCaptureAction.Medium, PlotterControls.Step, SpirographPScale, Converter_CMYK_Crosshatch.Note, BoxGeneratorMaxSize, PlotterSettingsPanel.penToolLowerSpeed, Generator_MazeHoneycomb.name, ConverterIntensity, Flap, SpiralPulseName, Converter_IntensityToHeight.name, MetricsPreferences.collectAnonymousMetricsOnUpdate, RobotMenu.GetTimeEstimate, PlotterSettings.zMotorType.stepper, TextMessage, Crosshatch, PlotterSettingsPanel.penToolLiftSpeed, PaperSettings.PaperMargin, FirmwareUploaderPanel.finished, JogInterface.EngageMotors, Generator_FlowField.noiseType, Converter_CMYK_Circles.name, SpiralPulse.spacing, FirmwareUploaderPanel.avrdudeNotDownloaded, Height, PlotterSettings.EndGcode, OK, ConversationHistory.Save, SandyNoble.rings, SandyNoble.center, PiCaptureAction.Cloud, PiCaptureAction.Sun, Simplify, PiCaptureAction.FixedFPS, Converter_PulseCMYK.Name, PlotterSettingsPanel.Speed, Scale, MenuItemTranslate, StartAtLastPenDown, ConversationHistory.Copy, Generator_MazeCircle.name, PlotterSettingsManagerPanel.NewProfileName, LoadScratch3.foreverNotAllowed, FirmwareUpdate, PlotterSettings.segmentsPerSecond, PlotterSettings.FindHomeGcode, SaveGCode.splitGCodeTitle, Converter_TruchetFromImage.spacing, SpirographMinorRadius, InfillTurtleAction.title]
+2025-01-03T19:30:46.5582911Z [INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.365 s - in com.marginallyclever.makelangelo.TranslationsMissingTest
+2025-01-03T19:30:46.5584444Z [INFO] Running com.marginallyclever.makelangelo.makeart.turtlegenerator.Generator_MazeRectangleCircleTest
+2025-01-03T19:30:46.5585477Z 19:30:46.500 [main] INFO  c.m.makelangelo.Translator - starting translator...
+2025-01-03T19:30:46.5586247Z 19:30:46.500 [main] INFO  c.m.makelangelo.Translator - Default language = English
+2025-01-03T19:30:46.7582230Z [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.274 s - in com.marginallyclever.makelangelo.makeart.turtlegenerator.Generator_MazeRectangleCircleTest
+2025-01-03T19:30:46.7586636Z [INFO] Running com.marginallyclever.makelangelo.makeart.turtlegenerator.TurtleGeneratorTest
+2025-01-03T19:30:46.9828819Z 19:30:46.752 [main] INFO  c.m.makelangelo.Translator - starting translator...
+2025-01-03T19:30:46.9829692Z 19:30:46.752 [main] INFO  c.m.makelangelo.Translator - Default language = English
+2025-01-03T19:30:46.9895566Z [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.231 s - in com.marginallyclever.makelangelo.makeart.turtlegenerator.TurtleGeneratorTest
+2025-01-03T19:30:46.9903649Z [INFO] Running com.marginallyclever.makelangelo.makeart.imagefilter.FilterInvertTest
+2025-01-03T19:30:47.2360529Z [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.244 s - in com.marginallyclever.makelangelo.makeart.imagefilter.FilterInvertTest
+2025-01-03T19:30:47.2364961Z [INFO] Running com.marginallyclever.makelangelo.makeart.imagefilter.FilterTresholdTest
+2025-01-03T19:30:47.2651599Z [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.027 s - in com.marginallyclever.makelangelo.makeart.imagefilter.FilterTresholdTest
+2025-01-03T19:30:47.2657481Z [INFO] Running com.marginallyclever.makelangelo.makeart.imagefilter.FilterTresholdFancyTest
+2025-01-03T19:30:47.2958373Z [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.031 s - in com.marginallyclever.makelangelo.makeart.imagefilter.FilterTresholdFancyTest
+2025-01-03T19:30:47.2960813Z [INFO] Running com.marginallyclever.makelangelo.makeart.TestLSystem
+2025-01-03T19:30:47.3035182Z [INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.006 s - in com.marginallyclever.makelangelo.makeart.TestLSystem
+2025-01-03T19:30:47.3036635Z [INFO] Running com.marginallyclever.makelangelo.makeart.turtletool.TestCropTurtle
+2025-01-03T19:30:47.3540746Z [INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.043 s - in com.marginallyclever.makelangelo.makeart.turtletool.TestCropTurtle
+2025-01-03T19:30:47.3542535Z [INFO] Running com.marginallyclever.makelangelo.makeart.io.SaveBitmapTest
+2025-01-03T19:30:47.3590079Z 19:30:47.342 [main] INFO  c.m.makelangelo.Translator - starting translator...
+2025-01-03T19:30:47.3592225Z 19:30:47.343 [main] INFO  c.m.makelangelo.Translator - Default language = English
+2025-01-03T19:30:47.7201964Z [INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.37 s - in com.marginallyclever.makelangelo.makeart.io.SaveBitmapTest
+2025-01-03T19:30:47.7203544Z [INFO] Running com.marginallyclever.makelangelo.makeart.io.SaveDXFTest
+2025-01-03T19:30:47.7235123Z [ERROR] Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.001 s <<< FAILURE! - in com.marginallyclever.makelangelo.makeart.io.SaveDXFTest
+2025-01-03T19:30:47.7246551Z [ERROR] com.marginallyclever.makelangelo.makeart.io.SaveDXFTest  Time elapsed: 0.001 s  <<< ERROR!
+2025-01-03T19:30:47.7249291Z java.lang.reflect.InaccessibleObjectException: Unable to make public static void com.marginallyclever.makelangelo.makeart.io.SaveDXFTest.beforeAll() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.makeart.io" to unnamed module @6f10d5b6
+2025-01-03T19:30:47.7251569Z 
+2025-01-03T19:30:47.7252234Z [INFO] Running com.marginallyclever.makelangelo.makeart.io.SaveGCodeTest
+2025-01-03T19:30:47.7273304Z [ERROR] Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.001 s <<< FAILURE! - in com.marginallyclever.makelangelo.makeart.io.SaveGCodeTest
+2025-01-03T19:30:47.7292864Z [ERROR] com.marginallyclever.makelangelo.makeart.io.SaveGCodeTest  Time elapsed: 0.001 s  <<< ERROR!
+2025-01-03T19:30:47.7300115Z java.lang.reflect.InaccessibleObjectException: Unable to make public static void com.marginallyclever.makelangelo.makeart.io.SaveGCodeTest.beforeAll() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.makeart.io" to unnamed module @6f10d5b6
+2025-01-03T19:30:47.7305345Z 
+2025-01-03T19:30:47.7307803Z [INFO] Running com.marginallyclever.makelangelo.makeart.io.LoadGCodeTest
+2025-01-03T19:30:47.7413499Z 19:30:47.717 [main] INFO  c.m.makelangelo.Translator - starting translator...
+2025-01-03T19:30:47.7416652Z 19:30:47.720 [main] INFO  c.m.makelangelo.Translator - Default language = English
+2025-01-03T19:30:47.7816759Z fileToTest = /gcode/multi_shapes_ignatus2.gcode, fileExpected = /gcode/multi_shapes_ignatus2_expected.txt
+2025-01-03T19:30:47.7932856Z fileToTest = /gcode/multi_shapes_path-circle-line-rect.gcode, fileExpected = /gcode/multi_shapes_path-circle-line-rect_expected.txt
+2025-01-03T19:30:47.8084512Z [INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.079 s - in com.marginallyclever.makelangelo.makeart.io.LoadGCodeTest
+2025-01-03T19:30:47.8085800Z [INFO] Running com.marginallyclever.makelangelo.makeart.io.SaveSVGTest
+2025-01-03T19:30:47.8086923Z [ERROR] Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0 s <<< FAILURE! - in com.marginallyclever.makelangelo.makeart.io.SaveSVGTest
+2025-01-03T19:30:47.8088187Z [ERROR] com.marginallyclever.makelangelo.makeart.io.SaveSVGTest  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:47.8090543Z java.lang.reflect.InaccessibleObjectException: Unable to make public static void com.marginallyclever.makelangelo.makeart.io.SaveSVGTest.beforeAll() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.makeart.io" to unnamed module @6f10d5b6
+2025-01-03T19:30:47.8092468Z 
+2025-01-03T19:30:47.8093242Z [INFO] Running com.marginallyclever.makelangelo.makeart.io.SaveAndLoadDXFTest
+2025-01-03T19:30:47.8142339Z 19:30:47.799 [main] INFO  c.m.makelangelo.Translator - starting translator...
+2025-01-03T19:30:47.8143178Z 19:30:47.799 [main] INFO  c.m.makelangelo.Translator - Default language = English
+2025-01-03T19:30:48.0716617Z [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.268 s - in com.marginallyclever.makelangelo.makeart.io.SaveAndLoadDXFTest
+2025-01-03T19:30:48.0721359Z [INFO] Running com.marginallyclever.makelangelo.makeart.io.LoadScratch3Test
+2025-01-03T19:30:48.0853585Z 19:30:48.069 [main] INFO  c.m.makelangelo.Translator - starting translator...
+2025-01-03T19:30:48.0856553Z 19:30:48.070 [main] INFO  c.m.makelangelo.Translator - Default language = English
+2025-01-03T19:30:48.1474318Z fileToTest = /scratch3/test_02_koch_curve_03.sb3, fileExpected = /scratch3/test_02_koch_curve_03_expected.txt
+2025-01-03T19:30:48.2160691Z [INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.137 s - in com.marginallyclever.makelangelo.makeart.io.LoadScratch3Test
+2025-01-03T19:30:48.2164361Z [INFO] Running com.marginallyclever.makelangelo.makeart.io.SaveAndLoadSVGTest
+2025-01-03T19:30:48.2198160Z 19:30:48.208 [main] INFO  c.m.makelangelo.Translator - starting translator...
+2025-01-03T19:30:48.2215509Z 19:30:48.208 [main] INFO  c.m.makelangelo.Translator - Default language = English
+2025-01-03T19:30:48.5305989Z [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.315 s - in com.marginallyclever.makelangelo.makeart.io.SaveAndLoadSVGTest
+2025-01-03T19:30:48.5309571Z [INFO] Running com.marginallyclever.makelangelo.makeart.io.SaveAndLoadGCodeTest
+2025-01-03T19:30:48.5406891Z 19:30:48.524 [main] INFO  c.m.makelangelo.Translator - starting translator...
+2025-01-03T19:30:48.5420344Z 19:30:48.524 [main] INFO  c.m.makelangelo.Translator - Default language = English
+2025-01-03T19:30:48.7095495Z [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.156 s - in com.marginallyclever.makelangelo.makeart.io.SaveAndLoadGCodeTest
+2025-01-03T19:30:48.7096742Z [INFO] Running com.marginallyclever.makelangelo.makeart.io.LoadSVGTest
+2025-01-03T19:30:48.7097494Z fileToTest = /svg/line.svg, fileExpected = /svg/line_expected.txt
+2025-01-03T19:30:48.7225043Z fileToTest = /svg/circle.svg, fileExpected = /svg/circle_expected.txt
+2025-01-03T19:30:48.7281643Z fileToTest = /svg/ellipse.svg, fileExpected = /svg/ellipse_expected.txt
+2025-01-03T19:30:50.2901037Z fileToTest = /svg/eule.svg, fileExpected = /svg/eule_expected.txt
+2025-01-03T19:30:50.3025426Z fileToTest = /svg/multi_shapes_ignatus1.svg, fileExpected = /svg/multi_shapes_ignatus1_expected.txt
+2025-01-03T19:30:50.3107526Z fileToTest = /svg/multi_shapes_ignatus2.svg, fileExpected = /svg/multi_shapes_ignatus2_expected.txt
+2025-01-03T19:30:50.3278157Z fileToTest = /svg/multi_shapes_path-circle-line-rect.svg, fileExpected = /svg/multi_shapes_path-circle-line-rect_expected.txt
+2025-01-03T19:30:50.3453767Z fileToTest = /svg/multi_shapes_ying-yang.svg, fileExpected = /svg/multi_shapes_ying-yang_expected.txt
+2025-01-03T19:30:50.3525464Z fileToTest = /svg/rect.svg, fileExpected = /svg/rect_expected.txt
+2025-01-03T19:30:50.3737396Z [INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.668 s - in com.marginallyclever.makelangelo.makeart.io.LoadSVGTest
+2025-01-03T19:30:50.3738591Z [INFO] Running com.marginallyclever.makelangelo.makeart.io.LoadDXFTest
+2025-01-03T19:30:50.3739511Z 19:30:50.351 [main] INFO  c.m.makelangelo.Translator - starting translator...
+2025-01-03T19:30:50.3740704Z 19:30:50.351 [main] INFO  c.m.makelangelo.Translator - Default language = English
+2025-01-03T19:30:50.3837282Z fileToTest = /dxf/circle.dxf, fileExpected = /dxf/circle_expected.txt
+2025-01-03T19:30:50.3892921Z fileToTest = /dxf/ellipse.dxf, fileExpected = /dxf/ellipse_expected.txt
+2025-01-03T19:30:50.4338398Z fileToTest = /dxf/multi_shapes_ignatus1.dxf, fileExpected = /dxf/multi_shapes_ignatus1_expected.txt
+2025-01-03T19:30:50.4411599Z fileToTest = /dxf/multi_shapes_ignatus2.dxf, fileExpected = /dxf/multi_shapes_ignatus2_expected.txt
+2025-01-03T19:30:50.4465091Z fileToTest = /dxf/multi_shapes_path-circle-line-rect.dxf, fileExpected = /dxf/multi_shapes_path-circle-line-rect_expected.txt
+2025-01-03T19:30:50.5161352Z fileToTest = /dxf/multi_shapes_ying-yang.dxf, fileExpected = /dxf/multi_shapes_ying-yang_expected.txt
+2025-01-03T19:30:50.5224686Z fileToTest = /dxf/rect.dxf, fileExpected = /dxf/rect_expected.txt
+2025-01-03T19:30:50.5312464Z [INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.171 s - in com.marginallyclever.makelangelo.makeart.io.LoadDXFTest
+2025-01-03T19:30:50.5314551Z [INFO] Running com.marginallyclever.makelangelo.PreferencesHelperTest
+2025-01-03T19:30:50.5385920Z [INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.01 s - in com.marginallyclever.makelangelo.PreferencesHelperTest
+2025-01-03T19:30:50.5398854Z [INFO] Running com.marginallyclever.makelangelo.LanguagesXmlValidationForNoDupKeyTest
+2025-01-03T19:30:50.6640646Z 19:30:50.653 [main] INFO  c.m.m.LanguagesXmlValidationForNoDupKeyTest - [   error ] file:/home/runner/work/Makelangelo-software/Makelangelo-software/target/test-classes/translator/english_with_dup_key.xml:26   cvc-identity-constraint.4.2.2: Duplicate key value [KEY_A] declared for identity constraint "string_key_unique" of element "language".
+2025-01-03T19:30:50.6644579Z 19:30:50.654 [main] INFO  c.m.m.LanguagesXmlValidationForNoDupKeyTest - [   error ] file:/home/runner/work/Makelangelo-software/Makelangelo-software/target/test-classes/translator/english_with_dup_key.xml:30   cvc-pattern-valid: Value '' is not facet-valid with respect to pattern '(\n|.)+' for type 'stringNotEmpty'.
+2025-01-03T19:30:50.6647935Z 19:30:50.654 [main] INFO  c.m.m.LanguagesXmlValidationForNoDupKeyTest - [   error ] file:/home/runner/work/Makelangelo-software/Makelangelo-software/target/test-classes/translator/english_with_dup_key.xml:30   cvc-type.3.1.3: The value '' of element 'key' is not valid.
+2025-01-03T19:30:50.6651451Z 19:30:50.655 [main] INFO  c.m.m.LanguagesXmlValidationForNoDupKeyTest - [   error ] file:/home/runner/work/Makelangelo-software/Makelangelo-software/target/test-classes/translator/english_with_dup_key.xml:39   cvc-identity-constraint.4.2.2: Duplicate key value [KEY_B] declared for identity constraint "string_key_unique" of element "language".
+2025-01-03T19:30:50.6655386Z 19:30:50.656 [main] INFO  c.m.m.LanguagesXmlValidationForNoDupKeyTest - [   error ] file:/home/runner/work/Makelangelo-software/Makelangelo-software/target/test-classes/translator/english_with_dup_key.xml:45   cvc-complex-type.2.4.a: Invalid content was found starting with element 'value'. One of '{hint}' is expected.
+2025-01-03T19:30:50.7982156Z [INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.26 s - in com.marginallyclever.makelangelo.LanguagesXmlValidationForNoDupKeyTest
+2025-01-03T19:30:50.7985668Z [INFO] Running com.marginallyclever.makelangelo.TranslatorTest
+2025-01-03T19:30:50.8046911Z 19:30:50.796 [main] INFO  c.m.makelangelo.Translator - starting translator...
+2025-01-03T19:30:50.8049475Z 19:30:50.796 [main] INFO  c.m.makelangelo.Translator - Default language = English
+2025-01-03T19:30:50.8066532Z 19:30:50.805 [main] WARN  c.m.makelangelo.Translator - Missing translation 'DoesNotExist' in language 'English'
+2025-01-03T19:30:50.8148044Z 19:30:50.806 [main] INFO  c.m.makelangelo.Translator - starting translator...
+2025-01-03T19:30:50.8148894Z 19:30:50.806 [main] INFO  c.m.makelangelo.Translator - Default language = English
+2025-01-03T19:30:50.8221724Z [INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.02 s - in com.marginallyclever.makelangelo.TranslatorTest
+2025-01-03T19:30:50.8324232Z [INFO] Running com.marginallyclever.makelangelo.paper.PaperTest
+2025-01-03T19:30:50.8465912Z [WARNING] Tests run: 3, Failures: 0, Errors: 0, Skipped: 1, Time elapsed: 0.005 s - in com.marginallyclever.makelangelo.paper.PaperTest
+2025-01-03T19:30:50.8467869Z [INFO] Running com.marginallyclever.makelangelo.plotter.plottersettings.PlotterSettingsTest
+2025-01-03T19:30:50.8509289Z [INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.006 s - in com.marginallyclever.makelangelo.plotter.plottersettings.PlotterSettingsTest
+2025-01-03T19:30:50.8511218Z [INFO] Running com.marginallyclever.makelangelo.plotter.plottersettings.PlotterSettingsManagerTest
+2025-01-03T19:30:50.8607771Z [INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.009 s - in com.marginallyclever.makelangelo.plotter.plottersettings.PlotterSettingsManagerTest
+2025-01-03T19:30:50.8609781Z [INFO] Running com.marginallyclever.makelangelo.plotter.plottercontrols.MarlinPanelTest
+2025-01-03T19:30:50.8854322Z 19:30:50.867 [main] INFO  c.m.makelangelo.Translator - starting translator...
+2025-01-03T19:30:50.8874964Z 19:30:50.867 [main] INFO  c.m.makelangelo.Translator - Default language = English
+2025-01-03T19:30:50.9571579Z 19:30:50.956 [main] WARN  c.m.m.p.plottercontrols.MarlinPanel - Did not find 0
+2025-01-03T19:30:50.9733769Z 19:30:50.970 [main] WARN  c.m.m.p.plottercontrols.MarlinPanel - Home XY First
+2025-01-03T19:30:50.9875307Z 19:30:50.986 [main] ERROR c.m.m.p.plottercontrols.MarlinPanel - Error from printer 'Printer halted'
+2025-01-03T19:30:50.9967296Z [INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.131 s - in com.marginallyclever.makelangelo.plotter.plottercontrols.MarlinPanelTest
+2025-01-03T19:30:50.9968890Z [INFO] Running com.marginallyclever.makelangelo.plotter.plottercontrols.MarlinPlotterInterfaceTest
+2025-01-03T19:30:51.0049421Z 19:30:50.989 [main] INFO  c.m.makelangelo.Translator - starting translator...
+2025-01-03T19:30:51.0059212Z 19:30:50.989 [main] INFO  c.m.makelangelo.Translator - Default language = English
+2025-01-03T19:30:51.0197668Z 19:30:51.018 [main] WARN  c.m.m.p.p.MarlinPlotterPanel - M114 problem, continuing anyway: X:inva Y:-186.00 Z:200.00 Count X:72290 Y:72290 Z:32000
+2025-01-03T19:30:51.0342975Z 19:30:51.031 [main] WARN  c.m.m.p.plottercontrols.MarlinPanel - Did not find 0
+2025-01-03T19:30:51.0468595Z 19:30:51.045 [main] WARN  c.m.m.p.p.MarlinPlotterPanel - M201 problem, continuing anyway: echo:  M201 X300.00 Yinvalid
+2025-01-03T19:30:51.0762509Z 19:30:51.075 [main] WARN  c.m.m.p.p.MarlinPlotterPanel - M203 problem, continuing anyway: echo:  M203 X200.00 Yinvalid
+2025-01-03T19:30:51.1185722Z [INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.114 s - in com.marginallyclever.makelangelo.plotter.plottercontrols.MarlinPlotterInterfaceTest
+2025-01-03T19:30:51.1205983Z [INFO] Running com.marginallyclever.convenience.TestConvexHull
+2025-01-03T19:30:51.1207013Z [INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.005 s - in com.marginallyclever.convenience.TestConvexHull
+2025-01-03T19:30:51.1208055Z [INFO] Running com.marginallyclever.convenience.TestColorRGB
+2025-01-03T19:30:51.1274747Z [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0 s - in com.marginallyclever.convenience.TestColorRGB
+2025-01-03T19:30:51.1276055Z [INFO] Running com.marginallyclever.convenience.helpers.MathHelperTest
+2025-01-03T19:30:51.1303062Z [INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.005 s - in com.marginallyclever.convenience.helpers.MathHelperTest
+2025-01-03T19:30:51.1304354Z [INFO] Running com.marginallyclever.convenience.FileAccessTest
+2025-01-03T19:30:51.1332466Z [ERROR] Tests run: 3, Failures: 0, Errors: 3, Skipped: 0, Time elapsed: 0.002 s <<< FAILURE! - in com.marginallyclever.convenience.FileAccessTest
+2025-01-03T19:30:51.1334371Z [ERROR] com.marginallyclever.convenience.FileAccessTest.open_fileInJar  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:51.1337006Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.convenience.FileAccessTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.convenience" to unnamed module @6f10d5b6
+2025-01-03T19:30:51.1338691Z 
+2025-01-03T19:30:51.1339781Z [ERROR] com.marginallyclever.convenience.FileAccessTest.open_fileInClasspath  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:51.1342182Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.convenience.FileAccessTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.convenience" to unnamed module @6f10d5b6
+2025-01-03T19:30:51.1344196Z 
+2025-01-03T19:30:51.1345114Z [ERROR] com.marginallyclever.convenience.FileAccessTest.open_directFile  Time elapsed: 0 s  <<< ERROR!
+2025-01-03T19:30:51.1347873Z java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.convenience.FileAccessTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.convenience" to unnamed module @6f10d5b6
+2025-01-03T19:30:51.1353562Z 
+2025-01-03T19:30:51.1354182Z [INFO] Running com.marginallyclever.convenience.TestStringHelper
+2025-01-03T19:30:51.1364389Z [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.001 s - in com.marginallyclever.convenience.TestStringHelper
+2025-01-03T19:30:51.1366095Z [INFO] Running com.marginallyclever.convenience.TestColorHSB
+2025-01-03T19:30:51.1399124Z [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.005 s - in com.marginallyclever.convenience.TestColorHSB
+2025-01-03T19:30:51.2237977Z [INFO] 
+2025-01-03T19:30:51.2239616Z [INFO] Results:
+2025-01-03T19:30:51.2240148Z [INFO] 
+2025-01-03T19:30:51.2240846Z [ERROR] Errors: 
+2025-01-03T19:30:51.2242114Z [ERROR]   FileAccessTest.open_directFile » InaccessibleObject Unable to make com.margina...
+2025-01-03T19:30:51.2243533Z [ERROR]   FileAccessTest.open_fileInClasspath » InaccessibleObject Unable to make com.ma...
+2025-01-03T19:30:51.2245211Z [ERROR]   FileAccessTest.open_fileInJar » InaccessibleObject Unable to make com.marginal...
+2025-01-03T19:30:51.2255872Z [ERROR]   SaveDXFTest » InaccessibleObject Unable to make public static void com.margina...
+2025-01-03T19:30:51.2257195Z [ERROR]   SaveGCodeTest » InaccessibleObject Unable to make public static void com.margi...
+2025-01-03T19:30:51.2258564Z [ERROR]   SaveSVGTest » InaccessibleObject Unable to make public static void com.margina...
+2025-01-03T19:30:51.2259804Z [ERROR]   TurtleTest.addTurtle » InaccessibleObject Unable to make com.marginallyclever....
+2025-01-03T19:30:51.2261144Z [ERROR]   TurtleTest.angle » InaccessibleObject Unable to make com.marginallyclever.make...
+2025-01-03T19:30:51.2262498Z [ERROR]   TurtleTest.bounds » InaccessibleObject Unable to make com.marginallyclever.mak...
+2025-01-03T19:30:51.2263751Z [ERROR]   TurtleTest.colorChange » InaccessibleObject Unable to make com.marginallycleve...
+2025-01-03T19:30:51.2266917Z [ERROR]   TurtleTest.empty » InaccessibleObject Unable to make com.marginallyclever.make...
+2025-01-03T19:30:51.2269852Z [ERROR]   TurtleTest.equalsTwoTurtles » InaccessibleObject Unable to make com.marginally...
+2025-01-03T19:30:51.2270852Z [ERROR]   TurtleTest.firstColor » InaccessibleObject Unable to make com.marginallyclever...
+2025-01-03T19:30:51.2271737Z [ERROR]   TurtleTest.moveAndDraw » InaccessibleObject Unable to make com.marginallycleve...
+2025-01-03T19:30:51.2272468Z [ERROR]   TurtleTest.notEqualsTwoTurtles » InaccessibleObject Unable to make com.margina...
+2025-01-03T19:30:51.2273170Z [ERROR]   TurtleTest.penDownLinePenUp » InaccessibleObject Unable to make com.marginally...
+2025-01-03T19:30:51.2275389Z [ERROR]   TurtleTest.scale » InaccessibleObject Unable to make com.marginallyclever.make...
+2025-01-03T19:30:51.2276197Z [ERROR]   TurtleTest.splitByToolChange » InaccessibleObject Unable to make com.marginall...
+2025-01-03T19:30:51.2276901Z [ERROR]   TurtleTest.testInterpolate » InaccessibleObject Unable to make com.marginallyc...
+2025-01-03T19:30:51.2277729Z [ERROR]   TurtleTest.toolChange » InaccessibleObject Unable to make com.marginallyclever...
+2025-01-03T19:30:51.2278454Z [ERROR]   TurtleTest.translate » InaccessibleObject Unable to make com.marginallyclever....
+2025-01-03T19:30:51.2279744Z [ERROR]   TurtleTest.travel » InaccessibleObject Unable to make com.marginallyclever.mak...
+2025-01-03T19:30:51.2280614Z [INFO] 
+2025-01-03T19:30:51.2281160Z [ERROR] Tests run: 140, Failures: 0, Errors: 22, Skipped: 1
+2025-01-03T19:30:51.2281943Z [INFO] 
+2025-01-03T19:30:51.2294511Z [INFO] ------------------------------------------------------------------------
+2025-01-03T19:30:51.2295203Z [INFO] BUILD FAILURE
+2025-01-03T19:30:51.2295926Z [INFO] ------------------------------------------------------------------------
+2025-01-03T19:30:51.2304405Z [INFO] Total time:  23.292 s
+2025-01-03T19:30:51.2332194Z [INFO] Finished at: 2025-01-03T19:30:51Z
+2025-01-03T19:30:51.2337680Z [INFO] ------------------------------------------------------------------------
+2025-01-03T19:30:51.2339835Z [ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.0.0-M5:test (default-test) on project Makelangelo: There are test failures.
+2025-01-03T19:30:51.2341023Z [ERROR] 
+2025-01-03T19:30:51.2341590Z [ERROR] Please refer to /home/runner/work/Makelangelo-software/Makelangelo-software/target/surefire-reports for the individual test results.
+2025-01-03T19:30:51.2342357Z [ERROR] Please refer to dump files (if any exist) [date].dump, [date]-jvmRun[N].dump and [date].dumpstream.
+2025-01-03T19:30:51.2342770Z [ERROR] -> [Help 1]
+2025-01-03T19:30:51.2342960Z [ERROR] 
+2025-01-03T19:30:51.2343248Z [ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+2025-01-03T19:30:51.2343694Z [ERROR] Re-run Maven using the -X switch to enable full debug logging.
+2025-01-03T19:30:51.2344230Z [ERROR] 
+2025-01-03T19:30:51.2344602Z [ERROR] For more information about the errors and possible solutions, please read the following articles:
+2025-01-03T19:30:51.2345221Z [ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+2025-01-03T19:30:51.2528734Z ##[error]Process completed with exit code 1.
+2025-01-03T19:30:51.2653107Z Post job cleanup.
+2025-01-03T19:30:51.4323733Z Post job cleanup.
+2025-01-03T19:30:51.5256092Z [command]/usr/bin/git version
+2025-01-03T19:30:51.5293287Z git version 2.47.1
+2025-01-03T19:30:51.5341935Z Temporarily overriding HOME='/home/runner/work/_temp/d44dbfc6-3031-427c-8b97-282189f557d4' before making global git config changes
+2025-01-03T19:30:51.5343295Z Adding repository directory to the temporary git global config as a safe directory
+2025-01-03T19:30:51.5347987Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Makelangelo-software/Makelangelo-software
+2025-01-03T19:30:51.5383494Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-01-03T19:30:51.5417645Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-01-03T19:30:51.5673505Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-01-03T19:30:51.5697471Z http.https://github.com/.extraheader
+2025-01-03T19:30:51.5709370Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2025-01-03T19:30:51.5743349Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-01-03T19:30:51.6107120Z Cleaning up orphan processes
+
+
+========================
+CODE DIFF
+========================
+{
+  "_created": "2025-01-29T07:33:19Z",
+  "_deleted": false,
+  "_etag": "a723d727f79b02f0911b164e83493b1ef7428bc9",
+  "_id": "6799d9bf7ba37dc7330f04f5",
+  "_links": {
+    "collection": {
+      "href": "diffs",
+      "title": "diffs"
+    },
+    "next": {
+      "href": "diffs/MarginallyClever-Makelangelo-software-35126825676?page=2",
+      "title": "next page"
+    },
+    "parent": {
+      "href": "/",
+      "title": "home"
+    },
+    "self": {
+      "href": "diffs/MarginallyClever-Makelangelo-software-35126825676",
+      "title": "Diff"
+    }
+  },
+  "_updated": "2025-01-29T07:33:19Z",
+  "diff_size": 8,
+  "failed_sha": "5f7a8ca2218ba64fd6eb5be385cafc51dd5f866a",
+  "image_tag": "MarginallyClever-Makelangelo-software-35126825676",
+  "passed_sha": "87a4f00984227cf35919e54d23533cd7264ef402",
+  "patches": [
+    {
+      "added_code_size": 8,
+      "content": "--- a/src/main/java/module-info.java\n+++ b/src/main/java/module-info.java\n@@ -20,4 +20,12 @@\n     requires org.locationtech.jts;\n     requires org.apache.httpcomponents.httpclient;\n     requires org.apache.httpcomponents.httpcore;\n+\n+    opens com.marginallyclever.convenience;\n+    opens com.marginallyclever.convenience.voronoi;\n+    opens com.marginallyclever.makelangelo.makeart.io;\n+    opens com.marginallyclever.makelangelo.plotter.plottercontrols;\n+    opens com.marginallyclever.makelangelo.turtle;\n+    opens com.marginallyclever.convenience.noise;\n+    opens com.marginallyclever.convenience.helpers;\n }\n\\ No newline at end of file\n",
+      "deleted_code_size": 0,
+      "new_file": "src/main/java/module-info.java",
+      "old_file": "src/main/java/module-info.java"
+    }
+  ],
+  "total_added_code": 8,
+  "total_deleted_code": 0
+}

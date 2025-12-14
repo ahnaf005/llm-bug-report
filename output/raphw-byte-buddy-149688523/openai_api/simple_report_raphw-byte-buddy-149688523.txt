@@ -1,0 +1,123 @@
+Title
+- Build failure: Checkstyle errors — missing Javadoc comments in FieldProxy.Binder constructors (byte-buddy-dep)
+
+Summary
+- The Maven build fails in the byte-buddy-dep module due to Checkstyle reporting two "Missing a Javadoc comment." errors in byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/FieldProxy.java.
+- Build log shows the checkstyle failure at two lines (225 and 229). The included code diff attempted to add Javadoc for Binder constructors, but the CI build still failed.
+
+Environment (from build log)
+- CI: Travis CI (container-based)
+- OS: Ubuntu 12.04 precise (Linux 3.13.0-29/40)
+- JDK: oraclejdk8 (1.8.0_101)
+- Maven: 3.2.5
+- Checkstyle plugin version: checkstyle 6.11.2 (maven-checkstyle-plugin:2.17)
+- Module: byte-buddy-dep
+- Failed commit: 14f2faaea3331b0f0ce5cbe2f53d2b7aaf48015a
+
+Observed behavior
+- Maven build fails with:
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (default) on project byte-buddy-dep: Failed during checkstyle execution: There are 2 errors reported by Checkstyle 6.11.2 with checkstyle.xml ruleset.
+- Checkstyle output (excerpt):
+  /home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/FieldProxy.java:225:9: error: Missing a Javadoc comment.
+  /home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/FieldProxy.java:229:9: error: Missing a Javadoc comment.
+
+Relevant code diff (provided)
+- The diff shows additions in FieldProxy.java around the Binder constructors. The new Javadoc blocks added in the patch are:
+
+  /**
+   * Creates a new binder for a {@link FieldProxy} in simplex mode.
+   *
+   * @param getterMethod The getter method.
+   * @param setterMethod The setter method.
+   */
+  protected Binder(MethodDescription.InDefinedShape getterMethod, MethodDescription.InDefinedShape setterMethod) {
+      this(new FieldResolver.Factory.Simplex(getterMethod, setterMethod));
+  }
+
+  /**
+   * Creates a new binder for a {@link FieldProxy} in duplex mode.
+   *
+   * @param proxyType    The proxy type.
+   * @param getterMethod The getter method.
+   * @param setterMethod The setter method.
+   */
+  protected Binder(TypeDescription proxyType, MethodDescription.InDefinedShape getterMethod, MethodDescription.InDefinedShape setterMethod) {
+      this(new FieldResolver.Factory.Duplex(proxyType, getterMethod, setterMethod));
+  }
+
+Root cause analysis
+- Checkstyle is configured to require Javadoc comments for non-private methods/constructors. The build log shows Checkstyle complaining that the two protected constructors of FieldProxy.Binder are missing Javadoc.
+- The patch in the CODE DIFF appears to add Javadoc comments for those constructors; therefore one of the following is true:
+  1. The commit tested by CI (failed_sha) does not contain the Javadoc additions (i.e., the diff shown is not the code that CI built). The failing SHA indicates the commit tested might not include the fix — ensure the commit/branch pushed to CI includes the new comments.
+  2. The Javadoc comments added in the commit are malformed (e.g., wrong comment delimiters, stray characters, encoding issues) and are therefore not recognized by Checkstyle as valid Javadoc. Checkstyle looks for /** ... */ specifically.
+  3. Line numbers in the build log refer to a slightly different file version, so the reported lines do not match the newest edits.
+- Most likely: the failing commit used for the build doesn't include the Javadoc, or the Javadoc was added in the wrong place/format, so Checkstyle still sees the constructors without Javadoc.
+
+Immediate fix (recommended)
+1. Verify local copy
+   - Pull the failing commit (14f2faa...) or check out the branch exactly as CI does and inspect FieldProxy.java around the Binder constructors to confirm whether the Javadoc is present.
+2. If Javadoc is missing or malformed, add/repair it exactly as a proper Javadoc block, e.g.:
+
+   /**
+    * Creates a new binder for a {@link FieldProxy} in simplex mode.
+    *
+    * @param getterMethod The getter method.
+    * @param setterMethod The setter method.
+    */
+   protected Binder(MethodDescription.InDefinedShape getterMethod,
+                    MethodDescription.InDefinedShape setterMethod) {
+       this(new FieldResolver.Factory.Simplex(getterMethod, setterMethod));
+   }
+
+   /**
+    * Creates a new binder for a {@link FieldProxy} in duplex mode.
+    *
+    * @param proxyType    The proxy type.
+    * @param getterMethod The getter method.
+    * @param setterMethod The setter method.
+    */
+   protected Binder(TypeDescription proxyType,
+                    MethodDescription.InDefinedShape getterMethod,
+                    MethodDescription.InDefinedShape setterMethod) {
+       this(new FieldResolver.Factory.Duplex(proxyType, getterMethod, setterMethod));
+   }
+
+   Notes:
+   - Use /** ... */ (not /* ... */ or //).
+   - Ensure @param names match parameter names exactly.
+   - Ensure file encoding is UTF-8 and no stray invisible characters exist before /**.
+   - Confirm no other constructors/methods in the file also lack Javadoc per Checkstyle rules.
+3. Run the Checkstyle check locally to validate before pushing:
+   - mvn checkstyle:check
+   - Or run the full build to validate: mvn install -DskipTests=true -Dmaven.javadoc.skip=true
+4. Push the corrected commit and re-run CI.
+
+Alternative / temporary options (not recommended for permanent solution)
+- If this is part of an in-progress change and you want to get CI green immediately, you can:
+  - Add the proper Javadoc and re-run build (preferred).
+  - (Not recommended) Relax Checkstyle rules or disable the plugin temporarily — this reduces code quality and should be avoided.
+
+How to reproduce locally
+- Clone the repo and checkout the same failing SHA/branch:
+  git clone https://github.com/raphw/byte-buddy.git
+  cd byte-buddy
+  git checkout 14f2faaea3331b0f0ce5cbe2f53d2b7aaf48015a
+- Run:
+  mvn -B -V install -DskipTests=true -Dmaven.javadoc.skip=true
+- Observe identical Checkstyle errors on FieldProxy.java at lines reported in CI.
+
+Action items for the author / maintainer
+- Confirm whether the provided CODE DIFF was actually included in the commit tested by CI. If not, push the commit with the Javadoc additions.
+- If the Javadoc is present, ensure it is formatted correctly (/** ... */), matches parameter names exactly, and has no encoding/whitespace issues that could cause Checkstyle to ignore it.
+- Re-run mvn checkstyle:check locally and then redeploy to CI.
+
+Attachments / references
+- Build log excerpt (relevant lines):
+  /home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/FieldProxy.java:225:9: error: Missing a Javadoc comment.
+  /home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/FieldProxy.java:229:9: error: Missing a Javadoc comment.
+
+- CODE DIFF: shows intended Javadoc blocks to be added for the two constructors (see "patches" in provided diff).
+
+If you want, I can:
+- Produce a small patch file you can apply to FieldProxy.java that adds the two Javadoc blocks in exact form and passes Checkstyle.
+- Run through a checklist of other files that may fail the same Checkstyle rule to proactively fix them.

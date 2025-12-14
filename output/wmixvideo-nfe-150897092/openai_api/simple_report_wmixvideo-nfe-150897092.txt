@@ -1,0 +1,119 @@
+Title
+- Build failure caused by Javadoc error in NFAutorizador31.java (bad use of '>')
+
+Summary
+- The Maven build fails during the maven-javadoc-plugin (attach-javadocs) phase with a Javadoc error:
+  "error: bad use of '>'" in file src/main/java/com/fincatto/nfe310/classes/NFAutorizador31.java.
+- The failure is introduced by an unsafe Javadoc comment containing the substring "=>", which the Javadoc tool interprets as a stray '>' (closing angle bracket) and rejects.
+- This blocks artifact creation (attach-javadocs goal) and causes a CI job failure.
+
+Environment / context
+- Project: wmixvideo/nfe (commit failed_sha: 12c8a862172bb697d54268935005e83c52e89481)
+- CI: Travis (Ubuntu 12.04; Oracle JDK8)
+- Maven command used by CI:
+  mvn install -DskipTests=true -Dgpg.skip=true --settings ~/settings.xml
+- Failing plugin: org.apache.maven.plugins:maven-javadoc-plugin:2.9.1:jar (attach-javadocs)
+
+Relevant log excerpts
+- Error (build stops here):
+  /home/travis/build/wmixvideo/nfe/src/main/java/com/fincatto/nfe310/classes/NFAutorizador31.java:93: error: bad use of '>'
+  * Links NFC-e segundo site => https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia
+  ^
+- Maven summary:
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-javadoc-plugin:2.9.1:jar (attach-javadocs) on project nfe: MavenReportException: Error while creating archive: Exit code: 1
+
+Failing file and line
+- File: src/main/java/com/fincatto/nfe310/classes/NFAutorizador31.java
+- Line reported in the javadoc error: ~93 (Javadoc comment line containing "=>")
+
+Steps to reproduce
+1. Checkout the commit that produced the failure (failed_sha: 12c8a86...).
+2. Run from project root:
+   mvn javadoc:jar
+   or
+   mvn install -DskipTests=true -Dgpg.skip=true
+3. Observe the maven-javadoc-plugin failing with "bad use of '>'" pointing to NFAutorizador31.java.
+
+Actual result
+- The build fails during the javadoc generation/attach step, failing the entire CI build (BUILD FAILURE). Javadoc generation aborts due to "bad use of '>'".
+
+Expected result
+- Javadoc plugin should succeed (generate javadocs and attach them). The build should continue and produce the artifact (jar + sources + javadocs if configured).
+
+Root cause analysis
+- The comment line in NFAutorizador31.java contains the literal "=>". The Javadoc tool parses Javadoc comments as HTML (or at least parses tags). A standalone '>' (or sequence that looks like a closing tag without a matching opening '<') triggers a "bad use of '>'" parse error in javadoc (Javadoc treats a raw '>' as stray closing angle bracket).
+- The offending comment line is:
+    * Links NFC-e segundo site => https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia
+  This contains "=>". The '>' character is not escaped or enclosed in {@code} or {@literal}, so javadoc rejects it.
+- Many other javadoc warnings are present but are non-fatal; the javadoc parser error is fatal and causes the plugin to exit with code 1.
+
+Code diff (relevant portion)
+- The supplied patch shows that the offending comment was changed from:
+    * Links NFC-e segundo site => https://...
+  to:
+    * Links NFC-e segundo site: https://...
+- The diff also contains unrelated stylistic changes (reordering an import, adding final to method params, formatting arrays with spaces). Those are not the cause of the javadoc error; the problematic part is the comment operator "=>".
+
+Fixes and recommendations
+1. Quick, minimal fix (recommended)
+   - Replace the arrow "=>" with a colon ":" or another non-markup character in the Javadoc comment, e.g.:
+       * Links NFC-e segundo site: https://...
+   - This exactly matches the change in the code diff and will eliminate the javadoc parse error.
+
+2. Robust alternatives (preferred for future-proofing)
+   - Escape/encode the '>' using HTML entity:
+       * Links NFC-e segundo site =&gt; https://...
+     (less preferred than just removing the arrow; still safe)
+   - Use Javadoc inline tags to avoid interpretation:
+       * Links NFC-e segundo site {@literal =>} https://...
+     or
+       * Links NFC-e segundo site {@code =>} https://...
+   - Wrap the whole line or URL in {@code ...} if you want to preserve special characters:
+       * {@code Links NFC-e segundo site => https://...}
+
+3. CI mitigation (temporary)
+   - If you need to unblock CI quickly and cannot change source, configure the maven-javadoc-plugin to be non-fatal in CI (not recommended long-term):
+     - Use plugin config to set failOnError false for the javadoc plugin (so javadoc errors do not fail build). Example:
+         <plugin>
+           <groupId>org.apache.maven.plugins</groupId>
+           <artifactId>maven-javadoc-plugin</artifactId>
+           <version>2.9.1</version>
+           <configuration>
+             <failOnError>false</failOnError>
+           </configuration>
+         </plugin>
+     - Note: this masks documentation errors and is not recommended as a permanent solution.
+
+Patch suggestion
+- The code diff already shows the correct fix (replace "=>" with ":"). If you prefer a safer change, apply e.g.:
+  - Replace:
+    * Links NFC-e segundo site => https://ciranda.me/...
+  - With:
+    * Links NFC-e segundo site: https://ciranda.me/...
+  or:
+    * Links NFC-e segundo site {@literal =>} https://ciranda.me/...
+
+Impact / severity
+- Severity: High for CI (blocks all builds that generate javadocs).
+- Impact: Prevents release/build completion on CI for the affected commit. Developers cannot merge until the javadoc error is fixed (or plugin configured non-fatal).
+
+Additional observations
+- The log contains many javadoc warnings (missing @param/@return descriptions). Those are warnings and not fatal, but you might want to address them as part of general code quality.
+- The patch also includes reformatting and adding "final" to method parameters and consistent array spacing — these are stylistic and not related to the failure.
+
+Suggested next steps
+1. Apply the simple comment fix (replace "=>" with ":" or use {@literal} / {@code}) in NFAutorizador31.java (line ~93).
+2. Re-run the CI build (mvn install). Expect javadoc plugin to complete.
+3. Optionally:
+   - Run mvn javadoc:javadoc locally to confirm no further javadoc errors.
+   - Consider running javadoc checks locally as part of developer pre-commit checks to catch these early.
+   - If you want to avoid future accidental javadoc markup errors, add a short guideline (or automated check) that advises using {@literal} or {@code} for characters that may be interpreted by javadoc.
+
+References
+- Offending file: src/main/java/com/fincatto/nfe310/classes/NFAutorizador31.java
+- CI error location: /home/travis/build/wmixvideo/nfe/src/main/java/com/fincatto/nfe310/classes/NFAutorizador31.java:93
+- Build failure produced by maven-javadoc-plugin: org.apache.maven.plugins:maven-javadoc-plugin:2.9.1:jar (attach-javadocs)
+
+If you want, I can:
+- Produce the exact patch file (unified diff) to apply the fix.
+- Prepare a one-line CI bypass (temporary pom change) if you need an immediate unblock.

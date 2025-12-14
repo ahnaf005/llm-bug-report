@@ -1,0 +1,63 @@
+## Bug Report: Build Failure - Checkstyle UnusedImports Violation Despite Import Removal
+
+### 1. Title
+Build Failure: Checkstyle UnusedImports Violation in `ReportUtils.java` Despite Import Removal
+
+### 2. Steps to Reproduce
+1.  Clone the `traccar` repository.
+2.  Checkout the specific commit identified as `failed_sha`: `136a302846ad340f6babaa5f0f35018d867f73e8`.
+3.  Execute the Maven build command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+### 3. Triggering Input
+The Checkstyle plugin (version 2.17) configured with the `checkstyle.xml` ruleset, when executed against the source file `src/org/traccar/reports/ReportUtils.java` at commit `136a302846ad340f6babaa5f0f35018d867f73e8`.
+
+### 4. Expected Behavior
+The Maven build should complete successfully without any Checkstyle violations. The provided code diff indicates that the `org.traccar.helper.Log` import, which was previously unused, is explicitly removed in commit `136a302846ad340f6babaa5f0f35018d867f73e8`. Therefore, Checkstyle should not report an `UnusedImports` violation for this specific import.
+
+### 5. Observed Behavior
+The Maven build fails with a Checkstyle `UnusedImports` violation. The error message explicitly states that `org.traccar.helper.Log` is an unused import in `src/org/traccar/reports/ReportUtils.java` at line 29, column 8. This contradicts the provided code diff, which shows that this exact import statement was removed in the commit being built (`136a302846ad340f6babaa5f0f35018d867f73e8`). This suggests a potential issue with the build environment, Checkstyle's analysis, or file synchronization during the build process.
+
+### 6. Relevant Code Snippets
+The following diff shows the removal of the `org.traccar.helper.Log` import in `src/org/traccar/reports/ReportUtils.java` between the `passed_sha` (`a1d91f3b8a80758d5f3e7804afec66256ab27e68`) and the `failed_sha` (`136a302846ad340f6babaa5f0f35018d867f73e8`):
+
+```diff
+--- a/src/org/traccar/reports/ReportUtils.java
++++ b/src/org/traccar/reports/ReportUtils.java
+@@ -26,7 +26,6 @@ import org.jxls.transform.Transformer;
+ import org.jxls.transform.poi.PoiTransformer;
+ import org.jxls.util.TransformerFactory;
+ import org.traccar.Context;
+--import org.traccar.helper.Log;
+ import org.traccar.model.Position;
+ 
+ import java.io.IOException;
+```
+
+### 7. Stack Traces
+```
+[INFO] There is 1 error reported by Checkstyle 6.11.2 with checkstyle.xml ruleset.
+[ERROR] src/org/traccar/reports/ReportUtils.java:[29,8] (imports) UnusedImports: Unused import - org.traccar.helper.Log.
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time: 11.397 s
+[INFO] Finished at: 2017-04-17T05:19:21+00:00
+[INFO] Final Memory: 19M/483M
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project traccar: You have 1 Checkstyle violation. -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+```
+
+### 8. Patches / Suggested Fixes
+The provided code diff already includes the logical fix for the reported Checkstyle violation by removing the unused import `org.traccar.helper.Log` from `src/org/traccar/reports/ReportUtils.java`.
+
+The actual bug appears to be a discrepancy between the code state that Checkstyle is analyzing and the code state checked out by `git` for the `failed_sha`.
+Suggested actions:
+*   Investigate the build environment to ensure that `git checkout` operations are fully and correctly applied before Checkstyle runs.
+*   Check for any caching mechanisms in the Maven or Checkstyle configuration that might be causing an outdated version of the file to be analyzed.
+*   Verify the Checkstyle plugin's configuration and its interaction with the Maven build lifecycle.

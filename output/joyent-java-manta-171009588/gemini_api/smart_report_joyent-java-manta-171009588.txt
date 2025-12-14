@@ -1,0 +1,153 @@
+## Bug Report: Checkstyle Violation - TodoComment in MantaMultipartManager.java
+
+### 1. Title
+Checkstyle Violation: TodoComment in `MantaMultipartManager.java` prevents build.
+
+### 2. Steps to Reproduce
+1.  Clone the `joyent/java-manta` repository.
+2.  Checkout the commit identified as `failed_sha`: `6605599062fa7201ccce660f105d6f1ecfe598bf`.
+3.  Execute the Maven install command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+### 3. Triggering Input
+The Checkstyle plugin's `TodoComment` rule is triggered by a comment matching the format `TODO:`. The build log specifically points to `src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java` at line 641.
+
+Based on the provided code diff, a `TODO` comment `// TODO: Validate parts and match up etags with path` was present in the `MantaMultipartManager.java` file. While the build log reports line 641, this specific `TODO` comment was located at line 629 in the version of the file *before* the changes shown in the diff were applied. It is highly probable that this or a similar `TODO` comment is the cause of the violation.
+
+### 4. Expected Behavior
+The `mvn install` command should complete successfully, building the project without any Checkstyle violations.
+
+### 5. Observed Behavior
+The build fails during the `install` phase, specifically when the `maven-checkstyle-plugin` executes. The plugin reports a `TodoComment` violation, indicating that a comment matching the `TODO:` format was found.
+
+**Error Message:**
+```
+[ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[641] (misc) TodoComment: Comment matches to-do format 'TODO:'.
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation. -> [Help 1]
+```
+
+### 6. Relevant Code Snippets
+The following snippet from `java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java` (from the version of the file *before* the changes in the diff were applied, which is likely the `failed_sha` that triggered the build failure) is the most probable cause of the `TodoComment` violation:
+
+```java
+         final String path = metadata.getPath();
+ 
+         final StringBuilder jobExecText = new StringBuilder("mget -q ");
+ 
+         // TODO: Validate parts and match up etags with path
+```
+*(Note: The build log reports this violation at line 641, while this specific `TODO` comment was at line 629 in the original file. There might be a slight line number discrepancy due to other changes or Checkstyle reporting.)*
+
+### 7. Stack Traces
+```
+Apache Maven 3.2.5 (12a6b3acb947671f09b81f49094c53f426d8cea1; 2014-12-14T17:29:23+00:00)
+Maven home: /usr/local/maven
+Java version: 1.8.0_31, vendor: Oracle Corporation
+Java home: /usr/lib/jvm/java-8-oracle/jre
+Default locale: en_US, platform encoding: UTF-8
+OS name: "linux", version: "3.13.0-40-generic", arch: "amd64", family: "unix"
+[ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[641] (misc) TodoComment: Comment matches to-do format 'TODO:'.
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation. -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+[ERROR] 
+[ERROR] After correcting the problems, you can resume the build with the command
+[ERROR]   mvn <goals> -rf :java-manta-client
+```
+
+### 8. Patches / Suggested Fixes
+The provided code diff includes changes that address this issue by removing the `TODO` comment and implementing the functionality it described. The relevant part of the patch is shown below:
+
+```diff
+--- a/java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java
++++ b/java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java
+@@ -608,43 +610,72 @@ public class MantaMultipartManager {
+      * Completes a multipart transfer by assembling the parts on Manta.
+      *
+      * @param upload multipart upload object
+-     * @param parts stream of multipart part objects
++     * @param partsStream stream of multipart part objects
+      * @throws java.io.IOException thrown if there is a problem connecting to Manta
+      */
+     public void complete(final MantaMultipartUpload upload,
+-                         final Stream<? extends MantaMultipartUploadTuple> parts)
++                         final Stream<? extends MantaMultipartUploadTuple> partsStream)
+             throws IOException {
+         if (upload == null) {
+             throw new IllegalArgumentException("Upload must be present");
+         }
+ 
+-        complete(upload.getId(), parts);
++        complete(upload.getId(), partsStream);
+     }
+ 
+     /**
+      * Completes a multipart transfer by assembling the parts on Manta.
+      *
+      * @param id multipart upload id
+-     * @param parts stream of multipart part objects
++     * @param partsStream stream of multipart part objects
+      * @throws IOException thrown if there is a problem connecting to Manta
+      */
+     public void complete(final UUID id,
+-                         final Stream<? extends MantaMultipartUploadTuple> parts)
++                         final Stream<? extends MantaMultipartUploadTuple> partsStream)
+             throws IOException {
+         final String uploadDir = multipartUploadDir(id);
+         final MultipartMetadata metadata = downloadMultipartMetadata(id);
+ 
++        final Map<String, MantaMultipartUploadPart> listing = new HashMap<>();
++        try (Stream<MantaMultipartUploadPart> listStream = listParts(id)
++                .limit(MAX_PARTS)) {
++            listStream.forEach(p -> listing.put(p.getEtag(), p));
++        }
++
+         final String path = metadata.getPath();
+ 
+         final StringBuilder jobExecText = new StringBuilder("mget -q ");
+ 
+-        // TODO: Validate parts and match up etags with path
++        List<MantaMultipartUploadTuple> missingTuples = new ArrayList<>();
++
++        final AtomicInteger count = new AtomicInteger(0);
++        partsStream.sorted().forEach(part -> {
++            if (count.incrementAndGet() > MAX_PARTS) {
++                String msg = String.format("Too many multipart parts specified [%d]. "
++                        + "The maximum number of parts is %d", MAX_PARTS, count.get());
++                throw new IllegalArgumentException(msg);
++            }
++
++            final MantaMultipartUploadPart o = listing.get(part.getEtag());
++
++            if (o != null) {
++                jobExecText.append(o.getObjectPath()).append(" ");
++            } else {
++                missingTuples.add(part);
++            }
++        });
++
++        if (!missingTuples.isEmpty()) {
++            final MantaMultipartException e = new MantaMultipartException(
++                    "Multipart part(s) specified couldn't be found");
++
++            int missingCount = 0;
++            for (MantaMultipartUploadTuple missingPart : missingTuples) {
++                String key = String.format("missing_part_%d", ++missingCount);
++                e.setContextValue(key, missingPart.toString());
++            }
++
++            throw e;
+         }
+ 
+-        try (Stream<MantaMultipartUploadPart> parts = listParts(id).sorted()) {
+-            parts.forEach(part ->
+-                    jobExecText.append(part.getObjectPath())
+-                            .append(" ")
+-            );
+-        }
+ 
+         jobExecText.append("| mput -q ")
+```

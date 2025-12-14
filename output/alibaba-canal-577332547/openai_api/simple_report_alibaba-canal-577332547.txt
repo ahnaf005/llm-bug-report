@@ -1,0 +1,109 @@
+Title: Build failure due to MysqlConnectorTest trying to connect to localhost:3306 (CI has no MySQL). Patch partially addresses it by adding @Ignore to the test, but build used failing commit.
+
+Summary
+- CI build (Travis) fails during mvn test with a single failing unit test: com.alibaba.otter.canal.parse.driver.mysql.MysqlConnectorTest.testQuery.
+- Failure is caused by an attempted connection to 127.0.0.1:3306 (no MySQL server in CI), causing assertion "connect /127.0.0.1:3306 failure".
+- The code diff shows a change that adds @Ignore to MysqlConnectorTest (to skip the test), plus unrelated refactors in other files. The build log shows the failure occurred before/without this test being ignored (the build used a commit where the test ran).
+- Root cause: test is an integration-style test that depends on a local MySQL server. CI environment doesn't provide MySQL; unit tests must not depend on external services (or must be skipped/conditional).
+
+Relevant build log excerpts
+- Failing test:
+  - ERROR: MysqlConnectorTest.testQuery:25 connect /127.0.0.1:3306 failure
+  - Stack trace: java.lang.AssertionError at com.alibaba.otter.canal.parse.driver.mysql.MysqlConnectorTest.testQuery(MysqlConnectorTest.java:25)
+- Summary:
+  - Tests run: 33, Failures: 1
+  - Reactor Summary shows failure in module: canal.parse.driver
+  - Failed maven goal: org.apache.maven.plugins:maven-surefire-plugin:2.22.1:test
+
+Code diff summary (patches included in the provided diff)
+- driver/src/test/java/com/alibaba/otter/canal/parse/driver/mysql/MysqlConnectorTest.java
+  - Added import: org.junit.Ignore
+  - Added @Ignore annotation to class (intended to skip the test)
+- canal-admin/canal-admin-server/.../SimpleAdminConnector.java
+  - Replaced Integer.valueOf(...) with Integer.parseInt(...) in multiple boolean-returning wrappers.
+- canal-admin/.../PollingConfigController.java
+  - Changed lambda to method reference: configs.stream().map(CanalInstanceConfig::getName)
+- canal-admin/.../UserServiceImpl.java
+  - If User.find returns null => now throws ServiceException("user:<name> auth failed!")
+  - Removes redundant null guarded password clear; sets user.setPassword("") unconditionally (safe because of the throw).
+
+Observed behavior
+- Build fails on Travis CI because MysqlConnectorTest attempts to connect to localhost:3306 and asserts failure when there's no DB available.
+- The CI logs indicate the test attempted to disconnect and then reported "the channel /127.0.0.1:3306 is not connected" and assertion fails.
+
+Expected behavior
+- Unit test suite should pass in CI.
+- Tests that need an external MySQL server should either:
+  - be marked and skipped on CI (e.g. @Ignore or moved to an integration test suite),
+  - be made conditional (use JUnit Assume to skip when MySQL not available), or
+  - use an embedded/test container (e.g. Testcontainers, in-memory DB, or an embedded MySQL) or properly mock connection for pure unit tests.
+
+Root cause analysis
+- MysqlConnectorTest.testQuery is an integration-style test requiring a MySQL server running at 127.0.0.1:3306.
+- In a fresh CI worker (Travis build image used), there is no MySQL listener on that port; the test fails during the connection attempt and raises an assertion.
+- The provided code diff already attempts to mark the test with @Ignore (and imports org.junit.Ignore). However, the failing build was run against a commit/sha that does not include the @Ignore change (failed_sha suggests the build used the earlier commit), or the change has not yet been picked up by this failing job. Therefore the failure remained in that job.
+
+Impact
+- CI build fails (blocking merges), module canal.parse.driver fails build; downstream modules are skipped.
+- Potentially masks other real issues if tests are incorrectly skipped without a mitigation strategy.
+
+Recommended fixes (short term and long term)
+Short-term:
+1. Accept and apply the change included in the diff that annotates the test with @Ignore (or move the test to an integration tests source set):
+   - driver/src/test/java/.../MysqlConnectorTest.java add:
+     - import org.junit.Ignore;
+     - @Ignore
+   This will immediately stop the CI failure by skipping the test on all CI runs.
+2. Alternatively, modify the test to skip at runtime when MySQL is not available:
+   - Use JUnit Assume.assumeTrue(MySQLAvailable) or try to connect in @Before and call Assume.assumeTrue(isConnected), so the test is skipped instead of failing when the DB is absent.
+   Example:
+     @Before
+     public void setUp() {
+         try {
+             // attempt a socket connection to 127.0.0.1:3306 with a short timeout
+             Socket s = new Socket();
+             s.connect(new InetSocketAddress("127.0.0.1", 3306), 200);
+             s.close();
+         } catch (IOException e) {
+             Assume.assumeTrue("MySQL not available", false);
+         }
+     }
+Long-term / best practice:
+3. Reclassify this test as an integration test and run it under a separate profile (maven-failsafe for integration tests) so unit tests continue to run in CI and integration tests can be executed in an environment with MySQL (or in nightlies).
+   - Move test to src/integration-test/java or use appropriate naming and failsafe plugin.
+4. Use Testcontainers or an embedded DB for reliable CI execution of DB-dependent tests.
+5. Add CI job or profile that starts a MySQL service (if you want to run integration tests in CI) or document that integration tests are excluded from standard CI builds.
+
+Notes on other code changes in the diff
+- SimpleAdminConnector: switched Integer.valueOf(...) -> Integer.parseInt(...). No functional change (both throw NumberFormatException for invalid input). This is low risk.
+- PollingConfigController: replaced lambda with method reference; cosmetic / readability improvement.
+- UserServiceImpl:
+  - Previously returned null if user not found; new behavior throws ServiceException. This is a behavior change for authentication failures — likely intended.
+  - The removal of an extra null-check before setting user.setPassword("") is safe because a ServiceException is thrown when user == null.
+  - Ensure callers handle ServiceException per expected authentication flow.
+
+How to reproduce locally
+1. Clone repository sha used in build (if you want to reproduce exact behavior that failed).
+2. On a machine with no MySQL running:
+   mvn -e -DskipTests=false -Dcheckstyle.skip=true -Dmaven.javadoc.skip=true clean test
+3. Run only the failing test:
+   mvn -Dtest=MysqlConnectorTest test
+   -> You should see AssertionError: connect /127.0.0.1:3306 failure at MysqlConnectorTest.testQuery:25
+
+Suggested immediate action items (for maintainers)
+- Merge the test-skip change (the @Ignore addition) OR update the test to use JUnit Assume or Testcontainers.
+- Add an integration-tests profile (maven-failsafe) for this test if it must exercise a real MySQL instance.
+- Confirm whether CI build uses the patched commit. If the diff was expected to fix the failing build, ensure the updated commit SHA is pushed and that CI picks it up. The failure indicates the build was executed against a commit that still contained the active test.
+
+Attachments / references
+- Failing log lines (from build log):
+  - java.lang.AssertionError: connect /127.0.0.1:3306 failure
+  - at com.alibaba.otter.canal.parse.driver.mysql.MysqlConnectorTest.testQuery(MysqlConnectorTest.java:25)
+- Files changed (from diff):
+  - driver/src/test/java/.../MysqlConnectorTest.java: added @Ignore and import
+  - canal-admin/.../SimpleAdminConnector.java: Integer.parseInt() replacements
+  - canal-admin/.../PollingConfigController.java: Config mapping changed to method reference
+  - canal-admin/.../UserServiceImpl.java: user null check -> throw ServiceException
+
+Conclusion
+The immediate CI failure is caused by a test that depends on a MySQL instance on localhost. The diff already includes a change to mark the test with @Ignore (good short-term mitigation). For a robust solution, reclassify DB-dependent tests to integration tests (runs in a controlled environment) or use Testcontainers/embedded DB and/or conditional skipping in unit test code. Finally, verify the CI job picks up the commit with the @Ignore (or alternative fix).

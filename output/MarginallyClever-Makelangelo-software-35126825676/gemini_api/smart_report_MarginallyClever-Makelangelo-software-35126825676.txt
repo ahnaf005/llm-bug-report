@@ -1,0 +1,56 @@
+## Detailed Bug Report
+
+**1. Title:** Build Failure: Java Module System (JPMS) `InaccessibleObjectException` during Test Execution
+
+**2. Steps to Reproduce:**
+1.  Checkout the `MarginallyClever/Makelangelo-software` repository at commit `5f7a8ca2218ba64fd6eb5be385cafc51dd5f866a`.
+2.  Ensure Java Development Kit (JDK) version 17 is installed and configured.
+3.  Navigate to the project root directory.
+4.  Execute the Maven test command: `./mvnw -B test -Djava.awt.headless=true`
+
+**3. Triggering Input:**
+The execution of the Maven `test` phase using JDK 17, which enforces the Java Module System (JPMS). Specifically, the test runner (Maven Surefire) attempts to reflectively access classes and methods within the `com.marginallyclever.makelangelo` module, but these packages are not explicitly `opened` to the unnamed module where the tests reside.
+
+**4. Expected Behavior:**
+All unit tests should execute successfully, and the Maven build should complete with a `BUILD SUCCESS` message, indicating that all tests passed without errors.
+
+**5. Observed Behavior:**
+The Maven `test` phase fails with a `BUILD FAILURE` message. Multiple tests, including those in `com.marginallyclever.makelangelo.turtle.TurtleTest`, `com.marginallyclever.makelangelo.makeart.io.SaveDXFTest`, `com.marginallyclever.makelangelo.makeart.io.SaveGCodeTest`, `com.marginallyclever.makelangelo.makeart.io.SaveSVGTest`, and `com.marginallyclever.convenience.FileAccessTest`, report `java.lang.reflect.InaccessibleObjectException`. This exception occurs because the Java Module System prevents reflective access to types in packages that are not explicitly `opened` by their defining module.
+
+**6. Relevant Code Snippets:**
+The issue is resolved by adding `opens` directives to the `module-info.java` file. The relevant change from the code diff is:
+
+```diff
+--- a/src/main/java/module-info.java
++++ b/src/main/java/module-info.java
+@@ -20,4 +20,12 @@
+     requires org.locationtech.jts;
+     requires org.apache.httpcomponents.httpclient;
+     requires org.apache.httpcomponents.httpcore;
++
++    opens com.marginallyclever.convenience;
++    opens com.marginallyclever.convenience.voronoi;
++    opens com.marginallyclever.makelangelo.makeart.io;
++    opens com.marginallyclever.makelangelo.plotter.plottercontrols;
++    opens com.marginallyclever.makelangelo.turtle;
++    opens com.marginallyclever.convenience.noise;
++    opens com.marginallyclever.convenience.helpers;
++}
+```
+
+**7. Stack Traces:**
+The build log shows numerous instances of `java.lang.reflect.InaccessibleObjectException`. Here are a few representative examples:
+
+```
+[ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.notEqualsTwoTurtles  Time elapsed: 0 s  <<< ERROR!
+java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+
+[ERROR] com.marginallyclever.makelangelo.makeart.io.SaveDXFTest  Time elapsed: 0.001 s  <<< ERROR!
+java.lang.reflect.InaccessibleObjectException: Unable to make public static void com.marginallyclever.makelangelo.makeart.io.SaveDXFTest.beforeAll() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.makeart.io" to unnamed module @6f10d5b6
+
+[ERROR] com.marginallyclever.convenience.FileAccessTest.open_fileInJar  Time elapsed: 0 s  <<< ERROR!
+java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.convenience.FileAccessTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.convenience" to unnamed module @6f10d5b6
+```
+
+**8. Patches / Suggested Fixes:**
+The provided code diff contains the necessary patch to resolve this issue. The fix involves explicitly `opening` the packages that require reflective access by the test framework within the `module-info.java` file. By adding `opens` directives for `com.marginallyclever.convenience`, `com.marginallyclever.convenience.voronoi`, `com.marginallyclever.makelangelo.makeart.io`, `com.marginallyclever.makelangelo.plotter.plottercontrols`, `com.marginallyclever.makelangelo.turtle`, `com.marginallyclever.convenience.noise`, and `com.marginallyclever.convenience.helpers`, the Java Module System will allow the test runner to access the necessary classes and methods, thereby resolving the `InaccessibleObjectException` errors.

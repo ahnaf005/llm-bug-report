@@ -1,0 +1,141 @@
+## Software Bug Report
+
+**Bug Title:** Build Failure: `ItemDocumentBuilderTest.testChangeOfSubjectId` Fails Due to Mismatched Expected Label Format (Discrepancy with Provided Diff)
+
+**Bug ID:** (To be assigned)
+
+**Project:** Wikidata Toolkit
+
+**Module:** `wdtk-datamodel`
+
+**Version:** 0.11.0-SNAPSHOT (as per build log)
+
+**Environment:**
+*   **CI System:** Travis CI
+*   **Worker Hostname:** `32368514-3873-4f65-b0be-3071cf2bfc6e@1.worker-org-5ff7998467-t99d8.gce-production-2`
+*   **Operating System:** Ubuntu 14.04.5 LTS (Trusty)
+*   **Kernel Version:** 4.4.0-101-generic
+*   **Java Version:** Oracle JDK 1.8.0_151
+*   **Maven Version:** Apache Maven 3.5.2
+*   **Git SHA (Failed):** `5c17e54be4ffa4a11969d12dc999ff6fd129abab`
+*   **Git SHA (Passed):** `3f5b73c782f0b1ef4d7851cb6284a1c2d9fad199`
+
+**Severity:** High (Build Failure)
+
+**Priority:** High (Blocks CI/CD pipeline)
+
+**Status:** New
+
+---
+
+**Description:**
+
+The Travis CI build for the `Wikidata Toolkit` project is failing during the `mvn test jacoco:report` phase. The failure occurs within the `wdtk-datamodel` module, specifically in the `org.wikidata.wdtk.datamodel.helpers.ItemDocumentBuilderTest` class.
+
+The test method `testChangeOfSubjectId` is failing with an `AssertionError`. The error message indicates a mismatch between the expected and actual values for a French label:
+`java.lang.AssertionError: expected:<"pleutre" (fr)> but was:<pleutre>`
+
+This means the test, as executed, expected the label to include the language tag in parentheses (`"pleutre" (fr)`), but the actual value returned by `copy.findLabel("fr")` was just the string content (`"pleutre"`).
+
+**Critical Discrepancy:**
+The provided `CODE DIFF` shows a change in `ItemDocumentBuilderTest.java` at line 135, where the expected value in the `assertEquals` call is changed from a variable `label` to a literal `"pleutre"`:
+```diff
+--- a/wdtk-datamodel/src/test/java/org/wikidata/wdtk/datamodel/helpers/ItemDocumentBuilderTest.java
++++ b/wdtk-datamodel/src/test/java/org/wikidata/wdtk/datamodel/helpers/ItemDocumentBuilderTest.java
+@@ -132,7 +132,7 @@ public class ItemDocumentBuilderTest {
+ 		ItemDocument copy = ItemDocumentBuilder.fromItemDocument(initial).withEntityId(ItemIdValue.NULL).build();
+ 		
+ 		assertEquals(ItemIdValue.NULL, copy.getEntityId());
+-		assertEquals(label, copy.findLabel("fr"));
++		assertEquals("pleutre", copy.findLabel("fr"));
+ 	}
+ 	
+ 	@Test(expected = IllegalArgumentException.class)
+```
+If this diff were accurately applied to the `failed_sha` (`5c17e54be4ffa4a11969d12dc999ff6fd129abab`), the `assertEquals` call would be `assertEquals("pleutre", copy.findLabel("fr"));`. In this scenario, the `AssertionError` should show `expected:<pleutre>`. However, the build log explicitly states `expected:<"pleutre" (fr)>`.
+
+This indicates a significant discrepancy:
+1.  Either the provided `CODE DIFF` does not precisely reflect the state of the code at `failed_sha` (`5c17e54be4ffa4a11969d12dc999ff6fd129abab`) for the failing line.
+2.  Or, the `label` variable in the `passed_sha` (`3f5b73c782f0b1ef4d7851cb6284a1c2d9fad199`) was defined as `"pleutre" (fr)`, and the change in the diff to `"pleutre"` was intended to fix the test, but the build log's error message is somehow showing the *old* expected value, or the change was not fully effective.
+
+Based on the build log, the test *expected* `"pleutre" (fr)` and *received* `"pleutre"`.
+
+---
+
+**Steps to Reproduce:**
+
+1.  Clone the `Wikidata-Toolkit` repository:
+    `git clone https://github.com/Wikidata/Wikidata-Toolkit.git`
+2.  Navigate into the cloned directory:
+    `cd Wikidata/Wikidata-Toolkit`
+3.  Checkout the specific failing commit:
+    `git checkout 5c17e54be4ffa4a11969d12dc999ff6fd129abab`
+4.  Execute the Maven build and test command:
+    `mvn test jacoco:report`
+
+---
+
+**Expected Behavior:**
+
+The `mvn test jacoco:report` command should execute successfully, with all tests passing, including `org.wikidata.wdtk.datamodel.helpers.ItemDocumentBuilderTest.testChangeOfSubjectId`.
+
+---
+
+**Actual Behavior:**
+
+The build fails with the following output:
+```
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary:
+[INFO]
+[INFO] Wikidata Toolkit ................................... SUCCESS [  1.921 s]
+[INFO] Wikidata Toolkit Utilities ......................... SUCCESS [  5.059 s]
+[INFO] Wikidata Toolkit Testing Utilities ................. SUCCESS [  1.921 s]
+[INFO] Wikidata Toolkit Data Model ........................ FAILURE [  6.589 s]
+[INFO] Wikidata Toolkit Storage ........................... SKIPPED
+[INFO] Wikidata Toolkit Dump File Handling ................ SKIPPED
+[INFO] Wikidata Toolkit Wikibase API ...................... SKIPPED
+[INFO] Wikidata Toolkit RDF ............................... SKIPPED
+[INFO] Wikidata Toolkit Examples .......................... SKIPPED
+[INFO] Wikidata Toolkit Distribution ...................... SKIPPED
+[INFO] Wikidata Toolkit Command-line Tool ................. SKIPPED
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+...
+Failed tests:   testChangeOfSubjectId(org.wikidata.wdtk.datamodel.helpers.ItemDocumentBuilderTest): expected:<"pleutre" (fr)> but was:<pleutre>
+...
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.12.4:test (default-test) on project wdtk-datamodel: There are test failures.
+```
+
+---
+
+**Root Cause Analysis (Initial):**
+
+The immediate cause of the build failure is an `AssertionError` in `ItemDocumentBuilderTest.testChangeOfSubjectId` at line 135. The test expects the French label to be `"pleutre" (fr)` but the actual value obtained from `copy.findLabel("fr")` is `"pleutre"`.
+
+The discrepancy between the `CODE DIFF` (which shows the expected value being changed to `"pleutre"`) and the `BUILD LOG` (which shows the test *still* expecting `"pleutre" (fr)`) is critical. This suggests one of the following:
+1.  The `CODE DIFF` provided does not accurately represent the exact code state of `ItemDocumentBuilderTest.java` at `5c17e54be4ffa4a11969d12dc999ff6fd129abab`. The failing commit might still contain the line `assertEquals("pleutre" (fr), copy.findLabel("fr"));` or equivalent.
+2.  The `label` variable in the `passed_sha` was indeed defined as `"pleutre" (fr)"`, and the change in the diff to a literal `"pleutre"` was an attempt to fix the test, but the test runner or assertion framework is somehow still using the old expected value, or the change was not correctly applied in the build environment.
+
+Regardless of the diff's exact application, the core issue is that the `findLabel("fr")` method (or the data it retrieves) provides `"pleutre"`, while the test expects a more verbose format including the language tag.
+
+---
+
+**Proposed Solution/Fix:**
+
+1.  **Verify Code State:** First, confirm the exact content of `wdtk-datamodel/src/test/java/org/wikidata/wdtk/datamodel/helpers/ItemDocumentBuilderTest.java` at commit `5c17e54be4ffa4a11969d12dc999ff6fd129abab`, specifically line 135. This will clarify if the provided `CODE DIFF` is fully representative.
+2.  **Align Test Expectation with Actual Output:**
+    *   If `copy.findLabel("fr")` is *correctly* returning just `"pleutre"` (i.e., the API is designed to return only the string content without language tags in the string itself), then the test should be updated to expect `"pleutre"`:
+        `assertEquals("pleutre", copy.findLabel("fr"));`
+        (This is what the provided `CODE DIFF` *attempts* to do, but the build log suggests it wasn't the code that ran or the `label` variable was more complex).
+    *   If `copy.findLabel("fr")` *should* return `"pleutre" (fr)` (i.e., the API is expected to include the language tag in the string), then the implementation of `findLabel` or the data generation logic needs to be corrected to produce the expected format.
+
+Given the `CODE DIFF` and the error, it's highly probable that the intent was to update the test to expect `"pleutre"`, and the `findLabel("fr")` method is indeed returning `"pleutre"`. The bug is likely that the test's expectation (as seen in the build log) is out of sync with the actual behavior of `findLabel("fr")` and potentially with the intended change in the `CODE DIFF`.
+
+---
+
+**Attachments:**
+
+*   BUILD LOG (provided in original prompt)
+*   CODE DIFF (provided in original prompt)

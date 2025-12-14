@@ -1,0 +1,103 @@
+1) Title
+FindBugs reports "EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS" in TypeCache.equals implementations -> Maven build fails in findbugs:check
+
+2) Steps to Reproduce
+- Checkout commit/branch containing the TypeCache.equals implementations (the version before the supplied patch).
+- Run the project's checks that execute FindBugs / SpotBugs, e.g.:
+  mvn jacoco:prepare-agent verify jacoco:report $TARGET -Pintegration -Dnet.bytebuddy.test.travis=true
+- Observe the findbugs-maven-plugin failing the build due to EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS warnings.
+
+(Alternatively run just FindBugs check:)
+  mvn findbugs:check
+
+3) Triggering Input / Conditions
+- Code: net.bytebuddy.TypeCache contains two equals(Object) implementations that compare instances of different nested types (LookupKey vs StorageKey) in the same equals method.
+- Static analysis: findbugs-maven-plugin 3.0.3 (FindBugs ruleset) running during the build.
+- Environment: Maven build invoking findbugs:check (as in the Travis build log).
+
+4) Expected Behavior
+- Either:
+  - FindBugs should not report a bug if the cross-type comparisons are intentionally implemented and are safe, or
+  - The build should explicitly suppress the false-positive so the findbugs:check goal does not fail the build.
+- Build (mvn jacoco:prepare-agent verify ...) should complete successfully with zero fatal FindBugs violations.
+
+5) Observed Behavior
+- FindBugs reports two issues of type EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS in net.bytebuddy.TypeCache at the equals methods and fails the build.
+- Maven fails with MojoExecutionException due to 2 bugs found by findbugs-maven-plugin:3.0.3:check.
+
+Key observed messages from the build log:
+- FindBugs warnings:
+  net.bytebuddy.TypeCache$LookupKey.equals(Object) checks for operand being a TypeCache$StorageKey  [net.bytebuddy.TypeCache$LookupKey, net.bytebuddy.TypeCache$LookupKey] At TypeCache.java:[line 258]Another occurrence at TypeCache.java:[line 259] EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS
+  net.bytebuddy.TypeCache$StorageKey.equals(Object) checks for operand being a TypeCache$LookupKey  [net.bytebuddy.TypeCache$StorageKey] At TypeCache.java:[line 299] EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS
+
+- Maven fatal error (end of build):
+  [ERROR] Failed to execute goal org.codehaus.mojo:findbugs-maven-plugin:3.0.3:check (default) on project byte-buddy-dep: failed with 2 bugs and 0 errors -> [Help 1]
+  ...
+  [ERROR] For more information about the errors and possible solutions, please read the following articles:
+  [ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException
+
+6) Relevant Code Snippets (from code diff)
+- Import added:
+  import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
+- LookupKey.equals (modified):
+  @Override
+  @SuppressFBWarnings(value = "EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS", justification = "Cross-comparison is intended")
+  public boolean equals(Object other) {
+      return (other instanceof LookupKey && ((LookupKey) other).classLoader == classLoader)
+              || (other instanceof StorageKey && ((StorageKey) other).hashCode == hashCode && ((StorageKey) other).get() == classLoader);
+  }
+
+- StorageKey.equals (modified):
+  @Override
+  @SuppressFBWarnings(value = "EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS", justification = "Cross-comparison is intended")
+  public boolean equals(Object other) {
+      return (other instanceof LookupKey && ((LookupKey) other).hashCode == hashCode && ((LookupKey) other).classLoader == get())
+              || (other instanceof StorageKey && ((StorageKey) other).get() == get());
+  }
+
+Notes:
+- The patch both adds @SuppressFBWarnings to the equals methods and slightly reorders comparisons in the cross-type branch (moving the hashCode equality check before calling get()).
+
+7) Stack Traces / FindBugs Output (from build log)
+- FindBugs reported the problems (excerpt):
+  [INFO] Total bugs: 2
+  [INFO] net.bytebuddy.TypeCache$LookupKey.equals(Object) checks for operand being a TypeCache$StorageKey  [net.bytebuddy.TypeCache$LookupKey, net.bytebuddy.TypeCache$LookupKey] At TypeCache.java:[line 258]Another occurrence at TypeCache.java:[line 259] EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS
+  [INFO] net.bytebuddy.TypeCache$StorageKey.equals(Object) checks for operand being a TypeCache$LookupKey  [net.bytebuddy.TypeCache$StorageKey] At TypeCache.java:[line 299] EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS
+
+- Maven error causing build failure:
+  [ERROR] Failed to execute goal org.codehaus.mojo:findbugs-maven-plugin:3.0.3:check (default) on project byte-buddy-dep: failed with 2 bugs and 0 errors -> [Help 1]
+
+8) Patches / Suggested Fixes (included in the diff)
+- Patch included in this change does two things:
+  1. Imports edu.umd.cs.findbugs.annotations.SuppressFBWarnings
+  2. Adds @SuppressFBWarnings(value = "EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS", justification = "Cross-comparison is intended") above both equals(Object) methods to suppress the FindBugs warning because the cross-type comparison is intentional.
+  3. Reorders the operands of the multi-term equality checks (moves hashCode comparison earlier) — likely to make the comparison cheaper/safer before dereferencing Reference.get().
+
+Suggested guidance and alternatives:
+- The patch's approach is reasonable: if the cross-type equals is intentionally implemented and correct, annotating with @SuppressFBWarnings (with a clear justification) documents the choice and silences the false-positive so the FindBugs check doesn't fail the build.
+- Alternative code-level fix (if you want to avoid suppressing the rule):
+  - Implement equals symmetrically using a single canonical representation (e.g. both nested classes delegate to a common comparison method or use a single common key type), or
+  - Use a consistent type check (e.g. use getClass() equality) so FindBugs does not consider the comparison suspicious.
+  - Example (conceptual):
+      public boolean equals(Object other) {
+          if (other == this) return true;
+          if (other instanceof LookupKey) {
+              LookupKey o = (LookupKey) other;
+              return o.classLoader == classLoader;
+          }
+          if (other instanceof StorageKey) {
+              StorageKey s = (StorageKey) other;
+              return s.hashCode == hashCode && s.get() == classLoader;
+          }
+          return false;
+      }
+    This is already essentially what the code implements — hence FindBugs false-positive.
+
+Recommended action (accepting the patch):
+- Merge the provided patch which adds the FindBugs suppression annotation and explanation. This resolves the FindBugs failures in CI because the warnings become acknowledged and not counted as build-breaking issues.
+- Ensure the justification comment is sufficiently descriptive so future maintainers understand the reason for the suppression.
+
+Summary
+- Root cause: FindBugs flagged intentional cross-type equals comparisons in net.bytebuddy.TypeCache as EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS, making findbugs:check fail the build.
+- Fix applied by the diff: add @SuppressFBWarnings to both equals methods (with a justification) and reorder some comparisons; this silences the FindBugs false positives and allows the Maven build (findbugs:check) to succeed.

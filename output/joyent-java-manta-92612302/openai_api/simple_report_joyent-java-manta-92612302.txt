@@ -1,0 +1,111 @@
+Title
+- Build fails on CI: missing org.apache.commons.collections4 in test compile + intermittent Maven central resolution timeouts
+
+Summary
+- The CI build for commit be9c521... fails during mvn install. Two related problems appear:
+  1) Maven initially times out resolving plugins/artifacts from repo.maven.apache.org (commons-beanutils), causing an early plugin resolution failure.
+  2) On retry, test compilation fails because org.apache.commons.collections4 (CollectionUtils) is not found in the test classpath (MantaHttpHeadersIT.java).
+
+Both issues prevent the project from building successfully on Travis.
+
+Environment
+- Repository: joyent/java-manta
+- Failed SHA: be9c5219de8f24d82bba7dcae0fd65598e268aa6
+- CI: Travis (container-based)
+- JDK: Oracle JDK 8 (1.8.0_31)
+- Maven: 3.2.5
+- Linux: Ubuntu 12.04.5 LTS (precise)
+- Command run: mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+
+Relevant diffs (summary)
+- Removed property from java-manta-client/pom.xml:
+  - <dependency.commons-collections.version>4.0</dependency.commons-collections.version> (deleted)
+- Added a test-scoped dependency to java-manta-it/pom.xml:
+  - org.apache.commons:commons-collections4:${dependency.commons-collections.version} (test scope)
+- Added the property to top-level pom.xml:
+  - <dependency.commons-collections.version>4.0</dependency.commons-collections.version>
+
+Observed behavior (log excerpts)
+1) First mvn run fails resolving plugin dependency:
+- [ERROR] Failed to execute goal ... maven-checkstyle-plugin:2.17:check ... Could not transfer artifact commons-beanutils:commons-beanutils:jar:1.9.2 from/to central (https://repo.maven.apache.org/maven2): Connect to repo.maven.apache.org:443 [repo.maven.apache.org/199.27.76.215] failed: Connection timed out
+
+2) Retry runs fail compilation during testCompile:
+- [ERROR] /.../java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java:[8,39] package org.apache.commons.collections4 does not exist
+- [ERROR] cannot find symbol variable CollectionUtils (multiple lines in MantaHttpHeadersIT.java)
+
+Impact
+- Full build fails; CI cannot produce an artifact.
+- Tests depending on commons-collections4 cannot compile.
+- Intermittent network failures to Maven Central can cause plugin resolution failures and cascading build failures.
+
+Root cause analysis
+There are two separate but related causes seen in the logs and diffs:
+
+A) Network/Repository availability (intermittent):
+- The initial failure is a connection timeout to repo.maven.apache.org for commons-beanutils:1.9.2. This is an external network issue (CI to Maven Central). When Maven cannot download plugin/artifact, the build fails early.
+
+B) Missing test dependency at compile time:
+- The compilation error indicates the test class MantaHttpHeadersIT uses org.apache.commons.collections4.CollectionUtils, but the classpath doesn't contain that package.
+- The diff shows an attempt to add the commons-collections4 dependency to java-manta-it/pom.xml using the property ${dependency.commons-collections.version}, and that property is moved/added to the root pom.xml. Possible causes:
+  - The property and the new dependency may not have been available to the module during the failing build (e.g., due to module build ordering or parent/child pom configuration mistakes).
+  - The dependency resolution may have been skipped or failed earlier because of the first network timeout, so the artifact wasn't downloaded, leading to compilation failure.
+  - There is also a possibility (less likely from the diff) of a typo in groupId/artifactId/version; however org.apache.commons:commons-collections4:4.0 is the correct coordinates.
+
+Reproduction steps
+1. Checkout the failed commit (be9c5219...).
+2. Run: mvn clean install -DskipTests=true -V
+3. Observe initial plugin resolution failure (network timeout) or, on retry, compilation failures in java-manta-it referencing org.apache.commons.collections4.
+
+Exact failing files/lines
+- java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java
+  - import org.apache.commons.collections4.*; (line 8 in log)
+  - References to CollectionUtils at lines ~111, 147, 182, 199 reported in log.
+
+Suggested fixes
+1. Make dependency declaration robust and unambiguous
+   - Ensure the commons-collections4 dependency is declared in java-manta-it/pom.xml with an explicit version (avoid relying on property substitution unless the property is in parent and guaranteed to be visible). Example:
+     <dependency>
+       <groupId>org.apache.commons</groupId>
+       <artifactId>commons-collections4</artifactId>
+       <version>4.0</version>
+       <scope>test</scope>
+     </dependency>
+   - Alternatively, declare the version in the parent pom's <dependencyManagement> and ensure java-manta-it inherits from that parent.
+
+2. Restore/confirm property placement
+   - If you prefer properties, make sure the property is present in the parent POM (root) before modules refer to it and that module inherits correctly. The diff added the property to root pom.xml — verify parent-child relationship and module order are correct.
+
+3. Handle Maven Central availability more gracefully in CI
+   - Add retry logic for artifact downloads, or use a mirror (e.g., Maven Central mirror or internal repo manager like Nexus/Artifactory).
+   - Consider adding settings.xml with mirrors for CI to avoid transient external outages.
+   - Re-run the build (transient network error may be sufficient cause).
+
+4. Validate change locally before pushing
+   - Run mvn -U clean install to force updates and check dependency resolution locally.
+   - Run mvn -X to obtain full debug if resolution still fails.
+
+5. Optional: Add a small CI health check step before full build
+   - A lightweight maven dependency:resolve or plugin:help to detect network issues earlier and provide clearer error messages.
+
+Minimal corrective patch (example)
+- In java-manta-it/pom.xml, replace property reference with explicit version (or ensure parent property exists and module inherits):
+  <dependency>
+    <groupId>org.apache.commons</groupId>
+    <artifactId>commons-collections4</artifactId>
+    <version>4.0</version>
+    <scope>test</scope>
+  </dependency>
+
+Notes and risks
+- If the property is intentionally centralized in the parent pom, avoid duplicating the version in multiple places; use dependencyManagement in parent pom to manage versions consistently.
+- If CI failure was purely a transient network issue, adding retries/mirrors will reduce flakiness.
+- If you add an explicit version into the module, remember to update it in a single place if versions change (prefer dependencyManagement).
+
+Next steps / recommended immediate actions
+1. Re-run CI (sometimes the first failure is transient).
+2. If failure persists: apply the explicit dependency version in java-manta-it/pom.xml or ensure the parent property is present and visible to all modules.
+3. Add CI-level settings.xml with a reliable mirror or retry logic to avoid Maven Central timeouts causing full build failures.
+
+If you want, I can:
+- Produce the exact pom.xml patch with the explicit dependency line to drop into java-manta-it/pom.xml.
+- Provide a sample settings.xml snippet to configure a mirror or increase timeout/retry behavior for Maven in CI.

@@ -1,0 +1,142 @@
+Title
+- Tests fail in foundation-vertx: TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory errors with "Unsupported protocol" after change in SSLManager.getEnabledCiphers
+
+Summary
+- A recent change in SSLManager.getEnabledCiphers (adds defaulting when sslOption.getProtocols() is empty) causes an IllegalArgumentException "Unsupported protocol" in tests under foundations/foundation-vertx. The failing test is TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory. Build fails with 1 error and the reactor stops at Java Chassis::Foundations::Vertx.
+
+Environment
+- Repo: apache/servicecomb-java-chassis
+- Branch/PR/SHAs: failed_sha f21f4836..., passed_sha 970d95d...
+- JDK: temurin 17.0.4+1 (runner Ubuntu 20.04)
+- Maven: invoked by GitHub Actions workflow unit-test-jdk17.yml (full log attached in Build Log section)
+- Failing module: foundations/foundation-vertx
+- Failing plugin: maven-surefire-plugin:3.0.0-M7:test
+
+Build result (high level)
+- Tests run: 313, Failures: 0, Errors: 1, Skipped: 0
+- Error: java.lang.IllegalArgumentException: Unsupported protocol
+- Build exit code: 1 (BUILD FAILURE)
+- Failing test: org.apache.servicecomb.foundation.vertx.TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory
+
+Relevant excerpts (key stack traces)
+- Primary error causing build failure:
+  - org.apache.servicecomb.foundation.vertx.TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory
+  - java.lang.IllegalArgumentException: Unsupported protocol
+    at org.apache.servicecomb.foundation.ssl.SSLManager.createSSLSocket(SSLManager.java:183)
+    at org.apache.servicecomb.foundation.ssl.SSLManager.getEnabledCiphers(SSLManager.java:222)
+    at org.apache.servicecomb.foundation.vertx.VertxTLSBuilder.buildTCPSSLOptions(VertxTLSBuilder.java:157)
+    at org.apache.servicecomb.foundation.vertx.VertxTLSBuilder.buildHttpClientOptions(VertxTLSBuilder.java:91)
+    at org.apache.servicecomb.foundation.vertx.TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory(TestVertxTLSBuilder.java:83)
+
+- Additional related information in earlier test output shows multiple SLF4J bindings warnings and many tests passing. The single blocking error is the Unsupported protocol thrown by SSLManager.
+
+Code change (from CODE DIFF)
+- File modified: foundations/foundation-ssl/src/main/java/org/apache/servicecomb/foundation/ssl/SSLManager.java
+- Change in getEnabledCiphers method:
+  - Previous line simply forwarded protocols:
+      option.setProtocols(sslOption.getProtocols());
+  - New logic added:
+      import org.apache.commons.lang.StringUtils;
+      if (StringUtils.isNotEmpty(sslOption.getProtocols())) {
+        option.setProtocols(sslOption.getProtocols());
+      } else {
+        option.setProtocols("TLSv1.2");
+      }
+
+- Net result: if incoming SSLOption has empty/null protocol string, code now forces "TLSv1.2" instead of leaving protocols unset.
+
+Observed failure behavior
+- With the change, when a test (TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory) constructs SSLOption without explicit protocols (empty or null), getEnabledCiphers will set the protocols to "TLSv1.2" and call createSSLSocket(option, custom).
+- createSSLSocket throws IllegalArgumentException "Unsupported protocol" for the protocol string applied (TLSv1.2), which propagates up and triggers the test error.
+- This error only manifests during the vertx foundation tests; earlier modules/tests succeed.
+
+Likely root causes (analysis)
+1. Forcing a specific protocol string (TLSv1.2) when the environment or the SSLCustom/SSLSocket creation code expects a different protocol name or to use default platform selection can cause an "Unsupported protocol" IllegalArgumentException:
+   - createSSLSocket likely uses the protocol string to pick SSLContext or JSSE algorithm (e.g. SSLContext.getInstance(protocol) or SSLSocketFactory creation). If that code expects a general "TLS" or empty value (to let default negotiated protocols be selected), providing "TLSv1.2" may be unsupported in the particular runtime/provider used in tests (e.g., native tcnative/boringssl or a provider mapping difference).
+2. The change also adds dependency on org.apache.commons.lang.StringUtils (instead of commons-lang3) — though compilation succeeded in CI, the important behavior change is the forced default protocol rather than the import.
+3. Previously: leaving protocols unset allowed createSSLSocket to choose defaults compatible with the current environment/provider. The change removed that safe defaulting and instead forces a concrete protocol which might be unsupported by some providers the test uses.
+
+Why tests passed before and fail now
+- Prior behavior: when protocols were empty, createSSLSocket used the platform default (or logic that handled empty/missing protocols safely).
+- After change: an explicit "TLSv1.2" protocol is used, which in these test runtime conditions (Netty tcnative/boringssl present, or the test mocking) results in an Unsupported protocol error.
+
+Recommended fix(es)
+I recommend reverting the behavioral change of forcing "TLSv1.2" and instead restoring prior semantics: only set option.setProtocols(...) when sslOption.getProtocols() is non-empty. In other words, do not force a protocol; allow createSSLSocket to use its default handling when protocols are unspecified. This is the least invasive fix and respects the runtime/provider's default behavior.
+
+Concrete suggestions (two alternatives)
+
+A. Preferred (simple revert)
+- Replace the new block with:
+    if (sslOption.getProtocols() != null && !sslOption.getProtocols().trim().isEmpty()) {
+      option.setProtocols(sslOption.getProtocols());
+    }
+  (no else clause — do not set a protocol when none provided)
+
+- Benefits: Restores previous behavior, avoids provider-dependent failures. Keeps tests stable.
+
+B. If a default is desired, use a more generic protocol token and fallback handling:
+- Use "TLS" (generic) instead of "TLSv1.2" so providers resolve to a supported implementation:
+    if (sslOption.getProtocols() != null && !sslOption.getProtocols().trim().isEmpty()) {
+      option.setProtocols(sslOption.getProtocols());
+    } else {
+      option.setProtocols("TLS"); // generic name
+    }
+- And in createSSLSocket, wrap SSLContext.getInstance(...) or the usage in a try/catch and fallback to SSLContext.getDefault() or to a different algorithm if requested is unsupported.
+- Also consider logging a warn when requested protocol is unsupported and then falling back.
+
+Fixing import
+- The code adds import org.apache.commons.lang.StringUtils. The modern artifact is org.apache.commons.lang3.StringUtils (commons-lang3). It's better to:
+  - Remove reliance on external StringUtils entirely, or
+  - Use java built-in (since JDK 11+: String.isBlank()) or
+  - Import org.apache.commons.lang3.StringUtils if the project already uses commons-lang3.
+- Proposed code uses plain JDK checks:
+    if (sslOption.getProtocols() != null && !sslOption.getProtocols().isBlank()) { ... }
+
+Suggested code patch (preferred minimal change)
+- Revert forcing default and avoid new org.apache.commons.lang import; implement robust null/blank check:
+
+  public static String[] getEnabledCiphers(SSLOption sslOption) {
+    SSLOption option = new SSLOption();
+    // only set protocols if provided by caller; otherwise let createSSLSocket decide defaults
+    if (sslOption.getProtocols() != null && !sslOption.getProtocols().isBlank()) {
+      option.setProtocols(sslOption.getProtocols());
+    }
+    option.setCiphers(sslOption.getCiphers());
+    SSLCustom custom = SSLCustom.defaultSSLCustom();
+    SSLSocket socket = createSSLSocket(option, custom);
+    ...
+  }
+
+Additional defensive suggestions
+- In SSLManager.createSSLSocket:
+  - Validate protocol strings and wrap calls that ask for SSLContext/SSLSocketFactory in try/catch to handle IllegalArgumentException and fallback to default SSLContext (e.g., SSLContext.getDefault() or "TLS") rather than throwing and causing tests to fail.
+  - Log warnings indicating which protocol was requested and that fallback was used.
+
+Tests and verification
+- Re-run failing test locally:
+  - mvn -DskipTests=false -Dtest=TestVertxTLSBuilder#testBuildHttpClientOptions_ssl_withFactory -pl foundations/foundation-vertx test
+- Re-run full module tests to ensure no other tests depend on forced default behavior.
+- Add a unit test around SSLManager.getEnabledCiphers for empty/null protocol to assert that it does not throw and returns expected ciphers or handles fallback gracefully.
+
+Impact / Severity
+- Severity: High for CI (builds fail)
+- Scope: Affects SSL creation behavior when SSLOption.protocols is empty; immediate impact surfaced in foundation-vertx tests and may affect runtime behavior for callers that expect the previous defaulting behavior.
+
+Related logs and artifacts
+- Complete build log (very long) included in Build Log section — the key failing logs and stack traces are quoted above.
+- CODE DIFF shows the exact change introduced in SSLManager.getEnabledCiphers that likely caused regression.
+
+Next steps (recommended)
+1. Revert the defaulting behavior in getEnabledCiphers (remove else branch that forces "TLSv1.2") OR change default to a safer generic ("TLS") and implement fallback handling in createSSLSocket.
+2. Replace org.apache.commons.lang.StringUtils usage with either JDK checks or org.apache.commons.lang3.StringUtils.
+3. Add unit test(s) to cover the case when protocols are null/empty to prevent regressions.
+4. Run the failing test suite (foundation-vertx) locally and in CI to confirm fix.
+
+If you want, I can:
+- Produce a small patch (diff) to revert the change and use JDK blank checks.
+- Suggest exact changes inside createSSLSocket to gracefully handle unsupported protocol and fallback to default.
+
+Appendix — Relevant CODE DIFF snippet (for quick reference)
+- The diff added a default of "TLSv1.2" when sslOption.getProtocols() is empty (and added org.apache.commons.lang.StringUtils import). This is the change to be adjusted per suggestions above.
+
+If you want the proposed rollback patch now, say "Please prepare patch" and I will provide the exact git diff for the fix (either revert to prior behavior or use the safe alternative with fallback).

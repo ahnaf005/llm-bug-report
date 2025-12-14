@@ -1,0 +1,93 @@
+## Software Bug Report
+
+**Bug ID:** #RXJDBC-001
+**Title:** Compilation Failure: `ResultSetMapper` symbol not found after interface addition
+
+**Severity:** High
+**Priority:** High
+**Status:** Open
+**Project/Module:** `rxjava-jdbc`
+
+---
+
+**1. Description:**
+
+The build for the `rxjava-jdbc` project is consistently failing during the compilation phase. The primary error reported across multiple source files is `cannot find symbol: class ResultSetMapper`. This occurs immediately after a commit that introduces the `ResultSetMapper.java` interface.
+
+---
+
+**2. Environment:**
+
+*   **Build System:** Travis CI
+*   **Operating System:** Ubuntu 12.04 LTS (Precise)
+*   **Linux Kernel:** 2.6.32-042stab090.5
+*   **Java Version:** Oracle JDK 8 (1.8.0_31)
+*   **Maven Version:** Apache Maven 3.2.5
+*   **Git Commit (Failing):** `12fa13a1276031b32c4f56ee211f35ed464add7d`
+*   **Git Commit (Last Passing):** `880d91d9e3931224d204090db3d267b28b02edbd`
+
+---
+
+**3. Reproducibility:**
+
+Always reproducible (failed 3 out of 3 retries).
+
+**Steps to Reproduce:**
+
+1.  Clone the `davidmoten/rxjava-jdbc` repository.
+2.  Checkout the failing commit: `git checkout 12fa13a1276031b32c4f56ee211f35ed464add7d`
+3.  Execute the Maven build command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+---
+
+**4. Expected Behavior:**
+
+The Maven build should complete successfully, compiling all Java source files, including the newly added `ResultSetMapper.java` interface and all files that reference it.
+
+---
+
+**5. Actual Behavior:**
+
+The Maven build fails during the `maven-compiler-plugin:3.1:compile` phase. The console output shows 33 compilation errors, all related to the `ResultSetMapper` class not being found. Examples of errors include:
+
+*   `/home/travis/build/davidmoten/rxjava-jdbc/src/main/java/com/github/davidmoten/rx/jdbc/QuerySelectOperator.java:[28,19] cannot find symbol symbol: class ResultSetMapper`
+*   `/home/travis/build/davidmoten/rxjava-jdbc/src/main/java/com/github/davidmoten/rx/jdbc/QuerySelect.java:[83,38] cannot find symbol symbol: class ResultSetMapper`
+*   `/home/travis/build/davidmoten/rxjava-jdbc/src/main/java/com/github/davidmoten/rx/jdbc/tuple/Tuples.java:[10,37] cannot find symbol symbol: class ResultSetMapper`
+
+---
+
+**6. Analysis and Root Cause:**
+
+1.  **Code Diff Analysis:** The provided `CODE DIFF` for commit `12fa13a1276031b32c4f56ee211f35ed464add7d` shows the *addition* of a new file: `src/main/java/com/github/davidmoten/rx/jdbc/ResultSetMapper.java`. This file defines a public interface `ResultSetMapper` within the package `com.github.davidmoten.rx.jdbc`.
+    ```java
+    package com.github.davidmoten.rx.jdbc;
+    // ... imports ...
+    public interface ResultSetMapper<T> {
+        T call(ResultSet rs) throws SQLException;
+    }
+    ```
+
+2.  **Build Log Analysis:** The compilation errors clearly indicate that the Java compiler cannot locate the `ResultSetMapper` symbol. This is occurring in multiple files, including:
+    *   `QuerySelectOperator.java` (in `com.github.davidmoten.rx.jdbc` package)
+    *   `QuerySelect.java` (in `com.github.davidmoten.rx.jdbc` package)
+    *   `Util.java` (in `com.github.davidmoten.rx.jdbc` package)
+    *   `QuerySelectOperation.java` (in `com.github.davidmoten.rx.jdbc` package)
+    *   `QuerySelectProducer.java` (in `com.github.davidmoten.rx.jdbc` package)
+    *   `Tuples.java` (in `com.github.davidmoten.rx.jdbc.tuple` package)
+
+3.  **Discrepancy:** The core issue is that while the `ResultSetMapper.java` file has been added, the other source files that now depend on it have not been updated to correctly reference it.
+    *   For files in the **same package** (`com.github.davidmoten.rx.jdbc`), like `QuerySelectOperator.java` or `QuerySelect.java`, the compiler *should* ideally find `ResultSetMapper` without an explicit `import` statement. The fact that it doesn't suggests that either the new file is not being correctly included in the compilation unit, or the references to `ResultSetMapper` in these files were introduced in a prior commit that was never successfully built, and this commit only partially addressed the problem by adding the interface.
+    *   For files in a **different package** (specifically, sub-packages like `com.github.davidmoten.rx.jdbc.tuple.Tuples.java`), an explicit `import com.github.davidmoten.rx.jdbc.ResultSetMapper;` statement is **required** to access the `ResultSetMapper` interface from its parent package. The `CODE DIFF` does not show any such import statements being added to `Tuples.java` or any other referencing files.
+
+**Conclusion:** The most probable root cause is that the necessary `import` statements were not added to the Java source files that now reference the `ResultSetMapper` interface, especially for those files residing in different packages. It's also possible that the references to `ResultSetMapper` were introduced in a previous commit, and this commit only added the interface, leading to a delayed compilation failure.
+
+---
+
+**7. Proposed Solution / Workaround:**
+
+1.  **Add Missing Import Statements:** For all Java files that reference `com.github.davidmoten.rx.jdbc.ResultSetMapper` and are not in the `com.github.davidmoten.rx.jdbc` package (e.g., `src/main/java/com/github/davidmoten/rx/jdbc/tuple/Tuples.java`), add the following import statement at the top of the file:
+    ```java
+    import com.github.davidmoten.rx.jdbc.ResultSetMapper;
+    ```
+2.  **Verify References in Same Package:** For files within the `com.github.davidmoten.rx.jdbc` package that are failing, ensure that the references to `ResultSetMapper` are syntactically correct. If the issue persists, a `mvn clean install` might resolve any stale compilation artifacts.
+3.  **Review Full Changes:** It is recommended to review the full set of changes that introduced the references to `ResultSetMapper` to ensure all dependent files were correctly updated alongside the new interface definition.

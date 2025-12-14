@@ -1,0 +1,95 @@
+## Bug Report: AnswerTaskRunner Fails to Return Correct Task Status When Expression is Empty
+
+### 1. Title
+`AnswerTaskRunnerTest` Fails: Task Status Not Set to `SKIPPED` When Answer Task Expression is Null
+
+### 2. Steps to Reproduce
+1.  Checkout the `rill-flow` repository at commit `c2f1d53ae37c0ee40ce5b27e9152d329c47acb23`.
+2.  Execute the Maven build command:
+    `mvn -B clean javadoc:javadoc verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -P coverage -Dsonar.projectKey=weibocom_rill-flow`
+
+### 3. Triggering Input
+The bug is triggered by the execution of the unit test `com.weibo.rill.flow.olympicene.traversal.runners.AnswerTaskRunnerTest.test doRun when answerTask is null`. This test case specifically simulates a scenario where an `AnswerTask` is processed, but its expression is empty or null.
+
+### 4. Expected Behavior
+When an `AnswerTask` has an empty expression, the `AnswerTaskRunner` should:
+1.  Update the `taskInfo`'s invoke message to "answer task expression empty".
+2.  Set the `retStatus` variable to `TaskStatus.SKIPPED`.
+3.  Return an `ExecutionResult` object with its `taskStatus` field correctly set to `TaskStatus.SKIPPED`.
+
+### 5. Observed Behavior
+The build fails during the `verify` phase in the `olympicene-traversal` module due to a test failure in `AnswerTaskRunnerTest`.
+Specifically, the test `test doRun when answerTask is null` fails because the `ExecutionResult` returned by the `doRun` method has a `null` `taskStatus`, instead of the expected `TaskStatus.SKIPPED`.
+
+**Error Message:**
+```
+[ERROR] com.weibo.rill.flow.olympicene.traversal.runners.AnswerTaskRunnerTest.test doRun when answerTask is null  Time elapsed: 0.536 s  <<< FAILURE!
+Condition not satisfied:
+
+result.taskStatus == TaskStatus.SKIPPED
+|      |          |  |
+|      null       |  class com.weibo.rill.flow.interfaces.model.task.TaskStatus
+|                 false
+<com.weibo.rill.flow.olympicene.core.model.task.ExecutionResult@545dedf4 needRetry=false retryIntervalInSeconds=0 taskStatus=null context=null input=null taskInfo=null dagInfo=null subTaskInfosAndContext=null taskNameNeedToTraversal=null>
+```
+
+### 6. Relevant Code Snippets
+The issue lies in `rill-flow-dag/olympicene-traversal/src/main/java/com/weibo/rill/flow/olympicene/traversal/runners/AnswerTaskRunner.java`.
+The original code:
+```java
+// ...
+            if (StringUtils.isBlank(answerTask.getExpression())) {
+                TaskInvokeMsg taskInvokeMsg = TaskInvokeMsg.builder().msg("answer task expression empty").build();
+                taskInfo.updateInvokeMsg(taskInvokeMsg);
+                retStatus = TaskStatus.SKIPPED;
+                return ExecutionResult.builder().taskStatus(taskInfo.getTaskStatus()).build(); // <-- Bug here
+            }
+// ...
+            String dispatchResult = answerTaskDispatcher.dispatch(dispatchInfo);
+            log.info("dispatch answer task succeed, execution_id: {}, task_name: {}, result: {}", executionId, taskInfo.getName(), dispatchResult);
+            retStatus = TaskStatus.SUCCEED;
+            return ExecutionResult.builder().taskStatus(taskInfo.getTaskStatus()).build(); // <-- Bug here
+// ...
+```
+
+### 7. Stack Traces
+```
+[ERROR] Tests run: 3, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.695 s <<< FAILURE! - in com.weibo.rill.flow.olympicene.traversal.runners.AnswerTaskRunnerTest
+[ERROR] com.weibo.rill.flow.olympicene.traversal.runners.AnswerTaskRunnerTest.test doRun when answerTask is null  Time elapsed: 0.536 s  <<< FAILURE!
+Condition not satisfied:
+
+result.taskStatus == TaskStatus.SKIPPED
+|      |          |  |
+|      null       |  class com.weibo.rill.flow.interfaces.model.task.TaskStatus
+|                 false
+<com.weibo.rill.flow.olympicene.core.model.task.ExecutionResult@545dedf4 needRetry=false retryIntervalInSeconds=0 taskStatus=null context=null input=null taskInfo=null dagInfo=null subTaskInfosAndContext=null taskNameNeedToTraversal=null>
+
+	at com.weibo.rill.flow.olympicene.traversal.runners.AnswerTaskRunnerTest.test doRun when answerTask is null(AnswerTaskRunnerTest.groovy:48)
+```
+
+### 8. Patches / Suggested Fixes
+The provided code diff contains the fix. The issue was that `taskInfo.getTaskStatus()` was being returned, but `taskInfo`'s status might not have been updated yet, or was `null` in the specific failure path. By returning `retStatus` (which is explicitly set to `TaskStatus.SKIPPED` or `TaskStatus.SUCCEED`), the `ExecutionResult` correctly reflects the intended task status.
+
+**Patch:**
+```diff
+--- a/rill-flow-dag/olympicene-traversal/src/main/java/com/weibo/rill/flow/olympicene/traversal/runners/AnswerTaskRunner.java
++++ b/rill-flow-dag/olympicene-traversal/src/main/java/com/weibo/rill/flow/olympicene/traversal/runners/AnswerTaskRunner.java
+@@ -52,7 +52,7 @@ public class AnswerTaskRunner extends AbstractTaskRunner {
+                 TaskInvokeMsg taskInvokeMsg = TaskInvokeMsg.builder().msg("answer task expression empty").build();
+                 taskInfo.updateInvokeMsg(taskInvokeMsg);
+                 retStatus = TaskStatus.SKIPPED;
+-                return ExecutionResult.builder().taskStatus(taskInfo.getTaskStatus()).build();
++                return ExecutionResult.builder().taskStatus(retStatus).build();
+             }
+             updateTaskInvokeStartTime(taskInfo);
+             taskInfo.setTaskStatus(TaskStatus.RUNNING);
+@@ -60,7 +60,7 @@ public class AnswerTaskRunner extends AbstractTaskRunner {
+             String dispatchResult = answerTaskDispatcher.dispatch(dispatchInfo);
+             log.info("dispatch answer task succeed, execution_id: {}, task_name: {}, result: {}", executionId, taskInfo.getName(), dispatchResult);
+             retStatus = TaskStatus.SUCCEED;
+-            return ExecutionResult.builder().taskStatus(taskInfo.getTaskStatus()).build();
++            return ExecutionResult.builder().taskStatus(retStatus).build();
+         } catch (Exception e) {
+             log.warn("dispatch answer task failed, execution_id: {}, task_name: {}\", executionId, taskInfo.getName(), e);
+             retStatus = tolerance? TaskStatus.SKIPPED: TaskStatus.FAILED;
+```

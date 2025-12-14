@@ -1,0 +1,112 @@
+## Bug Report: Compilation Failure in `java-manta-it` Module Due to Missing Apache Commons Codec and HttpComponents Dependencies
+
+### 1. Title
+Compilation Failure in `java-manta-it` Module Due to Missing Apache Commons Codec and HttpComponents Test Dependencies.
+
+### 2. Steps to Reproduce
+1.  Clone the `joyent/java-manta` repository.
+2.  Checkout the `multipart` branch at commit `bb242902336c1d9120168470fe181b515ef4b36b`.
+3.  Navigate to the `joyent/java-manta` directory.
+4.  Execute the Maven install command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+### 3. Triggering Input
+*   **Repository:** `https://github.com/joyent/java-manta.git`
+*   **Branch:** `multipart`
+*   **Commit SHA:** `bb242902336c1d9120168470fe181b515ef4b36b`
+*   **Maven Command:** `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+### 4. Expected Behavior
+The Maven build should successfully compile all modules, including `java-manta-it`, and install the project artifacts into the local Maven repository without any compilation errors.
+
+### 5. Observed Behavior
+The Maven build fails during the `testCompile` phase of the `java-manta-it` module. The compiler reports numerous "package does not exist" and "cannot find symbol" errors, indicating that several Apache Commons Codec and Apache HttpComponents classes used in the test code are not found on the classpath. The build retries twice, failing consistently each time.
+
+**Specific errors observed:**
+*   `package org.apache.commons.codec.digest does not exist`
+*   `package org.apache.commons.codec does not exist`
+*   `package org.apache.http.client.utils does not exist`
+*   `cannot find symbol variable DigestUtils`
+*   `cannot find symbol variable Charsets`
+*   `cannot find symbol variable DateUtils`
+
+### 6. Relevant Code Snippets
+The issue is in the `java-manta-it/pom.xml` file, where a necessary test dependency is missing. The provided patch adds the `httpclient` dependency, which transitively brings in `commons-codec` and `httpcore`, resolving the missing classes.
+
+**`java-manta-it/pom.xml` (missing dependency before fix):**
+```xml
+<!-- ... existing dependencies ... -->
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>2.5.1-SNAPSHOT</version>
+            <scope>test</scope>
+        </dependency>
+<!-- Missing httpclient dependency here -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>jul-to-slf4j</artifactId>
+<!-- ... rest of the file ... -->
+```
+
+### 7. Stack Traces
+```
+[ERROR] COMPILATION ERROR : 
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaObjectOutputStreamIT.java:[6,39] package org.apache.commons.codec.digest does not exist
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaClientIT.java:[14,32] package org.apache.commons.codec does not exist
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaClientIT.java:[15,36] package org.apache.http.client.utils does not exist
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/multipart/MantaMultipartManagerIT.java:[12,39] package org.apache.commons.codec.digest does not exist
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaObjectOutputStreamIT.java:[83,35] cannot find symbol
+  symbol:   variable DigestUtils
+  location: class com.joyent.manta.client.MantaObjectOutputStreamIT
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaObjectOutputStreamIT.java:[119,35] cannot find symbol
+  symbol:   variable DigestUtils
+  location: class com.joyent.manta.client.MantaObjectOutputStreamIT
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaClientIT.java:[147,50] cannot find symbol
+  symbol:   variable Charsets
+  location: class com.joyent.manta.client.MantaClientIT
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaClientIT.java:[183,50] cannot find symbol
+  symbol:   variable Charsets
+  location: class com.joyent.manta.client.MantaClientIT
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaClientIT.java:[235,59] cannot find symbol
+  symbol:   variable Charsets
+  location: class com.joyent.manta.client.MantaClientIT
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaClientIT.java:[262,59] cannot find symbol
+  symbol:   variable Charsets
+  location: class com.joyent.manta.client.MantaClientIT
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaClientIT.java:[572,31] cannot find symbol
+  symbol:   variable DateUtils
+  location: class com.joyent.manta.client.MantaClientIT
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/multipart/MantaMultipartManagerIT.java:[431,20] cannot find symbol
+  symbol:   variable DigestUtils
+  location: class com.joyent.manta.client.multipart.MantaMultipartManagerIT
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.5.1:testCompile (default-testCompile) on project java-manta-it: Compilation failure: Compilation failure:
+... (repeated errors)
+```
+
+### 8. Patches / Suggested Fixes
+The provided code diff contains the necessary patch to resolve this issue. The fix involves adding the `httpclient` dependency to the `java-manta-it/pom.xml` with a `test` scope. This dependency transitively provides `commons-codec` and `httpcore`, which contain the `DigestUtils`, `Charsets`, and `DateUtils` classes that were previously missing.
+
+**Patch to `java-manta-it/pom.xml`:**
+```diff
+--- a/java-manta-it/pom.xml
++++ b/java-manta-it/pom.xml
+@@ -35,6 +35,18 @@
+             <version>2.5.1-SNAPSHOT</version>
+             <scope>test</scope>
+         </dependency>
++        <dependency>
++            <groupId>org.apache.httpcomponents</groupId>
++            <artifactId>httpclient</artifactId>
++            <version>${dependency.apache-http-client.version}</version>
++            <scope>test</scope>
++            <exclusions>
++                <exclusion>
++                    <groupId>commons-logging</groupId>
++                    <artifactId>commons-logging</artifactId>
++                </exclusion>
++            </exclusions>
++        </dependency>
+         <dependency>
+             <groupId>org.slf4j</groupId>
+             <artifactId>jul-to-slf4j</artifactId>
+```

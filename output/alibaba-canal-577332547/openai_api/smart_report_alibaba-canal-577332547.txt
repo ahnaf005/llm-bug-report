@@ -1,0 +1,122 @@
+Title
+- CI build fails due to an environment-dependent unit test (MysqlConnectorTest) trying to connect to MySQL on 127.0.0.1:3306.
+
+Steps to Reproduce
+1. Check out the repository at commit c48407b449e69416de7cad272e0da8d9560b98f6 (the failing SHA shown in the build).
+2. Run the full Maven build with tests enabled:
+   ./mvnw clean install -DskipTests=false -Dcheckstyle.skip=true -Dmaven.javadoc.skip=true
+3. Observe the test run for the driver module (canal.parse.driver) and the failure of MysqlConnectorTest.testQuery.
+
+Triggering Input / Conditions
+- Test environment where no MySQL server is accessible at 127.0.0.1:3306 (typical CI container).
+- Running unit tests in the driver module (canal.parse.driver) with surefire (default).
+- The test MysqlConnectorTest attempts a real connection to /127.0.0.1:3306 and asserts success.
+
+Expected Behavior
+- Unit tests should be hermetic and not fail on CI due to missing external services.
+- Either the unit test should be skipped when MySQL is not available, or it should be converted into an integration test (run only when a DB is available or when explicitly enabled), or it should use a mocked server so it can run in CI.
+
+Observed Behavior (from BUILD LOG)
+- The Maven build fails during test execution of the driver module:
+  - com.alibaba.otter.canal.parse.driver.mysql.MysqlConnectorTest.testQuery fails with:
+    java.lang.AssertionError: connect /127.0.0.1:3306 failure
+      at com.alibaba.otter.canal.parse.driver.mysql.MysqlConnectorTest.testQuery(MysqlConnectorTest.java:25)
+- As a result, the module canal.parse.driver fails and the overall build is marked FAILURE. The surefire plugin indicates "There are test failures."
+- CI log lines (relevant excerpts):
+  - 12:56:37.169 [main] INFO  c.a.o.c.p.d.mysql.MysqlConnector - disConnect MysqlConnection to /127.0.0.1:3306...
+  - 12:56:37.194 [main] INFO  c.a.o.c.p.d.mysql.MysqlConnector - the channel /127.0.0.1:3306 is not connected
+  - ERROR Tests run: 1, Failures: 1 ... <<< FAILURE!
+  - java.lang.AssertionError: connect /127.0.0.1:3306 failure at MysqlConnectorTest.testQuery(MysqlConnectorTest.java:25)
+  - ERROR Failed to execute goal ... maven-surefire-plugin:2.22.1:test ... There are test failures.
+
+Relevant Code Snippets (from the diff)
+- The diff contains a patch that attempts to address the problem by marking the test class with @Ignore:
+
+  driver/src/test/java/com/alibaba/otter/canal/parse/driver/mysql/MysqlConnectorTest.java
+  - imports added:
+    import org.junit.Ignore;
+  - annotation added to class:
+    @Ignore
+    public class MysqlConnectorTest {
+      @Test
+      ...
+
+  (This change would skip the whole test class under surefire.)
+
+- Other unrelated changes in the diff (not causing this failure but included in the patch):
+  - SimpleAdminConnector: changed Integer.valueOf(...) -> Integer.parseInt(...):
+    return BooleanUtils.toBoolean(Integer.parseInt(doServerAdmin("check")));
+    (and same for start, stop, restart, and instance-related methods)
+  - PollingConfigController: replaced lambda with method reference:
+    List<String> instances = configs.stream().map(CanalInstanceConfig::getName).collect(Collectors.toList());
+  - UserServiceImpl: added explicit null check and ServiceException:
+    User user = User.find.query().where().eq("username", username).findOne();
+    if (user == null) {
+        throw new ServiceException("user:" + username + " auth failed!");
+    }
+    ...
+    user.setPassword("");
+
+Stack Traces / Failure Output (from the build log)
+- Test failure stack trace excerpt:
+  java.lang.AssertionError: connect /127.0.0.1:3306 failure
+      at com.alibaba.otter.canal.parse.driver.mysql.MysqlConnectorTest.testQuery(MysqlConnectorTest.java:25)
+
+- Maven summary indicating failing module and final error:
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.22.1:test (default-test) on project canal.parse.driver: There are test failures.
+  [ERROR] Please refer to /home/travis/build/alibaba/canal/driver/target/surefire-reports for the individual test results.
+
+Diagnosis / Root Cause
+- The failing test requires a MySQL server available at 127.0.0.1:3306. In CI environment (Travis), no MySQL is started, so the test cannot connect and fails an assertion.
+- The code diff includes a commit intended to skip the test (added @Ignore), but the build log corresponds to the failing commit (failed_sha c48407b...), i.e., the test was still active in the commit that ran on CI and therefore caused the failure.
+- The immediate, minimal fix is to skip or modify the test so CI does not require an external MySQL server.
+
+Patches / Suggested Fixes
+1) Quick fix — skip the test in CI (the patch provided in the diff):
+   - Add import and annotate the class (or the specific test method) with @Ignore:
+     import org.junit.Ignore;
+     @Ignore("Requires local MySQL; skip in CI")
+     public class MysqlConnectorTest { ... }
+
+   This is exactly the change present in the diff. It will prevent the test from being executed by surefire and avoid CI failures.
+
+2) Better fix — make the test self-skipping or robust:
+   - Use JUnit assumptions to skip the test when MySQL is not reachable:
+     import org.junit.Assume;
+     import org.junit.BeforeClass;
+     public class MysqlConnectorTest {
+         @BeforeClass
+         public static void checkMysqlAvailable() {
+             try (Socket s = new Socket()) {
+                 s.connect(new InetSocketAddress("127.0.0.1", 3306), 200);
+             } catch (IOException e) {
+                 Assume.assumeTrue("MySQL not available on 127.0.0.1:3306", false);
+             }
+         }
+         @Test
+         public void testQuery() { ... }
+     }
+   - This keeps the test in source but will automatically skip it if MySQL is not present. The build will report skipped tests (not failures).
+
+3) Better/Preferred — decouple test from external service:
+   - Convert the test to use a mocked server or an embedded MySQL test container (e.g., Testcontainers) or a fake ServerSocket that accepts the connection and responds with handshake bytes as the connector expects.
+   - Example with Testcontainers (requires dependency and CI support):
+     - Start a MySQL container in @BeforeClass, populate minimal data if needed, set connection host/port for the test, and run the test.
+   - Or create a small ServerSocket that listens on 127.0.0.1:3306 and returns the expected protocol handshake so the connector test can exercise its logic without a real DB.
+
+4) CI approach — classify as integration test:
+   - Move this test to an integration test folder and run only when a profile is enabled (e.g., mvn verify -P integration-tests).
+   - Update surefire/failsafe settings to exclude integration tests by default in CI.
+
+Other small notes (from diff):
+- The change from Integer.valueOf(...) to Integer.parseInt(...) in SimpleAdminConnector is equivalent in behavior here (both produce an int/Integer) — this is not related to the test failure.
+- UserServiceImpl: the new explicit null check is correct because the subsequent code calls user.setPassword(""); without null-check; the added check prevents a NullPointerException and throws a ServiceException instead.
+
+Recommended Action
+- Apply either patch (1) the immediate @Ignore (already present in the diff) so CI passes, or (2) better, implement the Assume-based skipping or mock/testcontainer approach to make the test reliable in CI.
+- If the diff already contains the @Ignore but CI still failed, ensure the commit used by CI includes that patch (the build log shows the failing commit is older than the diff's change). Re-run CI after pushing the change.
+- If this test represents important functionality that must be validated, prefer the Testcontainers or embedded/mock approach and mark such tests as integration tests if they require external services.
+
+Summary
+- Failure is deterministic and environment-dependent: MysqlConnectorTest tries to make a real connection to 127.0.0.1:3306, which does not exist in the CI worker.
+- The provided diff includes a correct mitigation (annotate the test with @Ignore), but the build log corresponds to a commit that did not include that mitigation; apply and re-run CI or implement a more robust solution (Assume, mock, or Testcontainers).

@@ -1,0 +1,95 @@
+Title: CI Build Failure — Checkstyle Unused Import in src/org/traccar/reports/ReportUtils.java
+
+Summary
+- The Maven build on CI (Travis) fails during the maven-checkstyle-plugin phase with a single Checkstyle violation: an unused import in ReportUtils.java.
+- Build log shows the error: Unused import - org.traccar.helper.Log.
+- The provided code diff already removes that import from ReportUtils.java and updates unit tests for ReportUtils.calculateFuel; however the failing build corresponds to the earlier commit where the import remains.
+
+Affected commit and IDs
+- Failing SHA: 136a302846ad340f6babaa5f0f35018d867f73e8
+- (Diff metadata also lists a passed SHA: a1d91f3b8a80758d5f3e7804afec66256ab27e68)
+- Files implicated:
+  - src/org/traccar/reports/ReportUtils.java
+  - test/org/traccar/reports/ReportUtilsTest.java
+
+Environment (from BUILD LOG)
+- Build system: Travis CI (Ubuntu 12.04/Precise image)
+- Maven 3.2.5, Java 1.7.0_75
+- maven-checkstyle-plugin: 2.17, Checkstyle 6.11.2
+
+Failure (relevant excerpts)
+- Checkstyle reports 1 error:
+  [ERROR] src/org/traccar/reports/ReportUtils.java:[29,8] (imports) UnusedImports: Unused import - org.traccar.helper.Log.
+- Maven stops with BUILD FAILURE during the checkstyle:check goal (no test phase reached because build terminated earlier).
+- Travis retried the mvn command 3 times with the same result.
+
+Code diff summary (what was changed)
+- ReportUtils.java
+  - Removed the unused import:
+    - import org.traccar.helper.Log;
+  (Code diff shows this deletion; that is the correct fix for the Checkstyle violation.)
+- ReportUtilsTest.java (unit test updated)
+  - Replaced several assertions and protocol-specific behavior with new expectations:
+    - Previous expectations included strings like "-" and "0.02 %" and used protocol values.
+    - New test asserts null for initial fuel states, then sets fuel level values (0.7, 0.5) and expects "0.2".
+  - These test changes indicate a behavior change in ReportUtils.calculateFuel; make sure implementation matches the test.
+
+Root cause
+- An unused import (org.traccar.helper.Log) remained in src/org/traccar/reports/ReportUtils.java. The maven-checkstyle-plugin enforces coding standards and fails the build on any Checkstyle violation by default. Because Checkstyle is run in the validate/check phase before tests, the build fails early.
+- The code diff indicates the intended fix (removing the import) but the failing build ran against the SHA that still contained the import.
+
+Reproduction steps
+1. Checkout the failing commit: git checkout 136a302846ad340f6babaa5f0f35018d867f73e8
+2. Run the maven checkstyle check locally:
+   - mvn org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check
+   or run the full build (as CI does):
+   - mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+3. You should see:
+   - [ERROR] src/org/traccar/reports/ReportUtils.java:[29,8] (imports) UnusedImports: Unused import - org.traccar.helper.Log.
+
+Expected result
+- The Checkstyle check should pass (no unused imports or other violations), then the build proceeds to compile and run tests.
+
+Proposed fix
+- Remove the unused import line in src/org/traccar/reports/ReportUtils.java (exact change shown in the diff).
+  - Before:
+    import org.traccar.helper.Log;
+  - After:
+    (line removed)
+- Ensure that ReportUtils.java does not require Log. If logging is needed, use it; otherwise removing the import is correct.
+
+Patch (as in the provided diff)
+- src/org/traccar/reports/ReportUtils.java
+  - Deleted import org.traccar.helper.Log;
+
+Additional actions to prevent future CI failures
+1. Run Checkstyle locally before committing:
+   - mvn org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check
+   or
+   - mvn -DskipTests=true install
+2. Add a pre-commit hook or CI pre-check to run checkstyle quickly.
+3. When updating tests (like ReportUtilsTest.java), ensure implementation changes are included and compiled in the same PR; otherwise tests may be out of sync with implementation.
+
+Notes about the test changes
+- The test ReportUtilsTest.java was modified to expect different behavior:
+  - It now asserts Assert.assertNull(ReportUtils.calculateFuel(startPosition, endPosition));
+  - Then for startPosition.set(Position.KEY_FUEL_LEVEL, 0.7) and end 0.5, it expects "0.2".
+- Verify that ReportUtils.calculateFuel implementation:
+  - Returns null when fuel values are absent.
+  - Returns the string formatted as "0.2" (no percent sign and not "0.20" or "0.2 %").
+- If test expectations differ from the intended API, either adjust the test back to the intended output or update the implementation to match the test.
+
+Severity
+- Build-blocker for CI; prevents merges and packaging. Medium–High (CI failure must be fixed before further progress).
+
+Suggested next steps (action items)
+1. Apply the import removal (if not already applied) — the included code diff does this.
+2. Commit and push the change to the branch/PR that triggered CI.
+3. Run mvn install (or mvn checkstyle:check) locally to verify no remaining Checkstyle violations.
+4. Ensure ReportUtils.calculateFuel implementation matches updated tests. Run unit tests locally:
+   - mvn test
+5. Re-run CI.
+
+If you’d like, I can:
+- Produce a minimal patch file (unified diff) that removes the import (already present in the CODE DIFF),
+- Or analyze ReportUtils.calculateFuel implementation to confirm it matches the updated tests and suggest changes if they differ (I would need the implementation source).

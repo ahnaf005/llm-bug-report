@@ -1,0 +1,155 @@
+Title
+- TestVertxTLSBuilder fails with IllegalArgumentException "Unsupported protocol" after SSLManager change that defaults protocols to "TLSv1.2"
+
+Summary
+- A recent diff in SSLManager (foundations/foundation-ssl) introduced a defaulting behavior for SSL protocols and an import of org.apache.commons.lang.StringUtils. After this change, the test foundation-vertx:TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory fails with:
+  java.lang.IllegalArgumentException: Unsupported protocol
+  originating from SSLManager.createSSLSocket(...) / getEnabledCiphers(...).
+
+Steps to Reproduce
+1. Check out the branch that includes the supplied diff (the PR/commit from the build log).
+2. From repository root run the failing module tests:
+   - mvn -pl foundations/foundation-vertx -Dtest=org.apache.servicecomb.foundation.vertx.TestVertxTLSBuilder#testBuildHttpClientOptions_ssl_withFactory test
+   - Or run the full unit test in CI as in the workflow: mvn -B -Dcheckstyle.skip -Dspotbugs.skip=true clean install -Pit
+3. Observe the test failure/error reported in foundation-vertx.
+
+Triggering Input / Conditions
+- Occurs when SSLOption::getProtocols() is empty (null or blank) for the SSL option passed into SSLManager.getEnabledCiphers(...).
+- The code now defaults protocols to the single literal "TLSv1.2" when no protocols are provided.
+- Tests run on JDK 17 in the CI environment used in the build log.
+
+Expected Behavior
+- Tests should pass. If SSL option protocols are not provided, SSLManager should behave as before (use default platform protocols / previously-intended behavior), or choose a protocol value that is valid for the runtime and accepted by later SSL creation code.
+- No IllegalArgumentException indicating unsupported protocol should be thrown by createSSLSocket/getEnabledCiphers during building of SSL client options.
+
+Observed Behavior (from build log)
+- Test failure (error) occurs in TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory with:
+  java.lang.IllegalArgumentException: Unsupported protocol
+  at org.apache.servicecomb.foundation.ssl.SSLManager.createSSLSocket(SSLManager.java:183)
+  at org.apache.servicecomb.foundation.ssl.SSLManager.getEnabledCiphers(SSLManager.java:222)
+  at org.apache.servicecomb.foundation.vertx.VertxTLSBuilder.buildTCPSSLOptions(VertxTLSBuilder.java:157)
+  at org.apache.servicecomb.foundation.vertx.VertxTLSBuilder.buildClientOptionsBase(VertxTLSBuilder.java:98)
+  at org.apache.servicecomb.foundation.vertx.VertxTLSBuilder.buildHttpClientOptions(VertxTLSBuilder.java:91)
+  at org.apache.servicecomb.foundation.vertx.TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory(TestVertxTLSBuilder.java:83)
+
+- Test summary at end:
+  Errors: 1 (TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory)
+  Tests run: 313, Failures: 0, Errors: 1, Skipped: 0
+
+Relevant Code Snippets (from the diff)
+- New code added in foundations/foundation-ssl/src/main/java/org/apache/servicecomb/foundation/ssl/SSLManager.java:
+
+  import org.apache.commons.lang.StringUtils;
+
+  public static String[] getEnabledCiphers(SSLOption sslOption) {
+    SSLOption option = new SSLOption();
+    if (StringUtils.isNotEmpty(sslOption.getProtocols())) {
+      option.setProtocols(sslOption.getProtocols());
+    } else {
+      option.setProtocols("TLSv1.2");
+    }
+    option.setCiphers(sslOption.getCiphers());
+    SSLCustom custom = SSLCustom.defaultSSLCustom();
+    SSLSocket socket = createSSLSocket(option, custom);
+    ...
+
+- Previously the code simply did:
+    option.setProtocols(sslOption.getProtocols());
+
+Stack Traces (from build log)
+- Primary failure stack trace excerpt:
+
+  java.lang.IllegalArgumentException: Unsupported protocol
+    at org.apache.servicecomb.foundation.ssl.SSLManager.createSSLSocket(SSLManager.java:183)
+    at org.apache.servicecomb.foundation.ssl.SSLManager.getEnabledCiphers(SSLManager.java:222)
+    at org.apache.servicecomb.foundation.vertx.VertxTLSBuilder.buildTCPSSLOptions(VertxTLSBuilder.java:157)
+    at org.apache.servicecomb.foundation.vertx.VertxTLSBuilder.buildClientOptionsBase(VertxTLSBuilder.java:98)
+    at org.apache.servicecomb.foundation.vertx.VertxTLSBuilder.buildHttpClientOptions(VertxTLSBuilder.java:91)
+    at org.apache.servicecomb.foundation.vertx.TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory(TestVertxTLSBuilder.java:83)
+
+- Test failure summary printed by Maven Surefire:
+  [ERROR] Errors:
+  [ERROR]   TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory:83 » IllegalArgument Unsupported protocol
+
+Analysis / Likely Root Causes
+The introduced change creates two potential issues:
+
+1) Default protocol value chosen ("TLSv1.2") may not be acceptable to the logic in createSSLSocket():
+   - The IllegalArgumentException "Unsupported protocol" is typically thrown when setEnabledProtocols(...) is given protocol names that are not supported by the SSLSocket/SSLContext (or wrong format).
+   - Previously when protocols were unspecified the code passed whatever sslOption.getProtocols() was (null/empty) and downstream code likely used the platform default supported protocols (no explicit set), which avoided "Unsupported protocol".
+   - Forcing "TLSv1.2" when the code expects a particular format (e.g., an array or a comma-separated list processed elsewhere) or when the created SSLSocket does not support explicitly enabling "TLSv1.2" in the way it's used can result in IllegalArgumentException.
+   - The change may be incompatible with how option.setProtocols(...) / createSSLSocket(...) treat the value (string vs array or splitting rules). The immediate difference is forcing a particular protocol instead of leaving it to default handling.
+
+2) Wrong import of StringUtils:
+   - The code imports org.apache.commons.lang.StringUtils (commons-lang v2) while the project appears to use commons-lang3 (org.apache.commons.lang3.StringUtils) elsewhere.
+   - Although the build log indicates commons-lang/commons-lang3 artifacts are present, using the wrong package could still be risky (dependency mismatch), and should be corrected to commons-lang3 or replaced with a simple null/empty check to avoid dependency surprises.
+   - This is less likely to be the cause of "Unsupported protocol" but is an additional defect in the diff.
+
+Suggested Fixes / Patches
+1) Revert the change that forces the default "TLSv1.2", and instead preserve previous behavior (do not set protocols if none provided). That will let SSLSocket use its platform default protocols and avoid the IllegalArgumentException.
+
+Example patch suggestion (conceptual - modify the diff):
+
+- Replace the new logic:
+
+    import org.apache.commons.lang.StringUtils;
+
+    if (StringUtils.isNotEmpty(sslOption.getProtocols())) {
+      option.setProtocols(sslOption.getProtocols());
+    } else {
+      option.setProtocols("TLSv1.2");
+    }
+
+- With either:
+  a) Preserve original behavior (recommended minimal change):
+
+    // do not override protocols if not provided - use platform defaults
+    if (sslOption.getProtocols() != null && !sslOption.getProtocols().trim().isEmpty()) {
+      option.setProtocols(sslOption.getProtocols());
+    }
+
+  b) If explicit default is truly desired, use a safer default and ensure correct format:
+    - Use "TLS" (generic) instead of "TLSv1.2", and ensure setProtocols accepts the format (may need to pass an array).
+    - Or change SSLOption to accept String[] and pass new String[]{"TLSv1.2"} so createSSLSocket handles it consistently.
+
+  c) Also, avoid depending on org.apache.commons.lang; use the existing commons-lang3 or plain Java checks:
+    - import org.apache.commons.lang3.StringUtils; // if commons-lang3 is used in project
+    - or use: if (sslOption.getProtocols() != null && !sslOption.getProtocols().trim().isEmpty())
+
+2) If you must set a default, ensure createSSLSocket supports that protocol by:
+   - Ensuring the code that sets enabled protocols calls socket.setEnabledProtocols(new String[]{"TLSv1.2"}) only if socket.getSupportedProtocols() contains "TLSv1.2" (i.e., filter supported protocols) to avoid IllegalArgumentException.
+   - Example:
+
+     String requested = "TLSv1.2";
+     List<String> supported = Arrays.asList(socket.getSupportedProtocols());
+     if (supported.contains(requested)) {
+       socket.setEnabledProtocols(new String[]{requested});
+     } else {
+       // fallback to supported protocols (do not call setEnabledProtocols with unsupported ones)
+     }
+
+3) Fix the import for StringUtils:
+   - If you need StringUtils, import org.apache.commons.lang3.StringUtils (commons-lang3).
+   - Or remove the dependency and use the standard Java null/empty checks to avoid mismatch.
+
+Why this fix?
+- Reverting to previous behavior or validating protocols against supported ones prevents passing an unsupported protocol to the SSLSocket, which causes IllegalArgumentException.
+- Fixing the StringUtils import avoids using the wrong commons library package name which could create runtime or maintenance issues.
+
+Additional Recommendations
+- Add unit test coverage for getEnabledCiphers when sslOption.getProtocols() is null or empty so future changes don't regress.
+- In createSSLSocket, before calling socket.setEnabledProtocols(...), validate the requested protocols are supported, and if none are supported, skip calling setEnabledProtocols so the socket defaults are preserved.
+- Prefer using java standard checks (Objects.requireNonNull / isEmpty) over bringing additional package imports unless needed.
+
+Relevant Diff (for reference)
+- The patch added:
+
+  +import org.apache.commons.lang.StringUtils;
+  ...
+  +    if (StringUtils.isNotEmpty(sslOption.getProtocols())) {
+  +      option.setProtocols(sslOption.getProtocols());
+  +    } else {
+  +      option.setProtocols("TLSv1.2");
+  +    }
+
+Note: The build log shows the failing stack trace points to SSLManager.createSSLSocket -> getEnabledCiphers. That is consistent with this change causing an unsupported protocol to be passed to socket.setEnabledProtocols or SSLContext creation. The quickest safe rollback is to stop forcing a literal default protocol and instead let the SSL stack use its defaults or to validate supported protocols before enabling them.

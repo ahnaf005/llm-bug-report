@@ -1,0 +1,126 @@
+Title
+- Build fails with compilation errors in StartGocodeServerOperation.java after refactor of background-computation API
+
+Summary
+- The Maven (Tycho) build fails during compilation of plugin_ide.ui. Error originates in StartGocodeServerOperation.java: the class declares/overrides a method that does not exist on the supertype and calls super.performBackgroundComputation(), which is undefined. The failure is caused by a mismatch between the method(s) implemented in StartGocodeServerOperation and the API provided by AbstractUIOperation (target platform). The code diff shows a refactor that renames performBackgroundComputation() to isBackgroundComputationNecessary() (returning boolean), but the build log shows override/method-call errors for the old method.
+
+Environment (from BUILD LOG)
+- Project: GoClipse/goclipse
+- Failed commit: f737d664794570bb2a319d7bff9111f2c0ca9e0a
+- JDK: Oracle JDK 8 (1.8.0_31)
+- Maven: 3.2.5 + Tycho 0.24.0
+- OS: Ubuntu 12.04 LTS (precise) on Travis CI container
+- Build command: mvn clean integration-test
+
+Failing build output (key excerpts)
+- Compilation failure reported by tycho-compiler-plugin:
+  - File: plugin_ide.ui/src/com/googlecode/goclipse/ui/actions/StartGocodeServerOperation.java
+  - Errors:
+    1) The method performBackgroundComputation() of type StartGocodeServerOperation must override or implement a supertype method
+    2) The method performBackgroundComputation() is undefined for the type AbstractUIOperation (error for super.performBackgroundComputation();)
+- Final status: BUILD FAILURE (com.googlecode.goclipse.ui module failed compilation)
+
+Reproduction steps
+1. Checkout the failing SHA (or the branch containing the change).
+2. Run: mvn clean integration-test
+3. Observe the compilation errors described above during the com.googlecode.goclipse.ui compilation stage.
+
+Observed behavior
+- The build fails with compile-time errors because StartGocodeServerOperation attempts to override a method that does not exist in the AbstractUIOperation supertype used by the build (and calls a non-existing super method).
+
+Expected behavior
+- Build should compile successfully. StartGocodeServerOperation must implement/override the correct method(s) matching the AbstractUIOperation API present in the target platform, without calling undefined super methods.
+
+Root cause analysis
+- The CODE DIFF shows a refactor: StartGocodeServerOperation changes:
+  - performBackgroundComputation() (void) -> isBackgroundComputationNecessary() (boolean)
+  - The body logic was converted to return a boolean (needsStart) and the prior call to super.performBackgroundComputation() was removed.
+  - doBackgroundComputation() signature was adjusted (removal of CommonException in throws).
+- The build log shows errors referencing performBackgroundComputation (old name), indicating an API mismatch: the code base at compile time tries to override performBackgroundComputation while the AbstractUIOperation in the build target platform exposes a different API (or the code is inconsistent in the commit).
+- Two likely scenarios:
+  1) The project’s AbstractUIOperation changed its API (to isBackgroundComputationNecessary, etc.) and the subclass was only partially updated (or the update is not in the commit that the build used). The subclass still contains performBackgroundComputation() annotated with @Override and calls super.performBackgroundComputation(), which no longer exists — causing compile errors.
+  2) The subclass was updated to the new API (as in the diff) but another copy or the build used an older source, or the commit ordering caused inconsistent state, resulting in compilation against a different AbstractUIOperation signature.
+- Short summary: a method-name / signature mismatch between StartGocodeServerOperation and AbstractUIOperation (the superclass in the target platform) causes the override and super call to be invalid.
+
+Files involved
+- plugin_ide.ui/src/com/googlecode/goclipse/ui/actions/StartGocodeServerOperation.java
+- Abstract class: AbstractUIOperation (location in project or in external target platform; API change suspected)
+
+Patch in CODE DIFF (what was attempted)
+- The diff shows the intended update: replacing performBackgroundComputation() with isBackgroundComputationNecessary() returning boolean, removing the call to super.performBackgroundComputation(), and adjusting the doBackgroundComputation signature. This is the right direction if AbstractUIOperation's API was changed to the new methods.
+
+Recommended fixes
+Pick one of two approaches depending on what your target platform/AbstractUIOperation actually expects.
+
+A) If AbstractUIOperation has been updated to the new API (isBackgroundComputationNecessary returns boolean)
+- Ensure your subclass exactly implements the new API and remove code that tries to override old methods. Example (follow the diff — final form):
+
+  @Override
+  protected boolean isBackgroundComputationNecessary()
+      throws CoreException, CommonException, OperationCancellation {
+      if (!ToolchainPreferences.AUTO_START_DAEMON.get()) {
+          return false;
+      }
+      gocodePath = GocodeServerManager.getGocodePath();
+      boolean needsStart = gocodeServerManager.prepareServerStart(gocodePath);
+      return needsStart;
+  }
+
+  @Override
+  protected void doBackgroundComputation(IProgressMonitor monitor)
+      throws CoreException, OperationCancellation {
+      gocodeServerManager.doStartServer(gocodePath, monitor);
+  }
+
+- Make sure the throws list matches the superclass methods’ signature exactly.
+- Remove any references to super.performBackgroundComputation() because the new API presumably does not have it.
+
+B) If the build/target platform still uses the old API (performBackgroundComputation exists)
+- Revert/refactor to match the old API. For example, continue overriding performBackgroundComputation() with the original signature and call super.performBackgroundComputation() only if the parent method exists. Example:
+
+  @Override
+  protected void performBackgroundComputation() throws CommonException,
+      OperationCancellation, CoreException {
+      if (!ToolchainPreferences.AUTO_START_DAEMON.get()) {
+          return; // stop operation
+      }
+      gocodePath = GocodeServerManager.getGocodePath();
+      boolean needsStart = gocodeServerManager.prepareServerStart(gocodePath);
+      if (needsStart) {
+          super.performBackgroundComputation();
+      }
+  }
+
+- Ensure doBackgroundComputation signature matches parent.
+
+C) Cross-version compatibility (if you must support both old and new parent APIs)
+- This is harder because Java requires compile-time matching signatures. You cannot compile a single binary that overrides a method that exists only in one parent version while also compiling against another where the method does not exist.
+- Options:
+  - Decide and lock to a single AbstractUIOperation API: update target platform dependency to the correct version in the POM / target platform definition and ensure all code is updated consistently.
+  - Provide two branches/versions of the plugin: one for older Eclipse/AbstractUIOperation and one for newer.
+
+Immediate actionable steps
+1. Inspect the version of AbstractUIOperation on the project's target platform (target definition / tycho target platform). Determine whether the API expects performBackgroundComputation() (old) or isBackgroundComputationNecessary() (new).
+2. Update StartGocodeServerOperation.java to exactly match the chosen AbstractUIOperation API (use the method names, return types, thrown exceptions, annotations exactly).
+3. Remove or update any calls to super.performBackgroundComputation() if the parent no longer exposes that method.
+4. Commit and run mvn clean integration-test locally, or on CI.
+5. If switching to the new AbstractUIOperation API, update target platform / project dependencies so Tycho compiles against the intended API version (avoid mixing API versions).
+
+Suggested patch (if target platform uses the new API, apply the code from the provided CODE DIFF)
+- The CODE DIFF already shows the correct refactor (replace performBackgroundComputation with isBackgroundComputationNecessary boolean-returning method and adjust doBackgroundComputation throws). Ensure this file is actually present in the failing commit and there are no leftover references to performBackgroundComputation in the same file. Make sure to include @Override and matching throws signatures.
+
+Workarounds
+- Pin the target platform to the older AbstractUIOperation (if you need to keep old code) OR revert the refactor until the target platform is updated to the new API consistently.
+- Build locally with the same target platform version as CI to catch the mismatch early.
+
+Why this caused CI failure but local dev may not
+- If local developers compile against a different Eclipse/Tycho/AbstractUIOperation version than the CI target platform, they will not see these errors until CI builds the project. Always ensure target-platform and API versions are consistent across development and CI environments.
+
+References / helpful commands
+- Reproduce build locally:
+  - mvn -e -X clean integration-test
+- Check target platform configuration in releng/target definition or pom(s) used by Tycho.
+- The failing file path: plugin_ide.ui/src/com/googlecode/goclipse/ui/actions/StartGocodeServerOperation.java
+
+Summary / Conclusion
+- The build failure is caused by an API mismatch between StartGocodeServerOperation and AbstractUIOperation (method renamed/refactored). Fix by aligning the subclass to exactly the supertype API present in the project's target platform (either revert to old API or fully adopt the new API and update the target platform). The CODE DIFF indicates the intended correct change; ensure the change is actually applied and that the target platform is updated consistently.

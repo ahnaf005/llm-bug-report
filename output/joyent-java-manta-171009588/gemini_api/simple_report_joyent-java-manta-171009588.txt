@@ -1,0 +1,103 @@
+## Software Bug Report
+
+**Bug Title:** Build Failure: Checkstyle Violation (TodoComment) in `MantaMultipartManager.java`
+
+**Bug ID:** N/A (No specific ID provided)
+
+**Status:** Failed
+
+**Priority:** Medium
+
+**Severity:** High (Build Failure)
+
+**Project/Module:** `java-manta-client`
+
+**Environment:**
+*   **CI System:** Travis CI
+*   **Operating System:** Ubuntu 12.04.5 LTS (Precise)
+*   **Linux Kernel:** 3.13.0-29-generic
+*   **Java Version:** Oracle JDK 1.8.0_31
+*   **Maven Version:** Apache Maven 3.2.5
+*   **Git Branch:** `multipart`
+*   **Failing Commit SHA:** `6605599062fa7201ccce660f105d6f1ecfe598bf`
+
+---
+
+### Description
+
+The Travis CI build for the `joyent/java-manta` repository on the `multipart` branch failed during the `install` phase. The failure was caused by a Checkstyle violation, specifically a `TodoComment` found in the `MantaMultipartManager.java` file. The `maven-checkstyle-plugin` was configured to treat this violation as an error, leading to a `MojoFailureException` and halting the build.
+
+### Steps to Reproduce
+
+1.  Clone the `joyent/java-manta` repository.
+2.  Checkout the failing commit SHA: `6605599062fa7201ccce660f105d6f1ecfe598bf`.
+3.  Execute the Maven `install` command with skipped tests and javadoc:
+    `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+### Expected Behavior
+
+The Maven `install` command should complete successfully, indicating that the code adheres to all configured quality gates (including Checkstyle) or that Checkstyle violations are configured as warnings rather than errors.
+
+### Actual Behavior
+
+The Maven `install` command failed with a `MojoFailureException` due to a Checkstyle violation. The build log indicates the specific error:
+
+```
+[ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[641] (misc) TodoComment: Comment matches to-do format 'TODO:'.
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation. -> [Help 1]
+```
+
+The build attempted to retry the command twice more, failing identically each time, before finally stopping.
+
+### Error Messages / Logs
+
+```
+[ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[641] (misc) TodoComment: Comment matches to-do format 'TODO:'.
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation. -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+[ERROR] 
+[ERROR] After correcting the problems, you can resume the build with the command
+[ERROR]   mvn <goals> -rf :java-manta-client
+
+The command "eval mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V" failed. Retrying, 2 of 3.
+... (repeated twice more) ...
+The command "eval mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V" failed 3 times.
+The command "mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V" failed and exited with 1 during ..
+```
+
+### Root Cause Analysis
+
+The build failed because the `maven-checkstyle-plugin` detected a `TODO` comment at line 641 in `src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java`. The Checkstyle configuration for the `java-manta-client` project (or its parent POM) includes a rule (`TodoComment`) that treats `TODO` comments as violations, and these violations are configured to fail the build.
+
+The specific line causing the failure was:
+`// TODO: Validate parts and match up etags with path`
+
+This indicates that the functionality described by the `TODO` comment was not yet implemented in the failing commit.
+
+### Proposed Solution / Fix
+
+The provided `CODE DIFF` (representing the changes from `6605599062fa7201ccce660f105d6f1ecfe598bf` to `ee36221ef1aafb48ffa286054b0f650fa1f7bc57`) addresses this bug by:
+
+1.  **Removing the `TODO` comment:** The problematic `// TODO: Validate parts and match up etags with path` comment at line 641 of `MantaMultipartManager.java` is removed.
+2.  **Implementing the functionality:** The code diff shows a significant addition of logic within the `complete` methods of `MantaMultipartManager.java`. This new logic:
+    *   Retrieves a listing of existing multipart parts.
+    *   Iterates through the provided `partsStream` (now a required argument for `complete` methods).
+    *   Validates that each part in the stream can be found among the existing parts.
+    *   Checks for an excessive number of parts (up to `MAX_PARTS`).
+    *   Constructs the `mget` command for assembling the parts.
+    *   Throws a new `MantaMultipartException` if any specified parts are missing or if too many parts are provided.
+3.  **Introducing `MantaMultipartException`:** A new exception class `com.joyent.manta.exception.MantaMultipartException` is added to handle errors specific to multipart uploads.
+4.  **Refactoring `MantaMultipartUploadPart`:** The custom `equals` and `hashCode` methods are removed, likely relying on the parent class's implementation or simplifying the comparison logic.
+5.  **Updating Integration Tests:** The integration test class `MantaMultipartIT` is renamed to `MantaMultipartManagerIT`, and its test methods are updated to pass the stream of `uploadedParts` to the `multipart.complete()` method, aligning with the new API. The `logback-test.xml` is also updated to reflect the new test class name.
+
+These changes effectively resolve the Checkstyle violation by implementing the pending functionality and removing the `TODO` comment, allowing the build to pass this stage.
+
+### Additional Notes
+
+*   The `install` command was run with `-DskipTests=true`, meaning the unit and integration tests were not executed during the failing build. The `CODE DIFF` includes updates to the integration tests, which would have been run in a subsequent `test` phase if the `install` phase had passed.
+*   The fix goes beyond merely removing the `TODO` comment; it implements the functionality that the `TODO` comment was referencing, indicating a completion of a feature rather than just a cosmetic fix.

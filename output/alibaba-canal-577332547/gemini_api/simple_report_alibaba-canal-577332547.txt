@@ -1,0 +1,105 @@
+## Software Bug Report
+
+**Bug ID:** [To be assigned]
+
+**Project:** alibaba/canal
+
+**Version/Commit:** `c48407b449e69416de7cad272e0da8d9560b98f6` (Failed Commit)
+
+**Severity:** High (Build Failure)
+
+**Priority:** High (Blocks successful CI/CD pipeline and subsequent module builds)
+
+---
+
+### 1. Overview
+
+The build for the `alibaba/canal` project failed on Travis CI at commit `c48407b449e69416de7cad272e0da8d9560b98f6`. The failure occurred during the `test` phase of the `canal.parse.driver` module, specifically due to an `AssertionError` in `MysqlConnectorTest.testQuery` indicating a failure to connect to a MySQL instance at `127.0.0.1:3306`.
+
+The provided `CODE DIFF` shows that the subsequent successful commit (`7386327af997dbff7c07d64d6867f5540f777e22`) addresses this by adding the `@Ignore` annotation to the `MysqlConnectorTest` class, effectively skipping this test in the build process.
+
+---
+
+### 2. Environment
+
+*   **CI System:** Travis CI
+*   **Worker Hostname:** `afd13b78-a2e0-460e-8f9b-34502205228c@1.worker-org-5dcc948c89-kzmb4.gce-production-2`
+*   **Operating System:** Ubuntu 16.04.6 LTS (xenial)
+*   **Java Version:** OpenJDK 11.0.2 (build 11.0.2+9)
+*   **Maven Version:** Apache Maven 3.6.0
+*   **Build Command:** `./mvnw clean install -DskipTests=false -Dcheckstyle.skip=true -Dmaven.javadoc.skip=true`
+
+---
+
+### 3. Steps to Reproduce
+
+1.  Clone the `alibaba/canal` repository.
+2.  Checkout the failing commit: `git checkout c48407b449e69416de7cad272e0da8d9560b98f6`
+3.  Execute the build command: `./mvnw clean install -DskipTests=false -Dcheckstyle.skip=true -Dmaven.javadoc.skip=true`
+
+---
+
+### 4. Expected Behavior
+
+The build should complete successfully, with all tests passing or being intentionally skipped (e.g., via `@Ignore` annotations).
+
+---
+
+### 5. Actual Behavior
+
+The build fails during the `test` phase of the `canal.parse.driver` module. The `MysqlConnectorTest.testQuery` method throws an `AssertionError` because it cannot establish a connection to a MySQL server at `127.0.0.1:3306`. This failure prevents the compilation and testing of all subsequent modules in the reactor build.
+
+**Relevant Build Log Snippet:**
+```
+[INFO] Running com.alibaba.otter.canal.parse.driver.mysql.MysqlConnectorTest
+12:56:37.169 [main] INFO  c.a.o.c.p.d.mysql.MysqlConnector - disConnect MysqlConnection to /127.0.0.1:3306...
+12:56:37.194 [main] INFO  c.a.o.c.p.d.mysql.MysqlConnector - the channel /127.0.0.1:3306 is not connected
+[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.398 s <<< FAILURE! - in com.alibaba.otter.canal.parse.driver.mysql.MysqlConnectorTest
+[ERROR] testQuery(com.alibaba.otter.canal.parse.driver.mysql.MysqlConnectorTest)  Time elapsed: 0.306 s  <<< FAILURE!
+java.lang.AssertionError: connect /127.0.0.1:3306 failure
+	at com.alibaba.otter.canal.parse.driver.mysql.MysqlConnectorTest.testQuery(MysqlConnectorTest.java:25)
+...
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.22.1:test (default-test) on project canal.parse.driver: There are test failures.
+```
+
+---
+
+### 6. Root Cause Analysis
+
+The `MysqlConnectorTest.testQuery` test method attempts to establish a connection to a MySQL server running on `localhost` at port `3306`. The Travis CI build environment, by default, does not provide a running MySQL instance accessible at this address. Consequently, the connection attempt fails, leading to the `AssertionError: connect /127.0.0.1:3306 failure` and the overall build failure.
+
+The test is an integration test that requires an external dependency (a running MySQL server) which is not guaranteed to be present in the standard CI environment configuration for this project.
+
+---
+
+### 7. Proposed Solution / Fix
+
+The `CODE DIFF` provided already contains the fix implemented in the `passed_sha` (`7386327af997dbff7c07d64d6867f5540f777e22`). The solution is to mark the `MysqlConnectorTest` class with the `@Ignore` annotation from JUnit. This will prevent the test from being executed during standard Maven test runs, including those in CI environments, unless explicitly enabled.
+
+**Relevant Code Diff Snippet:**
+```diff
+--- a/driver/src/test/java/com/alibaba/otter/canal/parse/driver/mysql/MysqlConnectorTest.java
++++ b/driver/src/test/java/com/alibaba/otter/canal/parse/driver/mysql/MysqlConnectorTest.java
+@@ -4,10 +4,12 @@ import java.io.IOException;
+ import java.net.InetSocketAddress;
+
+ import org.junit.Assert;
++import org.junit.Ignore;
+ import org.junit.Test;
+
+ import com.alibaba.otter.canal.parse.driver.mysql.packets.server.ResultSetPacket;
+
++@Ignore
+ public class MysqlConnectorTest {
+
+     @Test
+```
+
+**Recommendation:** Apply the changes from the `passed_sha` to the `failed_sha` branch/commit. If this test is critical and needs to run in CI, the CI environment must be configured to provision and start a MySQL server before the test phase, or the test should be refactored to use a mock MySQL server. Given the current fix, ignoring it is the intended approach for CI.
+
+---
+
+### 8. Additional Notes
+
+*   **Java 11 Reflective Access Warnings:** The build log also shows several warnings related to illegal reflective access operations by `org.codehaus.groovy.reflection.CachedClass` to `java.lang.Object.finalize()`. While these are currently warnings and not the cause of this build failure, they indicate potential compatibility issues with future Java releases where such operations might be denied. This should be addressed as part of ongoing maintenance.
+*   **Other Skipped Tests:** Several other test classes (e.g., `ServerRunningTest`, `FileMixedMetaManagerTest`, `PeriodMixedMetaManagerTest`, `ZooKeeperMetaManagerTest`, `AbstractMetaManagerTest`, `MixedMetaManagerTest`, `MemoryMetaManagerTest`) are reported as "Skipped: 1" or "Skipped: 6". This is expected behavior if these tests are also marked with `@Ignore` or similar annotations, and does not indicate a bug in their execution. The `MysqlConnectorTest` was a *failure*, not a skip, which is the core issue.

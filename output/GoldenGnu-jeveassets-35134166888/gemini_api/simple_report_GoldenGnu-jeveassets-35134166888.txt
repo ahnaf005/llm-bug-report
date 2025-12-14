@@ -1,0 +1,76 @@
+## Software Bug Report
+
+**Bug ID:** JEVE-20250103-001
+**Title:** CI Build Failure: `LibTest` Fails Due to Outdated Logback Dependency Versions
+**Project:** jeveassets
+**Version:** 7.9.3-SNAPSHOT
+**Component:** Build/CI, Tests, Dependency Management
+**Severity:** High (Build is failing, blocking integration)
+**Status:** Open
+**Assigned To:** (Developer/Team responsible for `LibTest` or dependency management)
+**Reported By:** AI Debugging Assistant
+**Date Reported:** 2025-01-03
+
+---
+
+### 1. Description
+
+The continuous integration (CI) build for the `jeveassets` project is consistently failing during the test execution phase (`maven-surefire-plugin:test`). The specific failure is an `AssertionError` within `net.nikr.eve.jeveasset.lib.LibTest`, indicating that the expected `logback` library versions do not match the versions found in the build. This suggests an inconsistency between the project's declared dependencies and the test's expectations.
+
+### 2. Steps to Reproduce
+
+1.  Checkout the codebase at commit `f91cc245896898e0bc0645b5cac1d3baeef6357b`.
+2.  Ensure a Java 17 Development Kit (JDK) is configured (e.g., Temurin 17.0.13+11).
+3.  Execute the Maven build command: `mvn -B package --file pom.xml -P skip-online-tests`
+
+### 3. Expected Behavior
+
+The build should complete successfully, with all unit tests passing. The `LibTest` should correctly identify the `logback` dependencies as updated to version `1.3.15`.
+
+### 4. Actual Behavior
+
+The build fails during the `test` phase with the following error message from `net.nikr.eve.jeveasset.lib.LibTest`:
+
+```
+[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.006 s <<< FAILURE! - in net.nikr.eve.jeveasset.lib.LibTest
+[ERROR] test(net.nikr.eve.jeveasset.lib.LibTest)  Time elapsed: 0.006 s  <<< FAILURE!
+java.lang.AssertionError: 
+
+---Libs added---
+logback-core-1.3.15.jar
+logback-classic-1.3.15.jar
+---Libs removed---
+logback-core-1.3.14.jar
+logback-classic-1.3.14.jar
+```
+
+This indicates that the test expected `logback-core-1.3.14.jar` and `logback-classic-1.3.14.jar` to be present, but instead found `1.3.15` versions, leading to the assertion failure.
+
+### 5. Root Cause Analysis
+
+The provided `CODE DIFF` clearly shows that the `src/main/java/net/nikr/eve/jeveasset/LibraryManager.java` file was modified in the failing commit (`f91cc245896898e0bc0645b5cac1d3baeef6357b`). Specifically, lines 128 and 130 were updated to reference `logback-core-1.3.15.jar` and `logback-classic-1.3.15.jar`, respectively, replacing the previous `1.3.14` versions.
+
+The `LibTest` is designed to verify the presence and absence of specific library versions. Its assertion logic has not been updated to reflect this intentional dependency upgrade. Therefore, the test is correctly identifying a *change* in dependencies, but incorrectly asserting that this change is a *failure*, because its internal list of expected libraries is outdated.
+
+### 6. Impact
+
+*   **Blocked CI Pipeline:** The build failure prevents successful completion of the CI pipeline, hindering further development and deployment.
+*   **False Negative:** The test failure is a false negative, as the underlying code change (dependency upgrade) appears to be intentional and correct.
+*   **Developer Frustration:** Developers will encounter build failures for what is essentially a test maintenance issue, leading to wasted time and potential confusion.
+
+### 7. Environment
+
+*   **Operating System:** Ubuntu 22.04.5 LTS
+*   **Runner Image:** ubuntu-22.04, Version: 20241215.1.0
+*   **Java Version:** Temurin 17.0.13+11
+*   **Maven Version:** (Implicitly used by `maven-surefire-plugin:2.22.2`)
+*   **Git Commit:** `f91cc245896898e0bc0645b5cac1d3baeef6357b`
+
+### 8. Logs and Code Diff
+
+*   **BUILD LOG:** Refer to the provided "BUILD LOG" section, specifically the lines from `2025-01-03T23:52:25.7648655Z` to `2025-01-03T23:52:30.8971721Z` for the detailed test failure output.
+*   **CODE DIFF:** Refer to the provided "CODE DIFF" section, which shows the changes in `src/main/java/net/nikr/eve/jeveasset/LibraryManager.java` where `logback-core` and `logback-classic` versions were updated from `1.3.14` to `1.3.15`.
+
+### 9. Suggested Fix
+
+Update the `net.nikr.eve.jeveasset.lib.LibTest` class to reflect the new `logback` dependency versions. Specifically, modify the test's expected list of libraries to include `logback-core-1.3.15.jar` and `logback-classic-1.3.15.jar` and remove the `1.3.14` versions. This will align the test's expectations with the actual code changes.

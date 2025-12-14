@@ -1,0 +1,148 @@
+Bug Report: services-camel tests failing (BinaryMetadataProcessorTest NPEs) — PR build
+
+Summary
+- The CI build (Travis) for PR #725 failed during the mvn test phase. All modules compiled and many tests passed, but the services-camel module test suite failed with 3 Errors (NullPointerException) in edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest. The build produced no code diff (attempt to fetch returned 404), so the failing changes could not be inspected automatically.
+
+Affected component
+- Module: services-camel
+- Failing tests:
+  - edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest.nonbinaryTest (NPE at line 129)
+  - edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest.validTest (NPE at line 102)
+  - edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest.noLocalBinaryTest (NPE at line 149)
+- Build system: Maven (3.5.2), Java 1.8.0_151, Travis CI (Ubuntu 14.04).
+
+Build summary / context (from BUILD LOG)
+- mvn install (with -DskipTests) succeeded for the whole multi-module project.
+- mvn test -pl ...services-camel run executed and many modules' tests passed.
+- Failure occurs only during the services-camel test execution; particular suite BinaryMetadataProcessorTest produced three NullPointerExceptions; subsequent test run aborted and Maven reported BUILD FAILURE for services-camel.
+- Full failing block excerpt (relevant lines):
+
+  [ERROR] Tests run: 58, Failures: 0, Errors: 3, Skipped: 0
+  [ERROR] Errors:
+  [ERROR]   BinaryMetadataProcessorTest.noLocalBinaryTest:149 » NullPointer
+  [ERROR]   BinaryMetadataProcessorTest.nonbinaryTest:129 » NullPointer
+  [ERROR]   BinaryMetadataProcessorTest.validTest:102 NullPointer
+
+  Stack traces (from BUILD LOG):
+  - nonbinaryTest: java.lang.NullPointerException at BinaryMetadataProcessorTest.nonbinaryTest(BinaryMetadataProcessorTest.java:129)
+  - validTest: java.lang.NullPointerException at BinaryMetadataProcessorTest.validTest(BinaryMetadataProcessorTest.java:102)
+  - noLocalBinaryTest: java.lang.NullPointerException at BinaryMetadataProcessorTest.noLocalBinaryTest(BinaryMetadataProcessorTest.java:149)
+
+- Maven points to surefire reports for details:
+  Please refer to /home/travis/build/UNC-Libraries/Carolina-Digital-Repository/services-camel/target/surefire-reports
+
+- Note: An earlier maven compile warnings about invalid/corrupt jars in ~/.m2 (puretls, cog-jglobus) appeared during mvn install, but they did not fail the install and tests for other modules passed; they are likely unrelated to the NPEs but worth noting if tests rely on those dependencies.
+
+Code diff retrieval
+- The provided CODE DIFF content is an error JSON with HTTP 404:
+  {
+    "_error": {
+      "code": 404,
+      "message": "The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again."
+    },
+    "_status": "ERR"
+  }
+- Because the diff could not be retrieved, I cannot point to the exact code changes that caused the test breakage.
+
+Observed behavior (detailed)
+- Running the services-camel test suite causes 3 tests in BinaryMetadataProcessorTest to throw NullPointerException. The NPEs occur in the test methods themselves (lines referenced above), which indicates a null object used in the test setup or that a dependency the test expects (mock, bean, or returned value) is now null due to a code change.
+- No more detailed NPE stack frames are printed in the provided excerpt beyond the test line numbers (the test code calls into production code; stack frames for production method calls are not present in the snippet). The surefire reports will contain the full stack traces and the values of assertions in the tests.
+
+Expected behavior
+- All tests in services-camel (including BinaryMetadataProcessorTest) should pass. BinaryMetadataProcessorTest should properly verify BinaryMetadataProcessor behavior and not throw NPEs.
+
+Probable root causes (hypotheses)
+Because we cannot see the code diff (404), probable causes include:
+
+1. Test setup changes / dependency injection changes
+   - A Spring bean or Mockito mock that BinaryMetadataProcessorTest relies on is no longer being initialized or injected (e.g., method or field name change, new constructor required).
+   - A test fixture or test helper returned null (an upstream change changed a method to return null or removed a resource used by tests).
+
+2. API or behavior change in BinaryMetadataProcessor (or related classes)
+   - A method used by the test now returns null instead of a valid object, or parameters required by a method are now mandatory and cause null.
+   - A refactor changed a return type or moved a helper method, causing tests to receive null.
+
+3. Environment/configuration change
+   - Tests rely on an external resource or configuration now missing/renamed; e.g., an expected property key changed so a component wasn't created.
+   - The earlier warnings about corrupt jars might indicate a corrupted dependency in the build cache, but since other tests passed and the failures are NPEs in tests, this is less likely.
+
+4. Recent changes to code under test not covered by tests
+   - The PR may have introduced a change that broke the contract expected by existing tests.
+
+Immediate next steps to reproduce (locally)
+1. Checkout the same commit/PR that triggered CI (FETCH_HEAD or the PR branch).
+2. Run only the failing module tests to get full stack traces:
+   - mvn -Dtest=BinaryMetadataProcessorTest -pl services-camel test
+   - or run the single failing tests:
+     mvn -Dtest=edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest#validTest -pl services-camel test
+3. Open the surefire report for tests to see full stack traces:
+   services-camel/target/surefire-reports/*.txt and *.xml
+4. Run the failing test(s) in an IDE with breakpoints at the test lines (lines 102, 129, 149 in BinaryMetadataProcessorTest) to inspect which variable is null.
+5. Compare the current production class BinaryMetadataProcessor and any classes used by these tests against the previous working commit (git diff to an earlier passing commit) to find what changed.
+
+Suggested debugging checklist
+- Obtain full stack traces from surefire-reports in CI artifacts or run locally.
+- Inspect BinaryMetadataProcessorTest at lines referenced to see which variables are null (e.g., mocked service, returned object, injected bean).
+- Check test setup (@Before, @BeforeClass, mocks) for missing initialization or changed method names/constructors.
+- Verify production code changes in BinaryMetadataProcessor and related classes (especially constructors or methods used in tests).
+- Run tests with Maven -e and -X to get more verbose logs if necessary.
+- If the tests use Spring context, run them with DEBUG logging for initialization to ensure beans are created.
+
+Recommended code fixes / mitigations
+(These are general because the code diff is not available.)
+
+1. If mock/bean was removed/renamed:
+   - Update the test to wire the new bean name or new constructor signature.
+   - Restore backward-compatible factory/methods in production code if the removal broke test contracts.
+
+2. If a production API now returns null:
+   - Update the production method to return an empty object or Optional instead of null (preferred) or update tests to handle Optional/absent values.
+   - Add null checks and clear error reporting so tests fail with useful messages instead of NPEs.
+
+3. If Spring config changed:
+   - Ensure the test application context includes the required bean definitions.
+   - Add explicit @MockBean/@Autowired in tests or use Mockito to provide required mocks.
+
+4. Improve tests:
+   - Add assertions in the test setup to fail early if required mocks/beans are null.
+   - Use explicit Mockito.when(...) stubbing for any dependencies the processor must call.
+
+5. If this PR intended to change behavior:
+   - Update BinaryMetadataProcessorTest expectations to match new behavior, and update test fixtures accordingly.
+   - Add migration notes in PR description to explain API changes to other developers.
+
+Actionable immediate tasks for the author of the PR
+1. Provide the code diff or confirm which files were modified in the PR (the automation returned 404; please paste the diff here or attach the patch).
+2. Run the failing tests locally to capture full stack traces and confirm which variables are null at the test lines.
+3. Share the surefire-reports for services-camel with full traces.
+4. If you intentionally changed BinaryMetadataProcessor API/bean wiring, update tests accordingly and ensure backward compatibility or update dependent modules/test setups.
+
+Other observations from build log (non-blocking)
+- There were several warnings about invalid/corrupt jars in local Maven repository (com.claymoresystems:puretls and org.globus.jglobus:cog-jglobus). They appeared as "error reading ... error in opening zip file" during compile in earlier modules. They did not prevent mvn install but could cause problems if those dependencies are needed by services-camel tests. Consider clearing/refreshing the Maven cache if odd errors persist:
+  - mvn dependency:purge-local-repository -DmanualInclude=com.claymoresystems:puretls,org.globus.jglobus:cog-jglobus
+  - Or delete ~/.m2/repository/com/claymoresystems and ~/.m2/repository/org/globus and re-run mvn install.
+
+Request for information
+- Please provide:
+  - The code diff for the PR (the CODE DIFF endpoint returned 404).
+  - The BinaryMetadataProcessorTest test class (or at least the code around lines 100–150).
+  - The BinaryMetadataProcessor production class (or any class changed by your PR that BinaryMetadataProcessorTest depends on).
+  - surefire report files from services-camel/target/surefire-reports (or paste the full stack traces).
+
+Priority / Impact
+- High: Blocking CI build; services-camel module tests failing prevents merge of PR. Need to fix or update tests/prod code before the branch can be merged.
+
+If you want, I can:
+- Parse additional logs or the surefire report if you paste it in.
+- Propose a specific code change if you provide the test snippet and the production classes modified in the PR.
+- Suggest a temporary suppression for the failing tests (not recommended) until a proper fix is implemented.
+
+Summary checklist for developer to resolve
+- [ ] Provide code diff / patch (404 prevented retrieval).
+- [ ] Run failing tests locally and capture full stack traces.
+- [ ] Inspect BinaryMetadataProcessorTest to identify null variable(s).
+- [ ] Inspect production changes introduced by PR that affect constructor, return values, or Spring wiring.
+- [ ] Fix production code or tests (restore contract or update test to new contract).
+- [ ] Re-run mvn -pl services-camel test locally and on CI.
+
+--- End of bug report ---

@@ -1,0 +1,71 @@
+## Bug Report: Checkstyle `MissingSwitchDefault` Violations Cause Build Failure
+
+### 1. Title:
+Maven Build Fails Due to Checkstyle `MissingSwitchDefault` Violations
+
+### 2. Steps to Reproduce:
+1.  Clone the `raphw/byte-buddy` repository.
+2.  Checkout the specific commit: `664f65ccf2fc5b9d9c977f254cff39aade0a7734`.
+3.  Execute the Maven build command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+### 3. Triggering Input:
+The build is triggered by the presence of `switch` statements in the `byte-buddy-dep` module's source code that do not include a `default` clause. The `checkstyle.xml` configuration, at the time of the failing build, includes the `MissingSwitchDefault` rule, which flags these omissions as errors.
+
+### 4. Expected Behavior:
+The Maven build should complete successfully, indicating that all code quality checks (including Checkstyle) pass, and the project artifacts are installed.
+
+### 5. Observed Behavior:
+The Maven build consistently fails during the `maven-checkstyle-plugin:2.17:check` goal for the `Byte Buddy (with dependencies)` module (`byte-buddy-dep`). The failure is caused by two `MissingSwitchDefault` errors reported by Checkstyle 6.11.2, indicating `switch` statements without a `default` clause. The build attempts to retry twice but fails each time with the same errors.
+
+**Specific error messages from the build log:**
+```
+/home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/asm/TypeConstantAdjustment.java:122:21: error: switch without "default" clause.
+/home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java:2343:25: error: switch without "default" clause.
+```
+
+### 6. Relevant Code Snippets:
+The build log indicates the problematic files and lines:
+*   `net/bytebuddy/asm/TypeConstantAdjustment.java` at line 122, column 21.
+*   `net/bytebuddy/dynamic/scaffold/TypeWriter.java` at line 2343, column 25.
+
+The `checkstyle.xml` configuration that caused the failure (before the provided patch was applied) included the `MissingSwitchDefault` module:
+```xml
+<!-- Excerpt from checkstyle.xml (before patch) -->
+<module name="EmptyStatement"/>
+<module name="EqualsHashCode"/>
+<module name="IllegalInstantiation"/>
+<module name="MissingSwitchDefault"/> <!-- This rule was active and caused the build failure -->
+<module name="SimplifyBooleanExpression"/>
+<module name="SimplifyBooleanReturn"/>
+```
+
+### 7. Stack Traces:
+The primary error message from the Maven build log is:
+```
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (default) on project byte-buddy-dep: Failed during checkstyle execution: There are 2 errors reported by Checkstyle 6.11.2 with checkstyle.xml ruleset. -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException
+[ERROR] 
+[ERROR] After correcting the problems, you can resume the build with the command
+[ERROR]   mvn <goals> -rf :byte-buddy-dep
+```
+
+### 8. Patches / Suggested Fixes:
+The provided code diff contains a patch that resolves this issue by removing the `MissingSwitchDefault` rule from the `checkstyle.xml` configuration.
+
+```diff
+--- a/checkstyle.xml
++++ b/checkstyle.xml
+@@ -65,7 +65,6 @@
+         <module name="EmptyStatement"/>
+         <module name="EqualsHashCode"/>
+         <module name="IllegalInstantiation"/>
+-        <module name="MissingSwitchDefault"/>
+         <module name="SimplifyBooleanExpression"/>
+         <module name="SimplifyBooleanReturn"/>
+ 
+```

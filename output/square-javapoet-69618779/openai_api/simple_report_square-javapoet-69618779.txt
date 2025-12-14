@@ -1,0 +1,105 @@
+Title
+- Unit test failing: com.squareup.javapoet.JavaFileTest#conflictingSimpleNames (missing qualifier on nested type)
+
+Summary
+- The test conflictingSimpleNames in JavaFileTest fails on the c93fffb commit. The test expects a nested type reference to be qualified with its enclosing type (e.g. A.Twin.D) but the generated source omits the outer qualifier (producing Twin.D). The code diff in the failing branch shows an attempted workaround: the test was annotated with @Ignore (issue #298), which indicates a known bug in import / name-disambiguation logic.
+
+Environment (from BUILD LOG)
+- Repository / branch: square/javapoet (commit c93fffb5d47c...)
+- JDK: Oracle JDK 7 (1.7.0_76)
+- Maven: 3.2.5
+- OS: Ubuntu 12.04.5 LTS (precise), linux 3.13.0-29-generic
+- Maven plugin: surefire 2.12.4
+- Test runner: JUnit4
+- Build command that reproduced failure: mvn test -B
+
+Failing Test
+- Test class: com.squareup.javapoet.JavaFileTest
+- Test method: conflictingSimpleNames
+- Failure reported by Travis/Maven Surefire:
+  - Tests run: 173, Failures: 1 (conflictingSimpleNames)
+- Assertion failure (comparison):
+  - Expected snippet (has qualifier): 
+    class C {
+      A.Twin.D d;
+    }
+  - Actual snippet (missing outer qualifier):
+    class C {
+      Twin.D d;
+    }
+
+Relevant Build Log Excerpts
+- Surefire report excerpt:
+  - "Running com.squareup.javapoet.JavaFileTest"
+  - "Running com.squareup.javapoet.JavaFileTest ... <<< FAILURE!"
+  - "conflictingSimpleNames(com.squareup.javapoet.JavaFileTest)  Time elapsed: 0.007 sec  <<< FAILURE!"
+  - org.junit.ComparisonFailure: expected:<...    class C {
+        [A.]Twin.D d;
+      }
+    }
+  ...> but was:<...    class C {
+        []Twin.D d;
+      }
+    }
+  ...>
+  - Stack trace points to com.squareup.javapoet.JavaFileTest.conflictingSimpleNames(JavaFileTest.java:135)
+
+Code Diff (relevant)
+- File changed: src/test/java/com/squareup/javapoet/JavaFileTest.java
+- Additions:
+  - import org.junit.Ignore;
+  - @Ignore("https://github.com/square/javapoet/issues/298") above the conflictingSimpleNames test
+- This indicates a test-level workaround (skip) was added to the failing test, referencing issue #298.
+
+Analysis / Likely Root Cause
+- The failing test asserts that when JavaPoet emits a type reference for a nested type where there is a name conflict, the emitted type name must be properly qualified to disambiguate (e.g., A.Twin.D). The actual output lacks the outer qualifier.
+- This indicates a bug in the name resolution / import generation logic (likely in JavaFile, ClassName, or type emission code):
+  - When two types share the same simple name (or nested type names collide), JavaFile should either:
+    - avoid importing the ambiguous simple name and fully-qualify the necessary occurrences, or
+    - ensure nested type references include their enclosing type qualifiers in output when needed.
+  - Current behavior: the code emits Twin.D without qualifying with the enclosing A., causing ambiguity and test failure.
+- Because the test was later annotated with @Ignore, maintainers acknowledged the bug and temporarily skipped the test while tracking it as issue #298. The underlying behavior remains incorrect and should be fixed rather than permanently ignoring the test.
+
+Files/Components to Inspect
+- JavaFile (import collection / emission code) — logic that decides which types to import vs fully qualify when emitting fields, parameters, etc.
+- ClassName (representation of nested classes and package names) — ensure nested class names are emitted with owner qualifiers when necessary.
+- Any utility that resolves simple-name collisions across imported types (likely in JavaFile.addImports or JavaFile#emit).
+
+Suggested Steps to Reproduce Locally
+1. Clone the repository at failing commit (c93fffb...) or run on current HEAD if the test has not been ignored there.
+2. Run: mvn -q -DskipTests=false test
+3. Observe the failing test and assertion showing expected vs actual (same as the Travis log).
+
+Suggested Fix / Remediation
+- Update the logic that determines when to emit a simple name vs a qualified name:
+  - When emitting a nested type (ClassName with an enclosing type), ensure the full owner chain is preserved if the simple name would be ambiguous.
+  - If a type name is not unique among imported types or in-scope types, avoid importing it and emit the fully-qualified name, including outer-type qualifiers for nested types (e.g., com.example.A.Twin.D or A.Twin.D if A is in same package or already referenced).
+- Add or adjust unit tests to cover:
+  - Nested-class name conflicts across packages (the failing conflictingSimpleNames scenario).
+  - Cases with multiple nested/inner types that share simple names.
+- Remove the @Ignore once fixed and ensure tests pass.
+- Potential one-line fix approach (conceptual):
+  - In the routine that builds the imports map and checks for simple-name conflicts, treat nested type simple names as their full nested identifier (including enclosing type) when deciding which identifiers are ambiguous, and ensure that when ambiguity exists the emitted form includes the necessary owner qualifier(s).
+- Consider update to ClassName#simpleName or type-emission method to return qualified nested names when ambiguity would be introduced by using simpleName only.
+
+Workarounds
+- Use the commit that added @Ignore to the test to skip failing test (temporary) — this is visible in the code diff (the test is being ignored referencing issue #298).
+- Alternatively, undo import behavior in calling code by providing fully-qualified ClassName in user code (not ideal; library should handle it).
+
+Severity
+- Medium: This affects correctness of generated Java source when types with conflicting simple/nested names exist. Generated code could be ambiguous/incorrect and fail to compile or represent wrong type references.
+
+References
+- Diff: addition of import org.junit.Ignore and @Ignore annotation on conflictingSimpleNames (issue #298).
+- Build log: failing test "conflictingSimpleNames" and stack trace lines (see Surefire output).
+
+Action Items (recommended)
+1. Assign to developer familiar with JavaPoet's import/name resolution logic.
+2. Reproduce failing test locally and write failing test case if not present.
+3. Implement fix in JavaFile/ClassName emission logic to qualify nested types when needed.
+4. Run full test suite, remove @Ignore from JavaFileTest.conflictingSimpleNames once fixed.
+5. Add regression tests for similar name-collision scenarios.
+
+If you want, I can:
+- Propose a concrete code patch in the JavaFile/ClassName area (based on the codebase) to implement qualification logic,
+- Or run through a smaller example producing the same failure and show expected vs produced output.

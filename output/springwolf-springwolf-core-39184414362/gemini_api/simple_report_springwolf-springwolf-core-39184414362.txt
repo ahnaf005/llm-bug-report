@@ -1,0 +1,85 @@
+## Software Bug Report
+
+**Bug ID:** SW-CORE-1226-TEST-FAILURE
+
+**Status:** Failed
+
+**Priority:** High
+
+**Severity:** Major (Build Failure)
+
+**Component/Module:** `springwolf-core`, `springwolf-add-ons/springwolf-common-model-converters`
+
+**Environment:**
+*   **Operating System:** Ubuntu 24.04.2 LTS
+*   **Java Version:** Temurin JDK 17.0.14+7 (x64)
+*   **Build Tool:** Gradle 8.11
+*   **Runner Version:** 2.323.0
+*   **GitHub Actions Image:** ubuntu-24.04, Version: 20250316.1.0
+*   **Failing Commit SHA:** `fb2c40266568152137c8ee7b9d0e5f6087c3f3cc`
+*   **Last Known Good Commit SHA:** `c3419d1d3b42999258136d8b4cc5b3e23c99d5f6`
+
+**Description:**
+The build process for the `springwolf-core` module is failing due to an `AssertionError` in the `SwaggerSchemaServiceTest.modelConvertersRefsAreResolved()` test. This failure occurs because the schema naming convention for inner classes has been updated to replace the `$` character with `.` in the fully qualified class name, but the corresponding test assertion still expects the old naming convention (with `$` ).
+
+**Reproducibility:** Always
+
+**Steps to Reproduce:**
+1.  Checkout the `springwolf/springwolf-core` repository at commit `fb2c402665668152137c8ee7b9d0e5f6087c3f3cc`.
+2.  Navigate to the `springwolf-core` directory.
+3.  Execute the Gradle build command: `./gradlew -p springwolf-core build`
+
+**Expected Behavior:**
+The `SwaggerSchemaServiceTest.modelConvertersRefsAreResolved()` test should pass, and the overall build should succeed. The schema names generated for inner classes should consistently use `.` instead of `$` as per the recent code changes, and the tests should reflect this updated convention.
+
+**Actual Behavior:**
+The build fails with an `AssertionError` in `SwaggerSchemaServiceTest.modelConvertersRefsAreResolved()`. The test expects the schema name for `ModelConverterNativeClass` (an inner class) to contain `io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest$ModelConverterNativeClass` (using `$`), but the actual generated schema name uses `.` instead of `$` (e.g., `io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest.ModelConverterNativeClass`).
+
+**Error Message (from build log):**
+```
+2025-03-21T14:28:33.1683794Z SwaggerSchemaServiceTest > modelConvertersRefsAreResolved() FAILED
+2025-03-21T14:28:33.1686210Z     java.lang.AssertionError: 
+2025-03-21T14:28:33.1693650Z     Expecting actual:
+2025-03-21T14:28:33.1719710Z       {"io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest.ModelConverterNativeClass"=SchemaObject(discriminator=null, externalDocs=null, deprecated=null, title=null, type=null, properties=null, description=null, format=null, pattern=null, maximum=null, minimum=null, multipleOf=null, minLength=null, maxLength=null, enumValues=null, exclusiveMinimum=null, exclusiveMaximum=null, examples=null, additionalProperties=null, required=null, allOf=null, oneOf=null, anyOf=null, constValue=null, not=null, items=null, uniqueItems=null, minItems=null, maxItems=null)}
+2025-03-21T14:28:33.1720957Z     to contain key:
+2025-03-21T14:28:33.1723122Z       "io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest$ModelConverterNativeClass"
+2025-03-21T14:28:33.1724539Z         at io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest.modelConvertersRefsAreResolved(SwaggerSchemaServiceTest.java:120)
+```
+
+**Stack Trace (from build log):**
+```
+2025-03-21T14:28:33.1683794Z SwaggerSchemaServiceTest > modelConvertersRefsAreResolved() FAILED
+2025-03-21T14:28:33.1686210Z     java.lang.AssertionError: 
+2025-03-21T14:28:33.1693650Z     Expecting actual:
+2025-03-21T14:28:33.1719710Z       {"io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest.ModelConverterNativeClass"=SchemaObject(discriminator=null, externalDocs=null, deprecated=null, title=null, type=null, properties=null, description=null, format=null, pattern=null, maximum=null, minimum=null, multipleOf=null, minLength=null, maxLength=null, enumValues=null, exclusiveMinimum=null, exclusiveMaximum=null, examples=null, additionalProperties=null, required=null, allOf=null, oneOf=null, anyOf=null, constValue=null, not=null, items=null, uniqueItems=null, minItems=null, maxItems=null)}
+2025-03-21T14:28:33.1720957Z     to contain key:
+2025-03-21T14:28:33.1723122Z       "io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest$ModelConverterNativeClass"
+2025-03-21T14:28:33.1724539Z         at io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest.modelConvertersRefsAreResolved(SwaggerSchemaServiceTest.java:120)
+```
+
+**Root Cause Analysis:**
+The provided code diff shows changes in two files:
+1.  `springwolf-add-ons/springwolf-common-model-converters/src/main/java/io/github/springwolf/addons/common_model_converters/converters/SimpleClassModelConverter.java`:
+    *   Line 39 was changed from `schema.name(rawClass.getName());` to `schema.name(rawClass.getName().replace("$", "."));`. This modifies the schema naming convention to replace `$` (used for inner classes in Java) with `.` for a more consistent fully qualified name.
+
+2.  `springwolf-core/src/test/java/io/github/springwolf/core/asyncapi/schemas/SwaggerSchemaServiceTest.java`:
+    *   The `modelConvertersRefsAreResolved()` test method (lines 116-120) was partially updated to reflect this change. Specifically, the `assertThat` calls for `rootSchema().getReference().getRef()` and `referencedSchemas().get(...)` now correctly use `ModelConverterNativeClass.class.getName().replace("$", ".")`.
+    *   However, the `containsKey` assertion on line 119: `assertThat(schema.referencedSchemas()).hasSize(1).containsKey(ModelConverterNativeClass.class.getName());` still uses `ModelConverterNativeClass.class.getName()` which resolves to the name with `$` (e.g., `...Test$ModelConverterNativeClass`).
+    *   The `AssertionError` clearly indicates that the `actual` map contains the key with `.` (e.g., `...Test.ModelConverterNativeClass`), while the `expected` key in the `containsKey` assertion is still the one with `$` (e.g., `...Test$ModelConverterNativeClass`).
+
+The bug is a mismatch between the updated schema generation logic (replacing `$` with `.`) and the outdated assertion in the test case that still expects the `$` character.
+
+**Proposed Solution:**
+Update the failing assertion in `SwaggerSchemaServiceTest.java` to reflect the new schema naming convention.
+Specifically, modify line 119 in `SwaggerSchemaServiceTest.java` from:
+```java
+assertThat(schema.referencedSchemas()).hasSize(1).containsKey(ModelConverterNativeClass.class.getName());
+```
+to:
+```java
+assertThat(schema.referencedSchemas()).hasSize(1).containsKey(ModelConverterNativeClass.class.getName().replace("$", "."));
+```
+This change will align the test's expectation with the actual behavior of the `SimpleClassModelConverter`.
+
+**Additional Context:**
+The code diff itself contains the fix for the test, but it seems the build was run *before* this specific part of the test fix was fully applied or correctly merged, or the diff shows the *intended* fix that was not yet fully integrated into the failing commit. The `failed_sha` (`fb2c40266568152137c8ee7b9d0e5f6087c3f3cc`) is the state where the build failed, and the `passed_sha` (`c3419d1d3b42999258136d8b4cc5b3e23c99d5f6`) is the state before the changes that introduced the failure. The provided diff *is* the change between these two SHAs, indicating that the fix was part of the same commit that introduced the problem, but the test assertion was not fully updated. The diff shows the correct fix, which needs to be applied to the codebase.

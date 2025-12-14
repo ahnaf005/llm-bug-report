@@ -1,0 +1,89 @@
+Title
+- Maven test compilation fails due to missing Apache Commons Codec (org.apache.commons.codec) and related test-scope types after adding httpclient to java-manta-it/pom.xml.
+
+Summary
+- The build fails at the test-compile phase with "package org.apache.commons.codec.digest does not exist" and several "cannot find symbol" errors (DigestUtils, Charsets, DateUtils).
+- The code diff added only org.apache.httpcomponents:httpclient (test scope) to java-manta-it/pom.xml. The tests still reference classes from Apache Commons Codec (and httpclient DateUtils) which are not present on the test compile classpath. As a result the build stops during mvn install -DskipTests=true -Dmaven.javadoc.skip=true.
+
+Environment
+- CI: Travis (container-based)
+- OS: Ubuntu 12.04 (precise) on Travis worker
+- Java: Oracle JDK 8 (1.8.0_31)
+- Maven: 3.2.5
+- Build command shown: mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+  (note: -DskipTests=true still runs test-compile; see mitigation below)
+
+Reproduction Steps
+1. Check out the repository/branch that includes the change (commit bb242902... as used in build).
+2. Run: mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+
+Observed Failure (excerpt from build log)
+- Compilation errors during testCompile for module java-manta-it:
+  - /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaObjectOutputStreamIT.java:[6,39] package org.apache.commons.codec.digest does not exist
+  - /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaClientIT.java:[14,32] package org.apache.commons.codec does not exist
+  - /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaClientIT.java:[15,36] package org.apache.http.client.utils does not exist
+  - cannot find symbol: variable DigestUtils (in multiple test classes)
+  - cannot find symbol: variable Charsets (in MantaClientIT)
+  - cannot find symbol: variable DateUtils (in MantaClientIT)
+- Maven fails at testCompile and aborts the install (3 retry attempts also fail).
+
+Root cause analysis
+- The tests import types from org.apache.commons.codec (DigestUtils, Charsets) and org.apache.http.client.utils (DateUtils).
+- The code diff only added the httpclient dependency (org.apache.httpcomponents:httpclient) in test scope; however the POM does not include a dependency on Apache Commons Codec (commons-codec).
+- Because commons-codec is missing from the test compile classpath, imports in test sources fail and compilation stops.
+- Adding httpclient alone will address org.apache.http.client.utils errors only if the artifact is correctly present, but DigestUtils and Charsets remain unresolved until commons-codec is added.
+- Additional note: The build used -DskipTests=true which skips running tests but still compiles test sources (testCompile). If you intended to avoid compiling tests entirely, use -Dmaven.test.skip=true.
+
+Impact
+- CI builds fail early in the install phase, preventing the module from being built/published and blocking development/CI pipelines.
+- Test compilation cannot proceed until commons-codec (and any other required test-scope libs) are declared.
+
+Suggested Fix
+1) Add Apache Commons Codec as a test dependency in java-manta-it/pom.xml (or a suitable scope that fits your needs). Example snippet:
+
+<dependency>
+  <groupId>commons-codec</groupId>
+  <artifactId>commons-codec</artifactId>
+  <version>1.9</version>  <!-- pick project-aligned version -->
+  <scope>test</scope>
+</dependency>
+
+- Alternatively, if your project already defines a properties variable for commons-codec version, use that property instead of hard-coding the version.
+
+2) Verify httpclient is present (the diff added it). If you need httpclient for tests, the previously added dependency is correct:
+
+<dependency>
+  <groupId>org.apache.httpcomponents</groupId>
+  <artifactId>httpclient</artifactId>
+  <version>${dependency.apache-http-client.version}</version>
+  <scope>test</scope>
+  <exclusions>
+    <exclusion>
+      <groupId>commons-logging</groupId>
+      <artifactId>commons-logging</artifactId>
+    </exclusion>
+  </exclusions>
+</dependency>
+
+3) Re-run the build (recommended commands):
+- To compile tests and run them: mvn clean install -DskipTests=false
+- To only compile tests but not run: mvn clean test-compile
+- If you truly want to skip test compilation entirely: mvn clean install -Dmaven.test.skip=true
+
+Verification steps
+- After updating POM with commons-codec, run locally:
+  - mvn -q test-compile
+  - mvn -q install -DskipTests=true -Dmaven.javadoc.skip=true
+- Ensure no "package org.apache.commons.codec ... does not exist" or "cannot find symbol DigestUtils/Charsets/DateUtils" errors are emitted.
+
+Additional notes / alternatives
+- If Charsets and DigestUtils usages could be replaced with JDK equivalents (e.g., java.nio.charset.StandardCharsets and java.security.MessageDigest / javax.xml.bind.DatatypeConverter), you could remove the commons-codec dependency altogether, but that is a code change and may be larger in scope.
+- Make sure version choices do not conflict with other modules: prefer using established project properties or parent-managed dependency versions where available.
+
+Patch suggestion (minimal)
+- Add the commons-codec dependency to java-manta-it/pom.xml in the same dependencies section where httpclient was added.
+
+Severity
+- High for CI stability (builds are blocked), medium for codebase (tests are the only affected compile scope).
+
+If you want, I can produce a ready-to-apply patch for java-manta-it/pom.xml adding commons-codec (and suggest a version or property to use).

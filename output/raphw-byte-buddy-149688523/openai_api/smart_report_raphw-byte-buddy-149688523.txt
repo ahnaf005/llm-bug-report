@@ -1,0 +1,86 @@
+Title
+- Checkstyle build failure: "Missing a Javadoc comment" for FieldProxy.Binder constructors
+
+Steps to Reproduce
+1. Clone the repository and checkout the failing commit (sha: 14f2faaea3331b0f0ce5cbe2f53d2b7aaf48015a).
+   - git clone --depth=50 --branch=master https://github.com/raphw/byte-buddy.git
+   - git checkout 14f2faaea3331b0f0ce5cbe2f53d2b7aaf48015a
+2. Run the Maven build used by CI:
+   - mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+   or run the checkstyle goal:
+   - mvn org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check
+3. Observe the checkstyle error(s) and build failure.
+
+Triggering Input (conditions)
+- The code in byte-buddy-dep module (byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/FieldProxy.java) contains two constructors for the nested Binder type that the project's Checkstyle rules consider missing Javadoc comments. The CI build fails when the maven-checkstyle-plugin runs on the module.
+
+Expected Behavior
+- The Maven build should succeed (or at least pass the checkstyle phase) when all required Javadoc comments are present. The checkstyle plugin should not report "Missing a Javadoc comment" for the Binder constructors if they have Javadoc.
+
+Observed Behavior
+- Maven build fails during the Checkstyle phase with two errors:
+  - /home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/FieldProxy.java:225:9: error: Missing a Javadoc comment.
+  - /home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/FieldProxy.java:229:9: error: Missing a Javadoc comment.
+- Final build failure:
+  - [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (default) on project byte-buddy-dep: Failed during checkstyle execution: There are 2 errors reported by Checkstyle 6.11.2 with checkstyle.xml ruleset.
+
+Relevant Stack Trace / Build Output
+- Key error lines from the CI log:
+  - /home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/FieldProxy.java:225:9: error: Missing a Javadoc comment.
+  - /home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/FieldProxy.java:229:9: error: Missing a Javadoc comment.
+- Final Maven error:
+  - [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (default) on project byte-buddy-dep: Failed during checkstyle execution: There are 2 errors reported by Checkstyle 6.11.2 with checkstyle.xml ruleset. -> [Help 1]
+
+Relevant Code Snippets
+- The change/patch shown in the diff (this is the attempted fix in the commit). It adds Javadoc comments for Binder constructors inside FieldProxy:
+
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/FieldProxy.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/FieldProxy.java
+@@ -222,10 +222,23 @@ public @interface FieldProxy {
+         private final FieldResolver.Factory fieldResolverFactory;
+ 
++        /**
++         * Creates a new binder for a {@link FieldProxy} in simplex mode.
++         *
++         * @param getterMethod The getter method.
++         * @param setterMethod The setter method.
++         */
+         protected Binder(MethodDescription.InDefinedShape getterMethod, MethodDescription.InDefinedShape setterMethod) {
+             this(new FieldResolver.Factory.Simplex(getterMethod, setterMethod));
+         }
+ 
++        /**
++         * Creates a new binder for a {@link FieldProxy} in duplex mode.
++         *
++         * @param proxyType    The proxy type.
++         * @param getterMethod The getter method.
++         * @param setterMethod The setter method.
++         */
+         protected Binder(TypeDescription proxyType, MethodDescription.InDefinedShape getterMethod, MethodDescription.InDefinedShape setterMethod) {
+             this(new FieldResolver.Factory.Duplex(proxyType, getterMethod, setterMethod));
+         }
+
+Notes on the code snippet
+- The above patch attempts to add the required Javadoc comments for the two protected Binder constructors. Checkstyle expects Javadoc on non-private members (project's checkstyle configuration). The errors indicate that, in the build that failed, these constructors were still reported as lacking Javadoc.
+
+Patches / Suggested Fixes
+- The diff above is the intended fix: add Javadoc blocks immediately above each protected Binder constructor. Ensure these Javadocs are committed on the exact lines immediately preceding the constructors.
+
+If build still fails after adding comments:
+1. Verify the Javadoc comment delimiters are exactly /** ... */ (not // or /* ... */). Checkstyle looks specifically for /** style Javadoc.
+2. Make sure there are no blank lines between the Javadoc comment and the constructor declaration; the Javadoc must be the immediate preceding comment block.
+3. Ensure the file that CI builds includes this change (i.e., commit/merge properly and confirm that the CI build sees the updated file/sha).
+4. Confirm files are encoded/checked in with the correct newline/encoding so Checkstyle can parse them.
+5. Run the Checkstyle goal locally to reproduce and iterate quickly:
+   - mvn org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check
+
+Proposed minimal patch (same as diff, shown here again to apply if not yet present):
+- Add the two /** ... */ Javadoc comments immediately above the protected Binder constructors (as in the diff snippet above). After applying, run mvn and confirm checkstyle passes.
+
+Additional troubleshooting tips
+- If the project’s checkstyle rules require additional Javadoc tags (e.g., @param descriptions, punctuation), ensure those are included and conform to the project's checkstyle configuration.
+- If the constructors are intentionally undocumented, and the team prefers to suppress Checkstyle for these lines, an alternative is to adjust checkstyle rules or add an inline suppression (but generally better to provide minimal acceptable Javadoc).
+
+Summary
+- Cause: Checkstyle errored on two protected Binder constructors in FieldProxy.java because they lacked Javadoc in the commit that CI built.
+- Fix: Add Javadoc comment blocks (/** ... */) immediately before each constructor (the diff included in this report demonstrates the fix). Ensure the change is committed and visible to the CI build. After that, the maven-checkstyle plugin should pass and the build should proceed.

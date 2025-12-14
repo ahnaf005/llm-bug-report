@@ -1,0 +1,98 @@
+Title
+- Failing unit test: testChangeOfSubjectId in ItemDocumentBuilderTest expects language-tagged label but receives plain string
+
+Summary
+- Running the test suite fails one test in wdtk-datamodel: ItemDocumentBuilderTest.testChangeOfSubjectId. The test expects an object/string with language metadata ("\"pleutre\" (fr)") but the method under test returns a plain string ("pleutre"). The mismatch causes an assertion failure and the build to fail.
+
+Steps to Reproduce
+1. Clone the repository and checkout the failing commit (branch issue-440-change-subject-id, commit 5c17e54be4ffa4a11969d12dc999ff6fd129abab).
+2. From repository root run:
+   - mvn test jacoco:report
+3. Observe test failures during the wdtk-datamodel module test phase.
+
+Triggering Input / Conditions
+- Running the mvn test command on the repository at the failing commit triggers the test failure.
+- The test is ItemDocumentBuilderTest.testChangeOfSubjectId (wdtk-datamodel module).
+- The code under test returns a label via copy.findLabel("fr") that is a plain string ("pleutre"), while the test compares against a label variable that prints/represents as "\"pleutre\" (fr)".
+
+Expected Behavior
+- The test should assert equivalent values in a consistent representation. Either:
+  - copy.findLabel("fr") should return an object/string with language metadata matching 'label' (if label is a MonolingualTextValue), or
+  - The test should compare the two values in the same representation (for example compare label.getText() to copy.findLabel("fr") if findLabel returns a plain string).
+
+Observed Behavior
+- The test failed with an assertion error:
+  - expected: "<"pleutre" (fr)>"
+  - actual: "<pleutre>"
+- The mismatch caused Maven/ Surefire to report a failing test and the overall build to fail.
+
+Relevant Stack Trace (from build log)
+- The failing test and stack trace excerpt:
+
+Running org.wikidata.wdtk.datamodel.helpers.ItemDocumentBuilderTest
+Tests run: 6, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.017 sec <<< FAILURE!
+testChangeOfSubjectId(org.wikidata.wdtk.datamodel.helpers.ItemDocumentBuilderTest)  Time elapsed: 0.009 sec  <<< FAILURE!
+java.lang.AssertionError: expected:<"pleutre" (fr)> but was:<pleutre>
+    at org.junit.Assert.fail(Assert.java:88)
+    at org.junit.Assert.failNotEquals(Assert.java:834)
+    at org.junit.Assert.assertEquals(Assert.java:118)
+    at org.junit.Assert.assertEquals(Assert.java:144)
+    at org.wikidata.wdtk.datamodel.helpers.ItemDocumentBuilderTest.testChangeOfSubjectId(ItemDocumentBuilderTest.java:135)
+    ... (rest of stack omitted; full stack present in the build log)
+
+- Maven reported:
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.12.4:test (default-test) on project wdtk-datamodel: There are test failures.
+
+Relevant Code Snippets (from code diff)
+- The code diff shows the changed assertion in the test:
+
+--- a/wdtk-datamodel/src/test/java/org/wikidata/wdtk/datamodel/helpers/ItemDocumentBuilderTest.java
++++ b/wdtk-datamodel/src/test/java/org/wikidata/wdtk/datamodel/helpers/ItemDocumentBuilderTest.java
+@@ -132,7 +132,7 @@ public class ItemDocumentBuilderTest {
+     ItemDocument copy = ItemDocumentBuilder.fromItemDocument(initial).withEntityId(ItemIdValue.NULL).build();
+     
+     assertEquals(ItemIdValue.NULL, copy.getEntityId());
+-    assertEquals(label, copy.findLabel("fr"));
++    assertEquals("pleutre", copy.findLabel("fr"));
+ }
+
+- The old assertion compared 'label' (likely a MonolingualTextValue or another object whose toString yields "\"pleutre\" (fr)") with copy.findLabel("fr") (which returned plain "pleutre"). The diff shows an attempted fix changing the assertion to compare the plain string "pleutre" to copy.findLabel("fr").
+
+Root Cause Analysis
+- The test compares two values in different representations/types:
+  - The variable label contains an object whose string representation includes language info (e.g., "\"pleutre\" (fr)").
+  - copy.findLabel("fr") returns a plain string "pleutre".
+- This leads to a value mismatch in assertEquals, producing the observed assertion failure.
+- Two ways to resolve: normalize the result types in the test (preferred for tests), or change the implementation to preserve language metadata if that is the intended behavior.
+
+Patches / Suggested Fixes
+1) (Already proposed in code diff) Change the test assertion to match the plain string returned by copy.findLabel:
+   - Replace:
+       assertEquals(label, copy.findLabel("fr"));
+     With:
+       assertEquals("pleutre", copy.findLabel("fr"));
+
+   This will make the test compare two plain strings (literal "pleutre" vs returned "pleutre") and should pass given the current behavior.
+
+2) (Alternative, more robust) Compare the textual content explicitly using the label object's text, preserving intent and avoiding brittle string literals:
+   - Replace:
+       assertEquals(label, copy.findLabel("fr"));
+     With:
+       assertEquals(label.getText(), copy.findLabel("fr"));
+   - This keeps the comparison tied to the expected label text and is less fragile if the expected text changes.
+
+3) (If intended behavior is to preserve language metadata) Change the implementation of copy.findLabel(...) to return a MonolingualTextValue (or the same type as label) rather than plain String, or provide an alternative accessor returning the MonolingualTextValue. Update the test accordingly:
+   - Either change findLabel signature or add findLabelValue(String lang) -> MonolingualTextValue.
+   - Then the test can safely assert equals(label, copy.findLabelValue("fr")).
+
+Recommendation
+- Update the test to compare the same representation. The best immediate fix is to use label.getText() in the assertion so the test checks the textual content instead of relying on toString formatting or different types:
+    assertEquals(label.getText(), copy.findLabel("fr"));
+- Alternatively, if the intended API is that findLabel returns MonolingualTextValue, modify the API/implementation and update callers/tests accordingly. But that is a bigger API change and may break other users; prefer changing the test.
+
+Files / Locations
+- Test file: wdtk-datamodel/src/test/java/org/wikidata/wdtk/datamodel/helpers/ItemDocumentBuilderTest.java
+- Failing test: testChangeOfSubjectId at or around line 135.
+
+Conclusion
+- The unit test failed due to mismatched expected and actual representations for a label. Fixing the test to compare the label text (or updating the implementation if the API is wrong) resolves the failure. The provided code diff already shows the simple fix of asserting the plain string "pleutre" against copy.findLabel("fr"), or preferably assert against label.getText().

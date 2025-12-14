@@ -1,0 +1,87 @@
+Title: CI failure — NameError: name 'Optional' is not defined during test collection
+
+Summary
+- CI (GitHub Actions) running pytest on Python 3.10 fails during test collection with 4 errors:
+  NameError: name 'Optional' is not defined
+- Failure originates from riscemu/types/binary_data_memory_section.py where Optional is used in a class attribute annotation but typing.Optional was not imported.
+- The repository diff shows the correct fix (adding "from typing import Optional") was made in the branch, but the failing CI run corresponds to a commit that did not include that import (failed_sha: 6ec6e513...).
+
+Environment (from build log)
+- GitHub Actions runner: Ubuntu 22.04.2
+- Python: 3.10.11
+- pytest: 7.3.1
+- Error occurred during test collection (no tests executed)
+
+Failure details / Stack trace (relevant excerpt)
+- Test collection aborts with 4 identical errors. One representative stack trace snippet:
+
+  File "riscemu/types/binary_data_memory_section.py", line <class body>:
+    class BinaryDataMemorySection(MemorySection):
+  File "riscemu/types/binary_data_memory_section.py", line 19, in BinaryDataMemorySection
+    flags: Optional[MemoryFlags] = None,
+  NameError: name 'Optional' is not defined
+
+- pytest summary:
+  ERROR test/test_helpers.py - NameError: name 'Optional' is not defined
+  ERROR test/test_integers.py - NameError: name 'Optional' is not defined
+  ERROR test/test_isa.py - NameError: name 'Optional' is not defined
+  ERROR test/test_tokenizer.py - NameError: name 'Optional' is not defined
+
+Root cause
+- The code uses Optional in type annotations in riscemu/types/binary_data_memory_section.py but does not import Optional from the typing module, causing NameError at import/collection time.
+- Since the failing commit (failed_sha) did not include the import, importing the package fails immediately, preventing pytest from discovering tests.
+
+Files/lines implicated
+- riscemu/types/binary_data_memory_section.py
+  - Problem line (from the traceback): flags: Optional[MemoryFlags] = None
+  - Missing import: Optional from typing
+
+Patch (shown in code diff)
+- The repo diff includes the fix that adds the missing import at the top of riscemu/types/binary_data_memory_section.py:
+
+  + from typing import Optional
+  from . import (
+      MemorySection,
+      InstructionContext,
+      ...
+
+- This is the correct minimal fix.
+
+Other changes in the diff (not related to the failure)
+- Small README addition (link).
+- Minor formatting change in riscemu/__main__.py (trailing comma added to an argparse.add_argument call). These are unrelated to the NameError.
+
+Steps to reproduce locally
+1. Checkout the commit that produced the failure (failed_sha: 6ec6e5130e8fbaca8b151fc7c5308b5a40aad2c8).
+2. Create a virtualenv and install dev requirements:
+   - python -m venv .venv
+   - source .venv/bin/activate
+   - pip install -r requirements-dev.txt -r requirements.txt
+3. Run pytest:
+   - pytest -q
+4. Observe import-time NameError during collection as above.
+
+Recommended fix
+- Ensure riscemu/types/binary_data_memory_section.py contains:
+  from typing import Optional
+  at the top of the file (before use). The patch in the provided diff is the exact fix.
+
+Additional recommendations / improvements
+- Add a small smoke test that imports the top-level package (riscemu) to catch import-time errors quickly, e.g. a test that simply does "import riscemu".
+- Consider running a quick "import check" step in CI before running the full pytest suite (e.g., python -c "import riscemu").
+- Add static type checking (mypy) or run a linter in CI to catch missing typing imports earlier.
+- If using from __future__ import annotations (deferred annotations), names in annotations are not evaluated at runtime — that would help avoid runtime NameErrors for some cases. Decide whether to use that project-wide.
+- When changing type annotations, prefer fully qualifying as typing.Optional or ensure necessary typing imports are present.
+
+Action items
+- Merge the commit that adds "from typing import Optional" (this is already present in the code diff).
+- Re-run CI for the branch (the run that failed was for failed_sha). After merging/applying the fix, the import errors should be resolved and pytest can continue.
+
+References
+- Build log indicates the failing commit: failed_sha = 6ec6e5130e8f...
+- Code diff shows the fix adding "from typing import Optional" to riscemu/types/binary_data_memory_section.py.
+
+If you want, I can:
+- Produce a minimal patch/PR description for merging the fix,
+- Suggest a smoke-test to add to the test suite,
+- Run through any other related files to verify typing imports are consistent.

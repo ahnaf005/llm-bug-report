@@ -1,0 +1,100 @@
+1) Title
+- Unit tests fail under Java 9+ module system: InaccessibleObjectException (module does not "opens <package>" to unnamed module), causing Maven Surefire test run to fail.
+
+2) Steps to Reproduce
+1. Checkout the commit referenced by the failing build (SHA: 5f7a8ca2218ba64fd6eb5be385cafc51dd5f866a).
+2. Use Java 17 (temurin 17.0.13+11) and Maven (project uses the bundled ./mvnw wrapper).
+3. Run the test goal:
+   ./mvnw -B test -Djava.awt.headless=true
+4. Observe Surefire test run; multiple tests error immediately with InaccessibleObjectException.
+
+3) Triggering Input / Conditions
+- Running unit tests under Java module system (module-info.java is present) while test framework (JUnit/JVM reflection) tries to create/access test classes or call @BeforeAll methods via reflection.
+- The module com.marginallyclever.makelangelo does not open certain packages to the unnamed module (JUnit/engine), so reflection is blocked by the module system.
+- Environment: GitHub Actions runner (ubuntu-24.04), Java 17.
+
+4) Expected Behavior
+- JUnit tests should run normally, able to access test classes and lifecycle methods via reflection so tests pass (or fail only when assertions fail).
+- Maven build should complete the test phase without InaccessibleObjectException related errors from the module system.
+
+5) Observed Behavior
+- Many tests error out immediately with java.lang.reflect.InaccessibleObjectException stating that the module com.marginallyclever.makelangelo does not "open <package>" to the unnamed module.
+- Maven build fails because there are test errors; Surefire reports "There are test failures." and the run exits non-zero.
+
+Representative observed errors from the build log:
+- java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+
+Other similar errors:
+- java.lang.reflect.InaccessibleObjectException: Unable to make public static void com.marginallyclever.makelangelo.makeart.io.SaveDXFTest.beforeAll() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.makeart.io" to unnamed module @6f10d5b6
+- java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.convenience.FileAccessTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.convenience" to unnamed module @6f10d5b6
+
+Maven summary lines:
+- [ERROR] Tests run: 140, Failures: 0, Errors: 22, Skipped: 1
+- [INFO] ------------------------------------------------------------------------
+- [INFO] BUILD FAILURE
+- [ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.0.0-M5:test (default-test) on project Makelangelo: There are test failures.
+
+6) Relevant Code Snippets (from the provided diff)
+- The patch adds opens clauses to module-info.java. These are the exact added lines:
+
+    requires org.locationtech.jts;
+    requires org.apache.httpcomponents.httpclient;
+    requires org.apache.httpcomponents.httpcore;
+
+    opens com.marginallyclever.convenience;
+    opens com.marginallyclever.convenience.voronoi;
+    opens com.marginallyclever.makelangelo.makeart.io;
+    opens com.marginallyclever.makelangelo.plotter.plottercontrols;
+    opens com.marginallyclever.makelangelo.turtle;
+    opens com.marginallyclever.convenience.noise;
+    opens com.marginallyclever.convenience.helpers;
+
+(These lines were added to src/main/java/module-info.java in the diff.)
+
+7) Stack Traces / Relevant Build Log Excerpts
+- Example stack trace lines (extracted from build log):
+
+  [ERROR] com.marginallyclever.makelangelo.turtle.TurtleTest.notEqualsTwoTurtles  Time elapsed: 0 s  <<< ERROR!
+  java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.makelangelo.turtle.TurtleTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.turtle" to unnamed module @6f10d5b6
+
+  [ERROR] com.marginallyclever.makelangelo.makeart.io.SaveDXFTest  Time elapsed: 0.001 s  <<< ERROR!
+  java.lang.reflect.InaccessibleObjectException: Unable to make public static void com.marginallyclever.makelangelo.makeart.io.SaveDXFTest.beforeAll() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.makelangelo.makeart.io" to unnamed module @6f10d5b6
+
+  [ERROR] com.marginallyclever.convenience.FileAccessTest.open_fileInJar  Time elapsed: 0 s  <<< ERROR!
+  java.lang.reflect.InaccessibleObjectException: Unable to make com.marginallyclever.convenience.FileAccessTest() accessible: module com.marginallyclever.makelangelo does not "opens com.marginallyclever.convenience" to unnamed module @6f10d5b6
+
+- Maven final failure block:
+
+  [ERROR] Tests run: 140, Failures: 0, Errors: 22, Skipped: 1
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD FAILURE
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.0.0-M5:test (default-test) on project Makelangelo: There are test failures.
+
+8) Patches / Suggested Fixes
+- Patch present in the diff: add opens directives in module-info.java for the packages that the test framework needs reflective access to. The provided patch already adds the following opens statements:
+
+    opens com.marginallyclever.convenience;
+    opens com.marginallyclever.convenience.voronoi;
+    opens com.marginallyclever.makelangelo.makeart.io;
+    opens com.marginallyclever.makelangelo.plotter.plottercontrols;
+    opens com.marginallyclever.makelangelo.turtle;
+    opens com.marginallyclever.convenience.noise;
+    opens com.marginallyclever.convenience.helpers;
+
+- This patch is the correct/typical fix: opening those packages allows JUnit (and other frameworks running in the unnamed module) to access test classes and lifecycle methods reflectively.
+
+- Additional suggested fixes / considerations:
+  1. Confirm that the module-info.java file including these opens is included in the commit being built (the failing build used SHA 5f7a8ca…; ensure the CI uses the updated SHA with the new module-info.java). The build log indicates the earlier failing commit; the diff shows the fix — ensure CI runs after merging this change.
+  2. If you prefer to limit reflective access, instead of opening packages to all, you can open them specifically to the JUnit engine: e.g.
+       opens com.marginallyclever.makelangelo.turtle to org.junit.platform.commons;
+     (note: the junit platform module name may differ — using an unconditional opens is simpler and common for test-access.)
+  3. Alternatively, configure Maven Surefire to add --add-opens JVM flags for the test run (via plugin configuration / argLine), e.g. in pom.xml surefire plugin configuration:
+       <argLine>--add-opens com.marginallyclever.makelangelo/com.marginallyclever.makelangelo.turtle=ALL-UNNAMED</argLine>
+     This can be useful if you don't want to modify module-info.java (but modifying module-info.java is a straightforward and transparent fix).
+  4. Make sure to add a trailing newline to module-info.java (diff notes "No newline at end of file") — not a functional blocker, but good practice.
+  5. Run the test suite locally after applying the patch:
+       ./mvnw -B test -Djava.awt.headless=true
+     and verify the previously failing tests (TurtleTest, SaveSVGTest, SaveGCodeTest, SaveDXFTest, FileAccessTest, etc.) no longer error with InaccessibleObjectException.
+
+Summary
+- Root cause: Java module system blocking reflective access to packages used by unit tests (JUnit runs in unnamed module). The code diff already implements the recommended fix by adding opens directives in module-info.java for the affected packages. Apply/merge the patch (ensure CI is running on the updated commit), or alternatively add JVM --add-opens options for the test JVM if you want to avoid changing module-info.java. After applying the patch, re-run mvn test; the InaccessibleObjectException errors should be resolved.

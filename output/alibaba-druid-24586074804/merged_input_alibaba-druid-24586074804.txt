@@ -1,0 +1,289 @@
+
+========================
+BUILD LOG
+========================
+﻿2024-05-04T12:44:16.8760508Z Current runner version: '2.316.0'
+2024-05-04T12:44:16.8787004Z ##[group]Operating System
+2024-05-04T12:44:16.8787666Z Ubuntu
+2024-05-04T12:44:16.8788014Z 22.04.4
+2024-05-04T12:44:16.8788474Z LTS
+2024-05-04T12:44:16.8788787Z ##[endgroup]
+2024-05-04T12:44:16.8789195Z ##[group]Runner Image
+2024-05-04T12:44:16.8789734Z Image: ubuntu-22.04
+2024-05-04T12:44:16.8790154Z Version: 20240422.1.0
+2024-05-04T12:44:16.8791194Z Included Software: https://github.com/actions/runner-images/blob/ubuntu22/20240422.1/images/ubuntu/Ubuntu2204-Readme.md
+2024-05-04T12:44:16.8792857Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu22%2F20240422.1
+2024-05-04T12:44:16.8793793Z ##[endgroup]
+2024-05-04T12:44:16.8794185Z ##[group]Runner Image Provisioner
+2024-05-04T12:44:16.8794763Z 2.0.369.1
+2024-05-04T12:44:16.8795142Z ##[endgroup]
+2024-05-04T12:44:16.8797684Z ##[group]GITHUB_TOKEN Permissions
+2024-05-04T12:44:16.8799391Z Actions: write
+2024-05-04T12:44:16.8800120Z Attestations: write
+2024-05-04T12:44:16.8800636Z Checks: write
+2024-05-04T12:44:16.8801015Z Contents: write
+2024-05-04T12:44:16.8801521Z Deployments: write
+2024-05-04T12:44:16.8801969Z Discussions: write
+2024-05-04T12:44:16.8802334Z Issues: write
+2024-05-04T12:44:16.8802779Z Metadata: read
+2024-05-04T12:44:16.8803184Z Packages: write
+2024-05-04T12:44:16.8803541Z Pages: write
+2024-05-04T12:44:16.8803990Z PullRequests: write
+2024-05-04T12:44:16.8804450Z RepositoryProjects: write
+2024-05-04T12:44:16.8804885Z SecurityEvents: write
+2024-05-04T12:44:16.8805392Z Statuses: write
+2024-05-04T12:44:16.8806131Z ##[endgroup]
+2024-05-04T12:44:16.8809179Z Secret source: Actions
+2024-05-04T12:44:16.8809984Z Prepare workflow directory
+2024-05-04T12:44:16.9431221Z Prepare all required actions
+2024-05-04T12:44:16.9588344Z Getting action download info
+2024-05-04T12:44:17.1136244Z Download action repository 'actions/checkout@v4' (SHA:0ad4b8fadaa221de15dcec353f45205ec38ea70b)
+2024-05-04T12:44:17.3985534Z Download action repository 'actions/setup-java@v4' (SHA:99b8673ff64fbf99d8d325f52d9a5bdedb8483e9)
+2024-05-04T12:44:17.6723967Z Download action repository 'codecov/codecov-action@v3.1.0' (SHA:81cd2dc8148241f03f5839d295e000b8f761e378)
+2024-05-04T12:44:18.0636976Z Complete job name: Test JDK 17, ubuntu-latest
+2024-05-04T12:44:18.1534195Z ##[group]Run actions/checkout@v4
+2024-05-04T12:44:18.1534667Z with:
+2024-05-04T12:44:18.1535034Z   repository: alibaba/druid
+2024-05-04T12:44:18.1535721Z   token: ***
+2024-05-04T12:44:18.1536064Z   ssh-strict: true
+2024-05-04T12:44:18.1536404Z   ssh-user: git
+2024-05-04T12:44:18.1536835Z   persist-credentials: true
+2024-05-04T12:44:18.1537212Z   clean: true
+2024-05-04T12:44:18.1537557Z   sparse-checkout-cone-mode: true
+2024-05-04T12:44:18.1538039Z   fetch-depth: 1
+2024-05-04T12:44:18.1538381Z   fetch-tags: false
+2024-05-04T12:44:18.1538726Z   show-progress: true
+2024-05-04T12:44:18.1539143Z   lfs: false
+2024-05-04T12:44:18.1539450Z   submodules: false
+2024-05-04T12:44:18.1539800Z   set-safe-directory: true
+2024-05-04T12:44:18.1540268Z ##[endgroup]
+2024-05-04T12:44:18.3834310Z Syncing repository: alibaba/druid
+2024-05-04T12:44:18.3836536Z ##[group]Getting Git version info
+2024-05-04T12:44:18.3837505Z Working directory is '/home/runner/work/druid/druid'
+2024-05-04T12:44:18.3838955Z [command]/usr/bin/git version
+2024-05-04T12:44:18.3839511Z git version 2.43.2
+2024-05-04T12:44:18.3858338Z ##[endgroup]
+2024-05-04T12:44:18.3874942Z Temporarily overriding HOME='/home/runner/work/_temp/39635943-7e26-4a42-a9d7-88598f182504' before making global git config changes
+2024-05-04T12:44:18.3876821Z Adding repository directory to the temporary git global config as a safe directory
+2024-05-04T12:44:18.3879561Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/druid/druid
+2024-05-04T12:44:18.3911740Z Deleting the contents of '/home/runner/work/druid/druid'
+2024-05-04T12:44:18.3918859Z ##[group]Initializing the repository
+2024-05-04T12:44:18.3922238Z [command]/usr/bin/git init /home/runner/work/druid/druid
+2024-05-04T12:44:18.3993071Z hint: Using 'master' as the name for the initial branch. This default branch name
+2024-05-04T12:44:18.3995082Z hint: is subject to change. To configure the initial branch name to use in all
+2024-05-04T12:44:18.4002875Z hint: of your new repositories, which will suppress this warning, call:
+2024-05-04T12:44:18.4003908Z hint: 
+2024-05-04T12:44:18.4004870Z hint: 	git config --global init.defaultBranch <name>
+2024-05-04T12:44:18.4005873Z hint: 
+2024-05-04T12:44:18.4006846Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2024-05-04T12:44:18.4008546Z hint: 'development'. The just-created branch can be renamed via this command:
+2024-05-04T12:44:18.4009617Z hint: 
+2024-05-04T12:44:18.4010279Z hint: 	git branch -m <name>
+2024-05-04T12:44:18.4012026Z Initialized empty Git repository in /home/runner/work/druid/druid/.git/
+2024-05-04T12:44:18.4017664Z [command]/usr/bin/git remote add origin https://github.com/alibaba/druid
+2024-05-04T12:44:18.4051101Z ##[endgroup]
+2024-05-04T12:44:18.4051912Z ##[group]Disabling automatic garbage collection
+2024-05-04T12:44:18.4054033Z [command]/usr/bin/git config --local gc.auto 0
+2024-05-04T12:44:18.4082852Z ##[endgroup]
+2024-05-04T12:44:18.4083593Z ##[group]Setting up auth
+2024-05-04T12:44:18.4088993Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2024-05-04T12:44:18.4117388Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2024-05-04T12:44:18.4447215Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2024-05-04T12:44:18.4473540Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2024-05-04T12:44:18.4698266Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2024-05-04T12:44:18.4731698Z ##[endgroup]
+2024-05-04T12:44:18.4732639Z ##[group]Fetching the repository
+2024-05-04T12:44:18.4743779Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +9003085f558c134de5b7fe70ac4d54e75898eae6:refs/remotes/origin/master
+2024-05-04T12:44:20.1043160Z From https://github.com/alibaba/druid
+2024-05-04T12:44:20.1044695Z  * [new ref]         9003085f558c134de5b7fe70ac4d54e75898eae6 -> origin/master
+2024-05-04T12:44:20.1071562Z ##[endgroup]
+2024-05-04T12:44:20.1072256Z ##[group]Determining the checkout info
+2024-05-04T12:44:20.1073045Z ##[endgroup]
+2024-05-04T12:44:20.1075930Z [command]/usr/bin/git sparse-checkout disable
+2024-05-04T12:44:20.1111852Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2024-05-04T12:44:20.1137218Z ##[group]Checking out the ref
+2024-05-04T12:44:20.1140548Z [command]/usr/bin/git checkout --progress --force -B master refs/remotes/origin/master
+2024-05-04T12:44:20.4889413Z Reset branch 'master'
+2024-05-04T12:44:20.4890239Z branch 'master' set up to track 'origin/master'.
+2024-05-04T12:44:20.4910618Z ##[endgroup]
+2024-05-04T12:44:20.4950070Z [command]/usr/bin/git log -1 --format='%H'
+2024-05-04T12:44:20.4972578Z '9003085f558c134de5b7fe70ac4d54e75898eae6'
+2024-05-04T12:44:20.5310989Z ##[group]Run actions/setup-java@v4
+2024-05-04T12:44:20.5311332Z with:
+2024-05-04T12:44:20.5311552Z   distribution: temurin
+2024-05-04T12:44:20.5311823Z   java-version: 17
+2024-05-04T12:44:20.5312063Z   cache: maven
+2024-05-04T12:44:20.5312292Z   java-package: jdk
+2024-05-04T12:44:20.5312542Z   check-latest: false
+2024-05-04T12:44:20.5312799Z   server-id: github
+2024-05-04T12:44:20.5313056Z   server-username: GITHUB_ACTOR
+2024-05-04T12:44:20.5313369Z   server-password: GITHUB_TOKEN
+2024-05-04T12:44:20.5313674Z   overwrite-settings: true
+2024-05-04T12:44:20.5313943Z   job-status: success
+2024-05-04T12:44:20.5314309Z   token: ***
+2024-05-04T12:44:20.5314535Z ##[endgroup]
+2024-05-04T12:44:20.7142692Z ##[group]Installed distributions
+2024-05-04T12:44:20.7186214Z Resolved Java 17.0.10+7 from tool-cache
+2024-05-04T12:44:20.7186869Z Setting Java 17.0.10+7 as the default
+2024-05-04T12:44:20.7210567Z Creating toolchains.xml for JDK version 17 from temurin
+2024-05-04T12:44:20.7283647Z Writing to /home/runner/.m2/toolchains.xml
+2024-05-04T12:44:20.7284278Z 
+2024-05-04T12:44:20.7285274Z Java configuration:
+2024-05-04T12:44:20.7286145Z   Distribution: temurin
+2024-05-04T12:44:20.7286625Z   Version: 17.0.10+7
+2024-05-04T12:44:20.7287481Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.10-7/x64
+2024-05-04T12:44:20.7288123Z 
+2024-05-04T12:44:20.7288898Z ##[endgroup]
+2024-05-04T12:44:20.7315466Z Creating settings.xml with server-id: github
+2024-05-04T12:44:20.7336166Z Writing to /home/runner/.m2/settings.xml
+2024-05-04T12:44:22.4538752Z Received 226492416 of 289143745 (78.3%), 216.0 MBs/sec
+2024-05-04T12:44:22.6577965Z Cache Size: ~276 MB (289143745 B)
+2024-05-04T12:44:22.6715036Z [command]/usr/bin/tar -xf /home/runner/work/_temp/66f52486-1351-4ce0-be27-fa60b4effac5/cache.tzst -P -C /home/runner/work/druid/druid --use-compress-program unzstd
+2024-05-04T12:44:23.4556030Z Received 289143745 of 289143745 (100.0%), 137.7 MBs/sec
+2024-05-04T12:44:23.5976644Z Cache restored successfully
+2024-05-04T12:44:23.6620384Z Cache restored from key: setup-java-Linux-maven-dc1a9f816f03261bad898a5895cd6f88199650e3f88b3cafa95fac4f074c7bb0
+2024-05-04T12:44:23.6906643Z ##[group]Run ./mvnw -Penable-for-jdk17+,gen-code-cov clean package -B
+2024-05-04T12:44:23.6907390Z [36;1m./mvnw -Penable-for-jdk17+,gen-code-cov clean package -B[0m
+2024-05-04T12:44:23.7130033Z shell: /usr/bin/bash -e {0}
+2024-05-04T12:44:23.7130360Z env:
+2024-05-04T12:44:23.7130748Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.10-7/x64
+2024-05-04T12:44:23.7131442Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.10-7/x64
+2024-05-04T12:44:23.7131965Z ##[endgroup]
+2024-05-04T12:44:28.9230375Z [INFO] Scanning for projects...
+2024-05-04T12:44:29.1750461Z [INFO] ------------------------------------------------------------------------
+2024-05-04T12:44:29.1751684Z [INFO] Reactor Build Order:
+2024-05-04T12:44:29.1752388Z [INFO] 
+2024-05-04T12:44:29.1761010Z [INFO] druid-parent                                                       [pom]
+2024-05-04T12:44:29.1762351Z [INFO] druid                                                              [jar]
+2024-05-04T12:44:29.1763846Z [INFO] druid-spring-boot-starter                                          [jar]
+2024-05-04T12:44:29.1783152Z [INFO] druid-wrapper                                                      [jar]
+2024-05-04T12:44:29.1784552Z [INFO] druid-demo-petclinic                                               [jar]
+2024-05-04T12:44:29.1786103Z [INFO] druid-spring-boot-3-starter                                        [jar]
+2024-05-04T12:44:29.1809163Z [INFO] 
+2024-05-04T12:44:29.1810379Z [INFO] ----------------------< com.alibaba:druid-parent >----------------------
+2024-05-04T12:44:29.1811883Z [INFO] Building druid-parent 1.2.23-SNAPSHOT                              [1/6]
+2024-05-04T12:44:29.1813138Z [INFO] --------------------------------[ pom ]---------------------------------
+2024-05-04T12:44:29.2362816Z [INFO] 
+2024-05-04T12:44:29.2364249Z [INFO] --- maven-clean-plugin:3.2.0:clean (default-clean) @ druid-parent ---
+2024-05-04T12:44:29.3535075Z [INFO] 
+2024-05-04T12:44:29.3536410Z [INFO] --- maven-checkstyle-plugin:3.1.2:check (checkstyle) @ druid-parent ---
+2024-05-04T12:44:30.9040236Z [INFO] There are 9 errors reported by Checkstyle 9.2 with src/checkstyle/druid-checks.xml ruleset.
+2024-05-04T12:44:30.9115777Z [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[34] (regexp) RegexpMultiline: Line has trailing whitespace
+2024-05-04T12:44:30.9118664Z [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[35] (regexp) RegexpMultiline: Line has trailing whitespace
+2024-05-04T12:44:30.9121131Z [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[42] (regexp) RegexpMultiline: Line has trailing whitespace
+2024-05-04T12:44:30.9124010Z [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[49] (regexp) RegexpMultiline: Blank line after opening brace
+2024-05-04T12:44:30.9127263Z [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[83,51] (whitespace) WhitespaceAround: ':' is not preceded with whitespace.
+2024-05-04T12:44:30.9130376Z [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[96,51] (whitespace) WhitespaceAround: ':' is not preceded with whitespace.
+2024-05-04T12:44:30.9132921Z [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[107,66] (coding) EmptyStatement: Empty statement.
+2024-05-04T12:44:30.9135656Z [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[117,45] (whitespace) WhitespaceAround: ':' is not preceded with whitespace.
+2024-05-04T12:44:30.9138249Z [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[177] (regexp) RegexpMultiline: Blank line after opening brace
+2024-05-04T12:44:30.9140051Z [INFO] ------------------------------------------------------------------------
+2024-05-04T12:44:30.9140743Z [INFO] Reactor Summary:
+2024-05-04T12:44:30.9141170Z [INFO] 
+2024-05-04T12:44:30.9142265Z [INFO] druid-parent 1.2.23-SNAPSHOT ....................... FAILURE [  1.732 s]
+2024-05-04T12:44:30.9143395Z [INFO] druid 1.2.23-SNAPSHOT .............................. SKIPPED
+2024-05-04T12:44:30.9144430Z [INFO] druid-spring-boot-starter 1.2.23-SNAPSHOT .......... SKIPPED
+2024-05-04T12:44:30.9145503Z [INFO] druid-wrapper 1.2.23-SNAPSHOT ...................... SKIPPED
+2024-05-04T12:44:30.9146567Z [INFO] druid-demo-petclinic 2.7.18 ........................ SKIPPED
+2024-05-04T12:44:30.9147633Z [INFO] druid-spring-boot-3-starter 1.2.23-SNAPSHOT ........ SKIPPED
+2024-05-04T12:44:30.9148655Z [INFO] ------------------------------------------------------------------------
+2024-05-04T12:44:30.9149354Z [INFO] BUILD FAILURE
+2024-05-04T12:44:30.9150030Z [INFO] ------------------------------------------------------------------------
+2024-05-04T12:44:30.9150708Z [INFO] Total time:  2.006 s
+2024-05-04T12:44:30.9151285Z [INFO] Finished at: 2024-05-04T12:44:30Z
+2024-05-04T12:44:30.9152058Z [INFO] ------------------------------------------------------------------------
+2024-05-04T12:44:30.9177811Z [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:3.1.2:check (checkstyle) on project druid-parent: You have 9 Checkstyle violations. -> [Help 1]
+2024-05-04T12:44:30.9179404Z [ERROR] 
+2024-05-04T12:44:30.9180196Z [ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+2024-05-04T12:44:30.9181396Z [ERROR] Re-run Maven using the -X switch to enable full debug logging.
+2024-05-04T12:44:30.9182142Z [ERROR] 
+2024-05-04T12:44:30.9182993Z [ERROR] For more information about the errors and possible solutions, please read the following articles:
+2024-05-04T12:44:30.9184412Z [ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+2024-05-04T12:44:30.9512545Z ##[error]Process completed with exit code 1.
+2024-05-04T12:44:30.9594724Z Post job cleanup.
+2024-05-04T12:44:31.1235109Z Post job cleanup.
+2024-05-04T12:44:31.1964259Z [command]/usr/bin/git version
+2024-05-04T12:44:31.2005095Z git version 2.43.2
+2024-05-04T12:44:31.2049680Z Temporarily overriding HOME='/home/runner/work/_temp/bba7efcd-1f34-4333-87a2-444f2be0cfa2' before making global git config changes
+2024-05-04T12:44:31.2051807Z Adding repository directory to the temporary git global config as a safe directory
+2024-05-04T12:44:31.2055273Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/druid/druid
+2024-05-04T12:44:31.2090853Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2024-05-04T12:44:31.2123110Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2024-05-04T12:44:31.2368741Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2024-05-04T12:44:31.2387651Z http.https://github.com/.extraheader
+2024-05-04T12:44:31.2398181Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2024-05-04T12:44:31.2426544Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2024-05-04T12:44:31.2880056Z Cleaning up orphan processes
+
+
+========================
+CODE DIFF
+========================
+{
+  "_created": "2024-06-26T19:17:43Z",
+  "_deleted": false,
+  "_etag": "87b1e303f51c1251a976be01207a643aeb3bdb62",
+  "_id": "667c69578454942502a5c1dd",
+  "_links": {
+    "collection": {
+      "href": "diffs",
+      "title": "diffs"
+    },
+    "next": {
+      "href": "diffs/alibaba-druid-24586074804?page=2",
+      "title": "next page"
+    },
+    "parent": {
+      "href": "/",
+      "title": "home"
+    },
+    "self": {
+      "href": "diffs/alibaba-druid-24586074804",
+      "title": "Diff"
+    }
+  },
+  "_updated": "2024-06-26T19:17:43Z",
+  "diff_size": 438,
+  "failed_sha": "9003085f558c134de5b7fe70ac4d54e75898eae6",
+  "image_tag": "alibaba-druid-24586074804",
+  "passed_sha": "15b887e9ff1591b0e0f252aee7b55e74e9bd5792",
+  "patches": [
+    {
+      "added_code_size": 14,
+      "content": "--- a/core/src/main/java/com/alibaba/druid/sql/visitor/SQLASTOutputVisitor.java\n+++ b/core/src/main/java/com/alibaba/druid/sql/visitor/SQLASTOutputVisitor.java\n@@ -10962,7 +10962,20 @@ public class SQLASTOutputVisitor extends SQLASTVisitorAdapter implements Paramet\n             printAndAccept(clusteredBy, \",\");\n             print(')');\n         }\n-\n+        List<SQLSelectOrderByItem> sortedBy = x.getSortedBy();\n+        if (sortedBy.size() > 0) {\n+            println();\n+            print0(ucase ? \"SORTED BY (\" : \"sorted by (\");\n+            printAndAccept(sortedBy, \", \");\n+            print(')');\n+        }\n+        int buckets = x.getBuckets();\n+        if (buckets > 0) {\n+            println();\n+            print0(ucase ? \"INTO \" : \"into \");\n+            print(buckets);\n+            print0(ucase ? \" BUCKETS\" : \" buckets\");\n+        }\n         List<SQLExpr> skewedBy = x.getSkewedBy();\n         if (skewedBy.size() > 0) {\n             println();\n@@ -10987,26 +11000,8 @@ public class SQLASTOutputVisitor extends SQLASTVisitorAdapter implements Paramet\n             }\n             visit(format);\n         }\n-\n         Map<String, SQLObject> serdeProperties = x.getSerdeProperties();\n         printSerdeProperties(serdeProperties);\n-\n-        List<SQLSelectOrderByItem> sortedBy = x.getSortedBy();\n-        if (sortedBy.size() > 0) {\n-            println();\n-            print0(ucase ? \"SORTED BY (\" : \"sorted by (\");\n-            printAndAccept(sortedBy, \", \");\n-            print(')');\n-        }\n-\n-        int buckets = x.getBuckets();\n-        if (buckets > 0) {\n-            println();\n-            print0(ucase ? \"INTO \" : \"into \");\n-            print(buckets);\n-            print0(ucase ? \" BUCKETS\" : \" buckets\");\n-        }\n-\n         SQLExprTableSource like = x.getLike();\n         if (like != null) {\n             println();\n",
+      "deleted_code_size": 19,
+      "new_file": "core/src/main/java/com/alibaba/druid/sql/visitor/SQLASTOutputVisitor.java",
+      "old_file": "core/src/main/java/com/alibaba/druid/sql/visitor/SQLASTOutputVisitor.java"
+    },
+    {
+      "added_code_size": 2,
+      "content": "--- a/core/src/test/java/com/alibaba/druid/bvt/sql/hive/HiveCreateTableTest_12.java\n+++ b/core/src/test/java/com/alibaba/druid/bvt/sql/hive/HiveCreateTableTest_12.java\n@@ -64,12 +64,12 @@ public class HiveCreateTableTest_12 extends OracleTest {\n                     \"\\tcountry STRING\\n\" +\n                     \")\\n\" +\n                     \"CLUSTERED BY (userid)\\n\" +\n+                    \"SORTED BY (viewTime)\\n\" +\n+                    \"INTO 32 BUCKETS\\n\" +\n                     \"ROW FORMAT DELIMITED\\n\" +\n                     \"\\tFIELDS TERMINATED BY '\\\\001'\\n\" +\n                     \"\\tCOLLECTION ITEMS TERMINATED BY '\\\\002'\\n\" +\n                     \"\\tMAP KEYS TERMINATED BY '\\\\003'\\n\" +\n-                    \"SORTED BY (viewTime)\\n\" +\n-                    \"INTO 32 BUCKETS\\n\" +\n                     \"STORED AS SEQUENCEFILE;\", text);\n         }\n \n",
+      "deleted_code_size": 2,
+      "new_file": "core/src/test/java/com/alibaba/druid/bvt/sql/hive/HiveCreateTableTest_12.java",
+      "old_file": "core/src/test/java/com/alibaba/druid/bvt/sql/hive/HiveCreateTableTest_12.java"
+    },
+    {
+      "added_code_size": 91,
+      "content": "--- /dev/null\n+++ b/core/src/test/java/com/alibaba/druid/bvt/sql/hive/issues/Issue5853.java\n@@ -0,0 +1,91 @@\n+package com.alibaba.druid.bvt.sql.hive.issues;\n+\n+import java.util.List;\n+\n+import com.alibaba.druid.DbType;\n+import com.alibaba.druid.sql.ast.SQLStatement;\n+import com.alibaba.druid.sql.parser.SQLParserUtils;\n+import com.alibaba.druid.sql.parser.SQLStatementParser;\n+\n+import org.junit.Test;\n+\n+import static org.junit.Assert.assertEquals;\n+\n+/**\n+ * Hive\u89e3\u6790CREATE TABLE\u7684\u95ee\u9898\n+ *\n+ * @see <a href=\"https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DDL\">...</a>\n+ */\n+public class Issue5853 {\n+\n+    @Test\n+    public void test_parse_create_0() {\n+        for (String sql : new String[]{\n+            \"CREATE TABLE page_view (\\n\"\n+                + \"\\tviewTime INT,\\n\"\n+                + \"\\tuserid BIGINT,\\n\"\n+                + \"\\tpage_url STRING,\\n\"\n+                + \"\\treferrer_url STRING,\\n\"\n+                + \"\\tip STRING COMMENT 'IP Address of the User'\\n\"\n+                + \")\\n\"\n+                + \"COMMENT 'This is the page view table'\\n\"\n+                + \"PARTITIONED BY (\\n\"\n+                + \"\\tdt STRING,\\n\"\n+                + \"\\tcountry STRING\\n\"\n+                + \")\\n\"\n+                + \"CLUSTERED BY (userid)\\n\"\n+                + \"SORTED BY (viewTime)\\n\"\n+                + \"INTO 32 BUCKETS\\n\"\n+                + \"ROW FORMAT DELIMITED\\n\"\n+                + \"\\tFIELDS TERMINATED BY '\\\\001'\\n\"\n+                + \"\\tCOLLECTION ITEMS TERMINATED BY '\\\\002'\\n\"\n+                + \"\\tMAP KEYS TERMINATED BY '\\\\003'\\n\"\n+                + \"STORED AS SEQUENCEFILE;\",\n+        }) {\n+            System.out.println(\"\u539f\u59cb\u7684sql===\" + sql);\n+            SQLStatementParser parser1 = SQLParserUtils.createSQLStatementParser(sql, DbType.hive);\n+            List<SQLStatement> statementList1 = parser1.parseStatementList();\n+            String sqleNew = statementList1.get(0).toString();\n+            System.out.println(\"\u751f\u6210\u7684sql===\" + sqleNew);\n+            assertEquals(sql, sqleNew);\n+            SQLStatementParser parser2 = SQLParserUtils.createSQLStatementParser(sqleNew, DbType.hive);\n+            List<SQLStatement> statementList2 = parser2.parseStatementList();\n+            String sqleNew2 = statementList2.get(0).toString();\n+            System.out.println(\"\u518d\u6b21\u89e3\u6790\u751f\u6210\u7684sql===\" + sqleNew2);\n+            assertEquals(sqleNew, sqleNew2);\n+        }\n+\n+    }\n+\n+    @Test\n+    public void test_parse_create_1() {\n+        for (String sql : new String[]{\n+            \"CREATE TABLE db.route(\\n\"\n+                + \"od_id string COMMENT 'OD',\\n\"\n+                + \"data_dt string COMMENT 'data date')\\n\"\n+                + \"CLUSTERED BY (\\n\"\n+                + \"od_id)\\n\"\n+                + \"INTO 8 BUCKETS\\n\"\n+                + \"ROW FORMAT SERDE\\n\"\n+                + \"'org.apache.hadoop.hive.ql.io.orc.OrcSerde'\\n\"\n+                + \"STORED AS INPUTFORMAT\\n\"\n+                + \"'org.apache.hadoop.hive.ql.io.orc.OrcInputFormat'\\n\"\n+                + \"OUTPUTFORMAT\\n\"\n+                + \"'org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat';\",\n+\n+        }) {\n+            System.out.println(\"\u539f\u59cb\u7684sql===\" + sql);\n+            SQLStatementParser parser1 = SQLParserUtils.createSQLStatementParser(sql, DbType.hive);\n+            List<SQLStatement> statementList1 = parser1.parseStatementList();\n+            String sqleNew = statementList1.get(0).toString();\n+            System.out.println(\"\u751f\u6210\u7684sql===\" + sqleNew);\n+            SQLStatementParser parser2 = SQLParserUtils.createSQLStatementParser(sqleNew, DbType.hive);\n+            List<SQLStatement> statementList2 = parser2.parseStatementList();\n+            String sqleNew2 = statementList2.get(0).toString();\n+            System.out.println(\"\u518d\u6b21\u89e3\u6790\u751f\u6210\u7684sql===\" + sqleNew2);\n+            assertEquals(sqleNew, sqleNew2);\n+        }\n+\n+    }\n+\n+}\n",
+      "deleted_code_size": 0,
+      "new_file": "core/src/test/java/com/alibaba/druid/bvt/sql/hive/issues/Issue5853.java",
+      "old_file": "/dev/null"
+    },
+    {
+      "added_code_size": 0,
+      "content": "--- a/src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java\n+++ /dev/null\n@@ -1,210 +0,0 @@\n-package com.alibaba.druid.filter.index;\n-\n-import com.alibaba.druid.filter.FilterEventAdapter;\n-import com.alibaba.druid.proxy.jdbc.StatementProxy;\n-import com.alibaba.druid.sql.SQLUtils;\n-import com.alibaba.druid.sql.ast.SQLStatement;\n-import com.alibaba.druid.sql.ast.expr.SQLMethodInvokeExpr;\n-import com.alibaba.druid.sql.dialect.mysql.parser.MySqlStatementParser;\n-import com.alibaba.druid.sql.dialect.mysql.visitor.MySqlSchemaStatVisitor;\n-import com.alibaba.druid.sql.parser.Token;\n-import com.alibaba.druid.stat.TableStat;\n-import com.alibaba.druid.util.JdbcConstants;\n-import com.alibaba.druid.util.StringUtils;\n-\n-import java.sql.Connection;\n-import java.sql.DatabaseMetaData;\n-import java.sql.ResultSet;\n-import java.sql.SQLException;\n-import java.util.ArrayList;\n-import java.util.List;\n-import java.util.Map;\n-import java.util.concurrent.ConcurrentHashMap;\n-\n-/**\n- * @date 2018-03-22\n- * @author willenfoo\n- * \u7531\u4e8e\u5f00\u53d1\u4eba\u5458\u6c34\u5e73\u53c2\u5dee\u4e0d\u9f50\uff0c\u5373\u4f7f\u8ba2\u4e86\u5f00\u53d1\u89c4\u8303\u5f88\u591a\u4eba\u4e5f\u4e0d\u9075\u5b88\n- * SQL\u662f\u5f71\u54cd\u7cfb\u7edf\u6027\u80fd\u6700\u91cd\u8981\u7684\u56e0\u7d20\uff0c\u6240\u4ee5\u62e6\u622a\u6389\u5783\u573eSQL\u8bed\u53e5\n- *\n- * \u62e6\u622aSQL\u7c7b\u578b\u7684\u573a\u666f\n- *  1.\u5fc5\u987b\u4f7f\u7528\u5230\u7d22\u5f15\uff0c\u5305\u542bleft jion\u8fde\u63a5\u5b57\u6bb5\uff0c\u7b26\u5408\u7d22\u5f15\u6700\u5de6\u539f\u5219\n- *     \u5fc5\u987b\u4f7f\u7528\u7d22\u5f15\u597d\u5904\uff0c\n- *     1.1 \u5982\u679c\u56e0\u4e3a\u52a8\u6001SQL\uff0cbug\u5bfc\u81f4update\u7684where\u6761\u4ef6\u6ca1\u6709\u5e26\u4e0a\uff0c\u5168\u8868\u66f4\u65b0\u4e0a\u4e07\u6761\u6570\u636e\n- *     1.2 \u5982\u679c\u68c0\u67e5\u5230\u4f7f\u7528\u4e86\u7d22\u5f15\uff0cSQL\u6027\u80fd\u57fa\u672c\u4e0d\u4f1a\u592a\u5dee  \n- *     \n- * 2.SQL\u5c3d\u91cf\u5355\u8868\u6267\u884c\uff0c\u6709\u67e5\u8be2left jion\u7684\u8bed\u53e5\uff0c\u5fc5\u987b\u5728\u6ce8\u91ca\u91cc\u9762\u5141\u8bb8\u8be5SQL\u8fd0\u884c\uff0c\u5426\u5219\u4f1a\u88ab\u62e6\u622a\uff0c\u6709left jion\u7684\u8bed\u53e5\uff0c\u5982\u679c\u4e0d\u80fd\u62c6\u6210\u5355\u8868\u6267\u884c\u7684SQL\uff0c\u8bf7leader\u5546\u91cf\u5728\u505a\n- *    http://gaoxianglong.github.io/shark/\n- *    SQL\u5c3d\u91cf\u5355\u8868\u6267\u884c\u7684\u597d\u5904\n- *    2.1 \u67e5\u8be2\u6761\u4ef6\u7b80\u5355\u3001\u6613\u4e8e\u5f00\u7406\u89e3\u548c\u7ef4\u62a4\uff1b\n- *    2.2 \u6269\u5c55\u6027\u6781\u5f3a\uff1b\uff08\u53ef\u4e3a\u5206\u5e93\u5206\u8868\u505a\u51c6\u5907\uff09\n- *    2.3 \u7f13\u5b58\u5229\u7528\u7387\u9ad8\uff1b\n- *    \n- * 2.\u5728\u5b57\u6bb5\u4e0a\u4f7f\u7528\u51fd\u6570\n- * 3.where\u6761\u4ef6\u4e3a\u7a7a\n- * 4.where\u6761\u4ef6\u4f7f\u7528\u4e86 !=\n- * 5.where\u6761\u4ef6\u4f7f\u7528\u4e86 not \u5173\u952e\u5b57\n- * 6.\u4e0d\u8981\u4f7f\u7528\u5b50\u67e5\u8be2\n- */\n-public class IllegalSQLIndexFilter extends FilterEventAdapter {\n-\n-    private static Map<String, List<IndexInfo>> indexInfoMap = new ConcurrentHashMap<String, List<IndexInfo>>();\n-\n-    private String dbType;\n-\n-    @Override\n-    protected void statementExecuteBefore(StatementProxy statement, String sql) {\n-        MySqlStatementParser sqlStatementParser = new MySqlStatementParser(sql);\n-        String tokenName = sqlStatementParser.getLexer().token().name();\n-\n-        if (Token.SELECT.name().equals(tokenName) || Token.UPDATE.name().equals(tokenName)) {\n-            //\u89e3\u6790select\u67e5\u8be2\n-            List<SQLStatement> stmtList = SQLUtils.parseStatements(sql, JdbcConstants.MYSQL);\n-            SQLStatement stmt = stmtList.get(0);\n-            MySqlSchemaStatVisitor visitor = new MySqlSchemaStatVisitor();\n-            stmt.accept(visitor);\n-\n-            Map<TableStat.Name, TableStat> tableMap = visitor.getTables();\n-            if (tableMap.size() > 3) {\n-                throw new RuntimeException(\"SQL\u4e0d\u5141\u8bb8\u8d85\u8fc73\u5f20\u8868\u64cd\u4f5c\");\n-            }\n-            //\u4e0d\u5141\u8bb8\u4f7f\u7528\u51fd\u6570\n-            List<SQLMethodInvokeExpr> sqlMethodInvokeExprs = visitor.getFunctions();\n-            if (sqlMethodInvokeExprs != null && !sqlMethodInvokeExprs.isEmpty()) {\n-                throw new RuntimeException(\"\u8bf7\u4e0d\u8981\u5728where\u6761\u4ef6\u4e2d\u4f7f\u7528\u3010\u51fd\u6570\u3011\");\n-            }\n-            //TODO \u4e0d\u5141\u8bb8\u4f7f\u7528\u5b50\u67e5\u8be2\n-\n-            //\u67e5\u8be2\u7528\u5230\u7684\u5b57\u6bb5\n-            List<TableStat.Condition> conditions = visitor.getConditions();\n-            if (conditions == null || conditions.isEmpty()) {\n-                throw new RuntimeException(\"\u8bf7\u5e26\u4e0awhere\u6761\u4ef6\");\n-            } else {\n-                for (TableStat.Condition condition: conditions) {\n-                    //\u4e0d\u5141\u8bb8\u4f7f\u7528\u4e0d\u7b49\u4e8e\n-                    if (StringUtils.equals(\"!=\", condition.getOperator())) {\n-                        throw new RuntimeException(\"\u8bf7\u4e0d\u8981\u5728where\u6761\u4ef6\u4e2d\u4f7f\u7528\u3010!=\u3011\");\n-                    }\n-                    //\u4e0d\u5141\u8bb8\u4f7f\u7528NOT\u5173\u952e\u5b57\n-                    else if (condition.getOperator().indexOf(\"NOT\") >= 0) {\n-                        throw new RuntimeException(\"\u8bf7\u4e0d\u8981\u5728where\u6761\u4ef6\u4e2d\u4f7f\u7528\u3010not\u3011\");\n-                    }\n-                }\n-\n-                List<String> tableIndexValid = new ArrayList<String>();\n-                //\u7d22\u5f15\u6700\u5de6\u539f\u5219\uff0c\u5f97\u5230\u67e5\u8be2\u6761\u4ef6\u4e2d\u7684\u7b2c\u4e00\u4e2a\u5b57\u6bb5\n-                for (TableStat.Condition condition: conditions) {\n-                    String tableInfo = condition.getColumn().getTable();\n-                    //\u5982\u679c\u8868\u5df2\u7ecf\u505a\u4e86\u9a8c\u8bc1\uff0c\u4e0d\u5728\u505a\u9a8c\u8bc1\u4e86\n-                    if (tableIndexValid.contains(tableInfo)) {\n-                        continue;\n-                    }\n-                    //\u662f\u5426\u4f7f\u7528\u7d22\u5f15\n-                    boolean useIndexFlag = false;\n-                    //\u8868\u5b58\u5728\u7684\u7d22\u5f15\n-                    String dbName = null;\n-                    String tableName = null;\n-                    String[] tableArray = tableInfo.split(\"\\\\.\");;\n-                    if (tableArray.length == 1) {\n-                        tableName = tableArray[0];\n-                    } else {\n-                        dbName = tableArray[0];\n-                        tableName = tableArray[1];\n-                    }\n-                    List<IndexInfo> indexInfos = getIndexInfos(tableInfo, dbName, tableName, statement);\n-                    //\u67e5\u8be2\u6761\u4ef6\u4e2d\u7684\u7b2c\u4e00\u4e2a\u5b57\u6bb5\n-                    String findFirstColumnName = condition.getColumn().getName();\n-                    for (IndexInfo indexInfo: indexInfos) {\n-                        if (StringUtils.equals(findFirstColumnName, indexInfo.getColumnName())) {\n-                            useIndexFlag = true;\n-                            break;\n-                        }\n-                    }\n-                    if (!useIndexFlag) {\n-                        throw new RuntimeException(\"SQL\u672a\u4f7f\u7528\u5230\u7d22\u5f15\");\n-                    }\n-                    tableIndexValid.add(tableInfo);\n-                }\n-            }\n-        }\n-        super.statementExecuteBefore(statement, sql);\n-    }\n-\n-    public List<IndexInfo> getIndexInfos(String key, String dbName, String tableName, StatementProxy statement) {\n-        List<IndexInfo> indexInfos = indexInfoMap.get(key);\n-        if (indexInfos == null || indexInfos.isEmpty()) {\n-            Connection conn = null;\n-            ResultSet rs = null;\n-            try {\n-                conn = statement.getConnectionProxy();\n-                DatabaseMetaData metadata = conn.getMetaData();\n-                rs = metadata.getIndexInfo(dbName, dbName, tableName, false, true);\n-                indexInfos = new ArrayList<IndexInfo>();\n-                while (rs.next()) {\n-                    //\u7d22\u5f15\u4e2d\u7684\u5217\u5e8f\u5217\u53f7\u7b49\u4e8e1\uff0c\u624d\u6709\u6548\n-                    if (StringUtils.equals(rs.getString(8), \"1\")) {\n-                        IndexInfo indexInfo = new IndexInfo();\n-                        indexInfo.setDbName(rs.getString(1));\n-                        indexInfo.setTableName(rs.getString(3));\n-                        indexInfo.setColumnName(rs.getString(9));\n-                        indexInfos.add(indexInfo);\n-                    }\n-                }\n-                indexInfoMap.put(key, indexInfos);\n-            } catch (SQLException e) {\n-                e.printStackTrace();\n-            }\n-        }\n-        return indexInfos;\n-    }\n-\n-    public static Map<String, List<IndexInfo>> getIndexInfoMap() {\n-        return indexInfoMap;\n-    }\n-\n-    public static void setIndexInfoMap(Map<String, List<IndexInfo>> indexInfoMap) {\n-        IllegalSQLIndexFilter.indexInfoMap = indexInfoMap;\n-    }\n-\n-    public String getDbType() {\n-        return dbType;\n-    }\n-\n-    public void setDbType(String dbType) {\n-        this.dbType = dbType;\n-    }\n-\n-    public static class IndexInfo {\n-\n-        private String dbName;\n-\n-        private String tableName;\n-\n-        private String columnName;\n-\n-        public String getDbName() {\n-            return dbName;\n-        }\n-\n-        public void setDbName(String dbName) {\n-            this.dbName = dbName;\n-        }\n-\n-        public String getTableName() {\n-            return tableName;\n-        }\n-\n-        public void setTableName(String tableName) {\n-            this.tableName = tableName;\n-        }\n-\n-        public String getColumnName() {\n-            return columnName;\n-        }\n-\n-        public void setColumnName(String columnName) {\n-            this.columnName = columnName;\n-        }\n-    }\n-\n-}\n",
+      "deleted_code_size": 210,
+      "new_file": "/dev/null",
+      "old_file": "src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java"
+    },
+    {
+      "added_code_size": 0,
+      "content": "--- a/src/test/java/com/alibaba/druid/bvt/filter/IllegalSQLIndexFilterExecuteTest.java\n+++ /dev/null\n@@ -1,100 +0,0 @@\n-/*\n- * Copyright 1999-2018 Alibaba Group Holding Ltd.\n- *\n- * Licensed under the Apache License, Version 2.0 (the \"License\");\n- * you may not use this file except in compliance with the License.\n- * You may obtain a copy of the License at\n- *\n- *      http://www.apache.org/licenses/LICENSE-2.0\n- *\n- * Unless required by applicable law or agreed to in writing, software\n- * distributed under the License is distributed on an \"AS IS\" BASIS,\n- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n- * See the License for the specific language governing permissions and\n- * limitations under the License.\n- */\n-package com.alibaba.druid.bvt.filter;\n-\n-import com.alibaba.druid.filter.Filter;\n-import com.alibaba.druid.filter.index.IllegalSQLIndexFilter;\n-import com.alibaba.druid.pool.DruidDataSource;\n-import com.alibaba.druid.util.JdbcUtils;\n-import junit.framework.TestCase;\n-import org.junit.Assert;\n-\n-import java.sql.Connection;\n-import java.sql.PreparedStatement;\n-import java.util.ArrayList;\n-import java.util.HashMap;\n-import java.util.List;\n-import java.util.Map;\n-\n-/**\n- * * \u62e6\u622aSQL\u7c7b\u578b\u7684\u573a\u666f\n- * 1.\u67e5\u8be2left jion \u8d85\u8fc73\u5f20\u8868\n- * 2.\u5728\u5b57\u6bb5\u4e0a\u4f7f\u7528\u51fd\u6570\n- * 3.where\u6761\u4ef6\u4e3a\u7a7a\n- * 4.where\u6761\u4ef6\u4f7f\u7528\u4e86 !=\n- * 5.where\u6761\u4ef6\u4f7f\u7528\u4e86 not \u5173\u952e\u5b57\n- * 6.where\u6761\u4ef6\u6ca1\u6709\u7d22\u5f15\u7d22\u5f15\uff0c\u6700\u5de6\u539f\u5219\n- *\n- * \u6d4b\u8bd5\u4e0d\u62e6\u622a\u7684SQL\uff0c\u6b63\u5e38\u901a\u8fc7\u5c31\u53ef\u4ee5\u4e86\n- */\n-public class IllegalSQLIndexFilterExecuteTest extends TestCase {\n-\n-    private DruidDataSource dataSource;\n-\n-    protected void setUp() throws Exception {\n-        dataSource = new DruidDataSource();\n-\n-        dataSource.setUrl(\"jdbc:mock:xxx\");\n-        dataSource.setFilters(\"stat\");\n-        dataSource.setTestOnBorrow(false);\n-\n-        List<IllegalSQLIndexFilter.IndexInfo> indexInfos = new ArrayList<IllegalSQLIndexFilter.IndexInfo>();\n-\n-        IllegalSQLIndexFilter.IndexInfo indexInfo = new IllegalSQLIndexFilter.IndexInfo();\n-        indexInfo.setDbName(\"db\");\n-        indexInfo.setTableName(\"demo\");\n-        indexInfo.setColumnName(\"columnName\");\n-        indexInfos.add(indexInfo);\n-\n-        Map<String, List<IllegalSQLIndexFilter.IndexInfo>> stringListMap = new HashMap<String, List<IllegalSQLIndexFilter.IndexInfo>>();\n-        stringListMap.put(\"demo\", indexInfos);\n-\n-        IllegalSQLIndexFilter illegalSQLIndexFilter = new IllegalSQLIndexFilter();\n-        illegalSQLIndexFilter.setIndexInfoMap(stringListMap);\n-\n-        List<Filter> filters = new ArrayList<Filter>();\n-        filters.add(illegalSQLIndexFilter);\n-\n-        dataSource.setProxyFilters(filters);\n-\n-        dataSource.init();\n-    }\n-\n-    protected void tearDown() throws Exception {\n-        JdbcUtils.close(dataSource);\n-    }\n-\n-    public void test_stat() throws Exception {\n-\n-        Assert.assertTrue(dataSource.isInited());\n-        String sql = \"select x from demo where columnName = ?\";\n-\n-        Connection conn = dataSource.getConnection();\n-\n-        PreparedStatement stmt = conn.prepareStatement(sql);\n-\n-        stmt.execute();\n-\n-\n-        sql = \"update demo set x = ? where columnName = ? \";\n-\n-        stmt = conn.prepareStatement(sql);\n-\n-        stmt.execute();\n-    }\n-\n-\n-}\n",
+      "deleted_code_size": 100,
+      "new_file": "/dev/null",
+      "old_file": "src/test/java/com/alibaba/druid/bvt/filter/IllegalSQLIndexFilterExecuteTest.java"
+    }
+  ],
+  "total_added_code": 107,
+  "total_deleted_code": 331
+}

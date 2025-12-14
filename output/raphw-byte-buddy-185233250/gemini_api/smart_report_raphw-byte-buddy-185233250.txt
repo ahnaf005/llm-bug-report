@@ -1,0 +1,110 @@
+## Bug Report: Build Failure due to FindBugs EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS in TypeCache.java
+
+### 1. Title
+Build Failure: FindBugs reports `EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS` in `TypeCache.java`
+
+### 2. Steps to Reproduce
+1.  Checkout the repository at commit `ea2bfdcab95a270cd5ca7c0f02c2733569eebfb1`.
+2.  Execute the Maven build command:
+    `mvn jacoco:prepare-agent verify jacoco:report $TARGET -Pintegration -Dnet.bytebuddy.test.travis=true`
+
+### 3. Triggering Input
+The build is triggered by the `mvn jacoco:prepare-agent verify jacoco:report` command, which includes the `verify` phase where the `findbugs-maven-plugin:3.0.3:check` goal is executed. The FindBugs plugin analyzes the `TypeCache.java` file, specifically its `equals` methods, and flags them for cross-type comparison.
+
+### 4. Expected Behavior
+The Maven build should complete successfully without any errors or warnings from the FindBugs plugin.
+
+### 5. Observed Behavior
+The Maven build fails during the `verify` phase for the `byte-buddy-dep` project. The `findbugs-maven-plugin:3.0.3:check` goal reports two bugs of type `EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS`, leading to a `BUILD FAILURE`.
+
+**Error Messages:**
+```
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary:
+[INFO] 
+[INFO] Byte Buddy (parent) ................................ SUCCESS [  2.636 s]
+[INFO] Byte Buddy Java agent .............................. SUCCESS [  9.234 s]
+[INFO] Byte Buddy (with dependencies) ..................... FAILURE [01:14 min]
+[INFO] Byte Buddy (without dependencies) .................. SKIPPED
+[INFO] Byte Buddy benchmarks .............................. SKIPPED
+[INFO] Byte Buddy for Android ............................. SKIPPED
+[INFO] Byte Buddy (Maven plugin) .......................... SKIPPED
+[INFO] Byte Buddy (Gradle plugin) ......................... SKIPPED
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time: 01:27 min
+[INFO] Finished at: 2016-12-19T18:30:10+00:00
+[INFO] Final Memory: 42M/455M
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.codehaus.mojo:findbugs-maven-plugin:3.0.3:check (default) on project byte-buddy-dep: failed with 2 bugs and 0 errors -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException
+[ERROR] 
+[ERROR] After correcting the problems, you can resume the build with the command
+[ERROR]   mvn <goals> -rf :byte-buddy-dep
+```
+
+**FindBugs Report Details:**
+```
+[INFO] BugInstance size is 2
+[INFO] Error size is 0
+[INFO] Total bugs: 2
+[INFO] net.bytebuddy.TypeCache$LookupKey.equals(Object) checks for operand being a TypeCache$StorageKey  [net.bytebuddy.TypeCache$LookupKey, net.bytebuddy.TypeCache$LookupKey] At TypeCache.java:[line 258]Another occurrence at TypeCache.java:[line 259] EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS
+[INFO] net.bytebuddy.TypeCache$StorageKey.equals(Object) checks for operand being a TypeCache$LookupKey  [net.bytebuddy.TypeCache$StorageKey] At TypeCache.java:[line 299] EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS
+```
+
+### 6. Relevant Code Snippets
+The issue occurs in the `equals` methods of nested classes `LookupKey` and `StorageKey` within `net.bytebuddy.TypeCache.java`.
+
+**Original Code (prior to fix):**
+```java
+// In TypeCache.java, within LookupKey class
+        @Override
+        public boolean equals(Object other) {
+            return (other instanceof LookupKey && ((LookupKey) other).classLoader == classLoader)
+                    || (other instanceof StorageKey && ((StorageKey) other).get() == classLoader && ((StorageKey) other).hashCode == hashCode);
+        }
+
+// In TypeCache.java, within StorageKey class
+        @Override
+        public boolean equals(Object other) {
+            return (other instanceof LookupKey && ((LookupKey) other).classLoader == get() && ((LookupKey) other).hashCode == hashCode)
+                    || (other instanceof StorageKey && ((StorageKey) other).get() == get());
+        }
+```
+
+### 7. Stack Traces
+The relevant stack trace is the Maven error message indicating the failure of the FindBugs plugin, as provided in the "Observed Behavior" section.
+
+### 8. Patches / Suggested Fixes
+The provided code diff includes a patch that suppresses the `EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS` FindBugs warning by adding the `@SuppressFBWarnings` annotation to the `equals` methods. The patch also includes a minor reordering of conditions within the `equals` method for `LookupKey` and `StorageKey`.
+
+**Patch:**
+```diff
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/TypeCache.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/TypeCache.java
+@@ -1,5 +1,6 @@
+ package net.bytebuddy;
+ 
++import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+ import net.bytebuddy.utility.CompoundList;
+ 
+ import java.lang.ref.Reference;
+@@ -254,9 +255,10 @@ public class TypeCache<T> extends ReferenceQueue<ClassLoader> {
+         }
+ 
+         @Override
++        @SuppressFBWarnings(value = "EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS", justification = "Cross-comparison is intended")
+         public boolean equals(Object other) {
+             return (other instanceof LookupKey && ((LookupKey) other).classLoader == classLoader)
+-                    || (other instanceof StorageKey && ((StorageKey) other).get() == classLoader && ((StorageKey) other).hashCode == hashCode);\n+                    || (other instanceof StorageKey && ((StorageKey) other).hashCode == hashCode && ((StorageKey) other).get() == classLoader);\n         }\n 
+         @Override
++        @SuppressFBWarnings(value = "EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS", justification = "Cross-comparison is intended")
+         public boolean equals(Object other) {
+-            return (other instanceof LookupKey && ((LookupKey) other).classLoader == get() && ((LookupKey) other).hashCode == hashCode)\n+            return (other instanceof LookupKey && ((LookupKey) other).hashCode == hashCode && ((LookupKey) other).classLoader == get())\n                     || (other instanceof StorageKey && ((StorageKey) other).get() == get());\n         }\n 
+```

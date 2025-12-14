@@ -1,0 +1,109 @@
+## Software Bug Report
+
+**Bug ID:** #20240626-001
+**Status:** New
+**Priority:** High
+**Severity:** Critical (Build Failure)
+
+---
+
+### 1. Issue Summary
+
+The build for the `joyent/java-manta` project on the `headers` branch (commit `be9c5219de8f24d82bba7dcae0fd65598e268aa6`) is failing during the `mvn install` phase. The primary failure observed after initial retries is a compilation error in the `java-manta-it` module, specifically within `MantaHttpHeadersIT.java`, due to the `org.apache.commons.collections4` package not being found. This indicates a failure to resolve and include the `commons-collections4` dependency in the test compilation classpath. The initial build attempt also failed with a network timeout when trying to download `commons-beanutils`, suggesting an underlying network connectivity issue affecting dependency resolution.
+
+---
+
+### 2. Product / Component
+
+*   **Product:** `java-manta`
+*   **Component:** Build System / `java-manta-it` module
+*   **Version:** `be9c5219de8f24d82bba7dcae0fd65598e268aa6` (failed commit SHA)
+
+---
+
+### 3. Environment
+
+*   **Build System:** Travis CI (container-based infrastructure)
+*   **Operating System:** Ubuntu 12.04.5 LTS (Precise)
+*   **Linux Kernel:** 3.13.0-29-generic (initial system info), 3.13.0-40-generic (during Maven execution)
+*   **Java Version:** Oracle JDK 1.8.0_31
+*   **Maven Version:** Apache Maven 3.2.5
+*   **Git Branch:** `headers`
+*   **Repository:** `https://github.com/joyent/java-manta.git`
+
+---
+
+### 4. Steps to Reproduce
+
+1.  Clone the `joyent/java-manta` repository.
+2.  Checkout the commit `be9c5219de8f24d82bba7dcae0fd65598e268aa6`.
+3.  Ensure Java 8 and Maven 3.2.5 are installed.
+4.  Execute the Maven install command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+---
+
+### 5. Expected Behavior
+
+The `mvn install` command should successfully compile all modules, including the test sources for `java-manta-it`, and complete without errors. All declared dependencies, including `org.apache.commons:commons-collections4`, should be resolved and downloaded successfully.
+
+---
+
+### 6. Actual Behavior
+
+The build fails with compilation errors in the `java-manta-it` module.
+
+**Detailed Error Trace:**
+
+*   **First Attempt Failure (Network Issue):**
+    ```
+    [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta: Execution checkstyle of goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check failed: Plugin org.apache.maven.plugins:maven-checkstyle-plugin:2.17 or one of its dependencies could not be resolved: Could not transfer artifact commons-beanutils:commons-beanutils:jar:1.9.2 from/to central (https://repo.maven.apache.org/maven2): Connect to repo.maven.apache.org:443 [repo.maven.apache.org/199.27.76.215] failed: Connection timed out -> [Help 1]
+    ```
+    This indicates a network connectivity issue preventing dependency download from Maven Central.
+
+*   **Subsequent Attempts (Compilation Failure after Retries):**
+    ```
+    [ERROR] COMPILATION ERROR :
+    [ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java:[8,39] package org.apache.commons.collections4 does not exist
+    [ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java:[111,14] cannot find symbol
+      symbol:   variable CollectionUtils
+      location: class com.joyent.manta.client.MantaHttpHeadersIT
+    ... (similar errors for lines 147, 182, 199) ...
+    [ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.3:testCompile (default-testCompile) on project java-manta-it: Compilation failure: Compilation failure:
+    ```
+    This error consistently occurs in the `testCompile` phase of the `java-manta-it` module, indicating that the `org.apache.commons.collections4` library (specifically `CollectionUtils`) is not available on the classpath during test compilation.
+
+---
+
+### 7. Root Cause Analysis
+
+The build log and code diff reveal the following:
+
+1.  **Initial Network Instability:** The very first attempt to run `mvn install` failed due to a `Connection timed out` error when trying to download `commons-beanutils:commons-beanutils:jar:1.9.2` from Maven Central. This strongly suggests a transient network issue on the Travis CI worker.
+
+2.  **Compilation Failure on Retries:** Although the build retried, the subsequent attempts failed with a compilation error in `java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java`. The error messages `package org.apache.commons.collections4 does not exist` and `cannot find symbol variable CollectionUtils` clearly indicate that the `commons-collections4` library was not found during the `testCompile` phase.
+
+3.  **Code Changes Related to `commons-collections4`:**
+    *   **`java-manta-client/pom.xml`:** The `dependency.commons-collections.version` property was *removed* from this module's `pom.xml`.
+    *   **`java-manta-it/pom.xml`:** A new `test` scoped dependency on `org.apache.commons:commons-collections4` was *added* to this module, using the `${dependency.commons-collections.version}` property.
+    *   **`pom.xml` (root project):** The `dependency.commons-collections.version` property was *added* to the root `pom.xml`.
+
+**Conclusion:**
+The code changes correctly introduce `commons-collections4` as a test dependency for the `java-manta-it` module and centralize its version property in the root `pom.xml`. However, the build environment is failing to resolve and download this newly required dependency (and potentially others, as seen with `commons-beanutils`). The compilation error is a direct consequence of the `commons-collections4` JAR not being available on the classpath for the `java-manta-it` module's test compilation. This is most likely due to persistent or recurring network connectivity issues between the Travis CI worker and Maven Central, preventing the necessary artifacts from being downloaded into the local Maven repository.
+
+The `install -DskipTests=true` command skips the *execution* of tests, but not their *compilation*. Therefore, the `commons-collections4` dependency is still required during the `testCompile` phase.
+
+---
+
+### 8. Proposed Solution / Workaround
+
+1.  **Retry the Build:** Given the initial network timeout, a simple retry of the build might resolve the issue if the network problem was transient.
+2.  **Investigate Travis CI Network Stability:** If retries continue to fail with similar dependency resolution errors, investigate the network stability of the Travis CI build environment. This might involve checking Travis CI status pages or logs for known network issues.
+3.  **Maven Mirror Configuration:** If network issues with Maven Central are frequent, consider configuring a Maven mirror in the `.travis.yml` or `settings.xml` to use a more reliable or geographically closer repository.
+4.  **Verify Dependency Scope and Transitivity:** While the current changes seem correct for a `test` scope dependency, a thorough review of the `java-manta-client` module's dependencies should be performed to ensure that removing the `commons-collections.version` property from its `pom.xml` doesn't inadvertently break any *transitive* dependencies for `java-manta-client` itself, although the current error points directly to `java-manta-it`'s explicit test dependency.
+
+---
+
+### 9. Attachments
+
+*   **BUILD LOG:** Provided in the problem description.
+*   **CODE DIFF:** Provided in the problem description.

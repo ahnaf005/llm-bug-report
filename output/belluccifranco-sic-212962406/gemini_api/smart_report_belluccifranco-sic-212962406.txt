@@ -1,0 +1,79 @@
+## Bug Report: Incorrect Factura Type Calculation for Discriminating Entities
+
+### 1. Title
+`FacturaServiceImplTest` fails due to incorrect expected array length for `getTipoFacturaVenta` when both company and client discriminate IVA.
+
+### 2. Steps to Reproduce
+1.  Clone the `sic` repository from `https://github.com/belluccifranco/sic.git`.
+2.  Navigate to the `belluccifranco/sic` directory.
+3.  Checkout the failing commit: `7699514d8732d25f4539ec008738a042ea1e29ae`.
+4.  Execute the Maven test command: `mvn test -B`.
+
+### 3. Triggering Input
+The bug is triggered when running the unit test `shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien` in `sic.service.impl.FacturaServiceImplTest.java`. This test simulates a scenario where both the `empresa` (company) and `cliente` (client) have a `CondicionIVA` (IVA condition) that `discriminaIVA` (discriminates IVA).
+
+Specifically, the `facturaService.getTipoFacturaVenta(empresa, cliente)` method is called with:
+*   `empresa`: An instance where `empresa.getCondicionIVA().isDiscriminaIVA()` returns `true`.
+*   `cliente`: An instance where `cliente.getCondicionIVA().isDiscriminaIVA()` returns `true`.
+
+### 4. Expected Behavior
+When both the company and client discriminate IVA, the `getTipoFacturaVenta` method is expected to return an array containing the following `Factura` types: `{"Factura A", "Factura B", "Factura X", "Factura Y", "Pedido"}`. The expected array length is 5.
+
+### 5. Observed Behavior
+The test `shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien` fails with an `AssertionError`. The `getTipoFacturaVenta` method returns an array with an actual length of 4, which does not match the expected length of 5. This indicates that "Factura B" is unexpectedly excluded from the list of valid `Factura` types under these conditions.
+
+**Error Message:**
+```
+Failed tests:
+  FacturaServiceImplTest.shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien:122 array lengths differed, expected.length=5 actual.length=4
+```
+
+### 6. Relevant Code Snippets
+The relevant code snippet from the test file `sic-api/src/test/java/sic/service/impl/FacturaServiceImplTest.java` that defines the expected behavior is:
+
+```java
+--- a/sic-api/src/test/java/sic/service/impl/FacturaServiceImplTest.java
++++ b/sic-api/src/test/java/sic/service/impl/FacturaServiceImplTest.java
+@@ -117,7 +117,7 @@ public class FacturaServiceImplTest {
+         when(condicionIVAqueDiscrimina.isDiscriminaIVA()).thenReturn(Boolean.TRUE);
+         when(empresa.getCondicionIVA()).thenReturn(condicionIVAqueDiscrimina);
+         when(cliente.getCondicionIVA()).thenReturn(condicionIVAqueDiscrimina);
+-        String[] expResult = {"Factura A", "Factura B", "Factura X", "Factura Y", "Pedido"};
++        String[] expResult = {"Factura A", "Factura X", "Factura Y", "Pedido"};
+         String[] result = facturaService.getTipoFacturaVenta(empresa, cliente);
+         assertArrayEquals(expResult, result);
+     }
+```
+
+### 7. Stack Traces
+```
+Tests run: 32, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.228 sec <<< FAILURE! - in sic.service.impl.FacturaServiceImplTest
+shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien(sic.service.impl.FacturaServiceImplTest)  Time elapsed: 0.009 sec  <<< FAILURE!
+java.lang.AssertionError: array lengths differed, expected.length=5 actual.length=4
+	at org.junit.Assert.fail(Assert.java:88)
+	at org.junit.internal.ComparisonCriteria.assertArraysAreSameLength(ComparisonCriteria.java:76)
+	at org.junit.internal.ComparisonCriteria.arrayEquals(ComparisonCriteria.java:37)
+	at org.junit.Assert.internalArrayEquals(Assert.java:532)
+	at org.junit.Assert.assertArrayEquals(Assert.java:283)
+	at org.junit.Assert.assertArrayEquals(Assert.java:298)
+	at sic.service.impl.FacturaServiceImplTest.shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien(FacturaServiceImplTest.java:122)
+```
+
+### 8. Patches / Suggested Fixes
+The provided code diff indicates a change in the expected behavior within the test itself. The fix involves updating the expected array to reflect the actual (and presumably correct) types of invoices available when both the company and client discriminate IVA.
+
+**Patch:**
+```diff
+--- a/sic-api/src/test/java/sic/service/impl/FacturaServiceImplTest.java
++++ b/sic-api/src/test/java/sic/service/impl/FacturaServiceImplTest.java
+@@ -117,7 +117,7 @@ public class FacturaServiceImplTest {
+         when(condicionIVAqueDiscrimina.isDiscriminaIVA()).thenReturn(Boolean.TRUE);
+         when(empresa.getCondicionIVA()).thenReturn(condicionIVAqueDiscrimina);
+         when(cliente.getCondicionIVA()).thenReturn(condicionIVAqueDiscrimina);
+-        String[] expResult = {"Factura A", "Factura B", "Factura X", "Factura Y", "Pedido"};
++        String[] expResult = {"Factura A", "Factura X", "Factura Y", "Pedido"};
+         String[] result = facturaService.getTipoFacturaVenta(empresa, cliente);
+         assertArrayEquals(expResult, result);
+     }
+```
+This patch removes "Factura B" from the `expResult` array, changing the expected length from 5 to 4. This suggests that "Factura B" should not be an option when both the company and client discriminate IVA, and the original test expectation was incorrect.

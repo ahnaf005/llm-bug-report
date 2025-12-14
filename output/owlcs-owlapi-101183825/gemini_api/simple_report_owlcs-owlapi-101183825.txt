@@ -1,0 +1,80 @@
+## Software Bug Report
+
+**Bug ID:** OWLAPI-BUILD-20160108-001
+**Project:** OWLAPI
+**Version:** 5.0.0-ALPHA-SNAPSHOT
+**Component/Module:** `owlapi-contract` (Tests and Tutorials)
+**Status:** Resolved (by removing the failing test)
+**Severity:** High (Build Failure)
+**Priority:** High (Blocks CI/CD pipeline)
+**Reported By:** AI Debugging Assistant
+**Date:** 2024-06-26
+
+---
+
+### 1. Title
+
+`mvn verify` build fails on `version5` branch due to `TutorialSnippetsTestCase.testModularizationWithAtomicDecomposition` assertion failure.
+
+### 2. Description
+
+The continuous integration build for the `version5` branch of the OWLAPI project failed during the `mvn verify` phase. The failure occurred in the `owlapi-contract` module, specifically within the `TutorialSnippetsTestCase.testModularizationWithAtomicDecomposition` test. The test failed due to an `AssertionError`, indicating a mismatch between the expected and actual sets of axioms returned by the module extraction process.
+
+The provided code diff shows that the failing test method `testModularizationWithAtomicDecomposition` and related `AtomicDecomposition` imports were subsequently removed in the `passed_sha` commit, effectively resolving the build failure by eliminating the problematic test.
+
+### 3. Steps to Reproduce
+
+1.  Clone the `owlcs/owlapi` repository.
+2.  Checkout the commit `c391f19dfc7d99d0ed31b9bfcf2d17bdcdeabd5c` (the `failed_sha`).
+3.  Ensure Java 8 (e.g., `1.8.0_66`) and Maven 3.2.5 are installed.
+4.  Navigate to the `owlcs/owlapi` directory.
+5.  Run the Maven verification command: `mvn verify`
+
+### 4. Expected Behavior
+
+The `mvn verify` command should complete successfully, with all tests passing. Specifically, the `TutorialSnippetsTestCase.testModularizationWithAtomicDecomposition` test should pass, indicating that the module extraction produces the expected set of axioms.
+
+### 5. Actual Behavior
+
+The `mvn verify` command fails in the `owlapi-contract` module. The build log shows an `AssertionError` for `TutorialSnippetsTestCase.testModularizationWithAtomicDecomposition` at line 642. The error message indicates that the actual set of axioms returned by the module extraction contains additional `Declaration` and `AnnotationAssertion` axioms that were not present in the expected set.
+
+**Specific Error from Build Log:**
+
+```
+Failed tests: 
+  TutorialSnippetsTestCase.testModularizationWithAtomicDecomposition:642 expected:<[FunctionalDataProperty(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking>), DataPropertyRange(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking> xsd:boolean), DisjointClasses(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Marsupials> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Person>), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal> ObjectExactCardinality(1 <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> owl:Thing)), FunctionalObjectProperty(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender>), ClassAssertion(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Degree> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#PhD>), ClassAssertion(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Degree> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#BA>), ClassAssertion(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Degree> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#BS>), ClassAssertion(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Degree> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#MA>), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal> ObjectMinCardinality(1 <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasHabitat> owl:Thing)), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Quokka> DataHasValue(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking> "true"^^xsd:boolean)), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Quokka> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Marsupials>), DataPropertyDomain(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Person>), EquivalentClasses(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Male> ObjectHasValue(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#male>) ), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Marsupials> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>), ClassAssertion(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Gender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#male>), ClassAssertion(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Gender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#female>), ObjectPropertyRange(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Gender>), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Person> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>), ObjectPropertyDomain(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasHabitat> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>), ObjectPropertyDomain(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>), EquivalentClasses(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Female> ObjectHasValue(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#female>) ), ObjectPropertyRange(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasHabitat> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Habitat>)]> but was:<[FunctionalDataProperty(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking>), DataPropertyRange(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking> xsd:boolean), Declaration(ObjectProperty(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender>)), Declaration(Class(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Marsupials>)), AnnotationAssertion(owl:versionInfo <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal> "1.1"^^xsd:string), Declaration(Class(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>)), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal> ObjectExactCardinality(1 <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> owl:Thing)), EquivalentClasses(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Female> ObjectHasValue(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#female>) ), FunctionalObjectProperty(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender>), DisjointClasses(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Marsupials> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Person>), Declaration(Class(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Person>)), AnnotationAssertion(rdfs:seeAlso <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal> "Male"^^xsd:string), Declaration(Class(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Female>)), EquivalentClasses(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Male> ObjectHasValue(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#male>) ), Declaration(DataProperty(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking>)), ObjectPropertyDomain(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasHabitat> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Marsupials> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>), Declaration(Class(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Male>)), Declaration(Class(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Quokka>)), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Quokka> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Marsupials>), DataPropertyDomain(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Person>), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Quokka> DataHasValue(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking> "true"^^xsd:boolean)), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Person> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>), Declaration(ObjectProperty(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasHabitat>)), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal> ObjectMinCardinality(1 <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasHabitat> owl:Thing)), ObjectPropertyDomain(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>)]>
+```
+
+### 6. Technical Details
+
+*   **Operating System:** Ubuntu 12.04.5 LTS (precise)
+*   **Java Version:** Oracle JDK 1.8.0_66
+*   **Maven Version:** Apache Maven 3.2.5
+*   **Git Commit (Failing):** `c391f19dfc7d99d0ed31b9bfcf2d17bdcdeabd5c`
+*   **Git Commit (Fixing):** `eaa87425c799c9e2f310b0d7531da2cf8b0addfb`
+*   **Failing Test File:** `contract/src/test/java/uk/ac/manchester/owl/owlapi/tutorialowled2011/TutorialSnippetsTestCase.java`
+*   **Failing Test Method:** `testModularizationWithAtomicDecomposition()`
+
+The `testModularizationWithAtomicDecomposition` method was designed to extract a module for "Quokka" and its subclasses from the Koala ontology using `AtomicDecompositionImpl`. The assertion failure indicates that the `getADModule` method (which uses `AtomicDecompositionImpl`) produced a different set of axioms than expected, specifically including additional `Declaration` and `AnnotationAssertion` axioms.
+
+### 7. Analysis of the Fix (from Code Diff)
+
+The provided code diff (`owlcs-owlapi-101183825`) addresses this build failure by:
+
+*   **Removing the failing test:** The entire `testModularizationWithAtomicDecomposition()` method and its associated helper method `getADModule()` were removed from `TutorialSnippetsTestCase.java`.
+*   **Removing unused imports:** Imports for `AtomicDecomposition` and `AtomicDecompositionImpl` were also removed.
+*   **Removing an example:** The `shouldExtractADModules()` example method was removed from `org/semanticweb/owlapi/examples/Examples.java`.
+
+This indicates that the `AtomicDecomposition` based module extraction was either not working as intended, or the test case was incorrect, or the functionality itself is no longer supported or desired in this context. The immediate effect is that the build now passes because the problematic test has been eliminated.
+
+### 8. Additional Observations / Warnings
+
+During the build, several warnings were noted, though they did not directly cause the build failure:
+
+*   **Java 8 `MaxPermSize` warning:** `Java HotSpot(TM) 64-Bit Server VM warning: ignoring option MaxPermSize=192m; support was removed in 8.0`. This is expected behavior for Java 8 and is harmless.
+*   **Unchecked/Deprecated Operations:** Multiple modules (`owlapi-api`, `owlapi-impl`, `owlapi-parsers`, `owlapi-oboformat`, `owlapi-compatibility`, `owlapi-contract`) show warnings about "unchecked or unsafe operations" and "deprecated API usage". These indicate areas for code quality improvement.
+*   **Maven Shade Plugin Class Overlaps:** The `maven-shade-plugin` reported numerous overlapping classes across different OWLAPI modules (e.g., `owlapi-distribution` overlapping with `owlapi-impl`, `owlapi-rio`, `owlapi-tools`, etc.). While often harmless, significant overlaps can sometimes lead to unexpected runtime behavior if different versions of the same class are present.
+*   **Runtime Warnings during `owlapi-impl` tests:** `OWLOntologyManagerImpl - Runtime Warning: Parsers should load imported ontologies using the makeImportLoadRequest method.` This suggests a potential suboptimal parsing strategy in some parts of the implementation.
+*   **OBOFormatParser Error during `owlapi-contract` tests:** `OBOFormatParser - Error: Instance frames are not supported yet. Parsing stopped at line: 425`. This indicates a limitation or bug in the OBO format parser when encountering instance frames, which might affect certain OBO-related tests or functionalities.
+
+---

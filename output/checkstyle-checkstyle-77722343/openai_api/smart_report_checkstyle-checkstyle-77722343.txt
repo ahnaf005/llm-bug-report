@@ -1,0 +1,66 @@
+Title
+- Build failure: Checkstyle flags "Redundant 'public' modifier" in EqualsAvoidNullCheck.FieldFrame constructor
+
+Steps to Reproduce
+1. Checkout the failing commit (sha da6ebe6de41b7a5afc6f6746ff0c2382c2a4be0f) in the checkstyle repository.
+2. From repository root run the CI build command used in the log:
+   mvn clean verify -DskipTests -DskipITs -Dpmd.skip=true -Dfindbugs.skip=true -Dcobertura.skip=true
+3. Let the build run until the antrun/Checkstyle phase (ant-phase-verify). Observe the Checkstyle step and the build failure.
+
+Triggering Input
+- File: src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java
+- The constructor declaration for the nested type FieldFrame declared with an explicit public modifier:
+  public FieldFrame(FieldFrame parent) { ... }
+
+(Expected) Behavior
+- Checkstyle should find no violations for constructor visibility in EqualsAvoidNullCheck.FieldFrame.
+- The Maven build (ant-phase-verify) should complete successfully (no Checkstyle errors), producing a successful build.
+
+Observed Behavior
+- The build fails during the Checkstyle run with one error reported:
+  [checkstyle] /home/travis/build/checkstyle/checkstyle/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java:489:9: Redundant 'public' modifier.
+- Maven aborts with:
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-antrun-plugin:1.8:run (ant-phase-verify) on project checkstyle: An Ant BuildException has occured...
+  [ERROR] /home/.../config/ant-phase-verify.xml:50: Checkstyle failed: Got 1 errors and 0 warnings.
+
+Relevant Stack Trace / Build Output (excerpts)
+- Checkstyle error:
+  [checkstyle] /home/travis/build/checkstyle/checkstyle/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java:489:9: Redundant 'public' modifier.
+- Maven error chain:
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-antrun-plugin:1.8:run (ant-phase-verify) on project checkstyle: An Ant BuildException has occured: The following error occurred while executing this line:
+  [ERROR] /home/travis/build/checkstyle/checkstyle/config/ant-phase-verify.xml:50: Checkstyle failed: Got 1 errors and 0 warnings.
+  [ERROR] around Ant part ...<ant antfile="config/ant-phase-verify.xml"/>... @ 7:47 in /home/travis/build/checkstyle/checkstyle/target/antrun/build-main.xml
+  [ERROR] -> [Help 1]
+
+Relevant Code Snippets (from diff)
+- Patch hunk that addresses this exact issue (shown in unified diff form):
+
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java
+@@ -486,7 +486,7 @@ public class EqualsAvoidNullCheck extends Check {
+          * Creates new frame.
+          * @param parent parent frame.
+          */
+-        public FieldFrame(FieldFrame parent) {
++        FieldFrame(FieldFrame parent) {
+             this.parent = parent;
+         }
+
+- Old (problematic) line:
+  public FieldFrame(FieldFrame parent) {
+
+- New (fixed) line:
+  FieldFrame(FieldFrame parent)
+
+Patches / Suggested Fixes
+- The provided patch (in the diff) already contains the suggested fix: remove the redundant public modifier from the FieldFrame constructor, making it package-private. Apply and commit the change shown above.
+- After applying the change, re-run the build:
+  mvn clean verify -DskipTests -DskipITs -Dpmd.skip=true -Dfindbugs.skip=true -Dcobertura.skip=true
+  or run only the Checkstyle target to confirm:
+  mvn antrun:run -Dantfile=config/ant-phase-verify.xml (or equivalent)
+
+Additional Recommendations / Notes
+- The Checkstyle error indicates that project Checkstyle rules consider the explicit 'public' modifier redundant for this nested constructor (probably because the nested class is not public or the style rule expects package-private). Confirm the intended accessibility for FieldFrame; if it must be accessible outside the package, adjust class-level visibility accordingly.
+- Run a quick grep to find other constructors with the same redundant 'public' modifier (to prevent future build failures):
+  git grep -n "public [A-Za-z0-9_]*Frame(" src/main/java | less
+- If multiple similar violations are intended to be allowed, update project Checkstyle configuration; otherwise keep removing redundant 'public' modifiers as required by style rules.

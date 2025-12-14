@@ -1,0 +1,93 @@
+## Software Bug Report
+
+**Bug Title:** Maven Surefire Plugin Test Failures and NullPointerExceptions in `VersionedClientlibsTransformerFactoryTest` due to `HtmlLibrary.getInputStream()` API Change
+
+**Bug ID:** [To be assigned]
+
+**Project:** ACS AEM Commons
+
+**Component/Module:** `acs-aem-commons-bundle` (specifically `com.adobe.acs.commons.rewriter.impl.VersionedClientlibsTransformerFactoryTest`)
+
+**Version:** `3.13.1-SNAPSHOT` (Failing build) vs `3.13.0` (Previous baseline)
+
+**Environment:**
+*   **CI System:** Travis CI
+*   **Build Language:** Java
+*   **JDK:** Oracle JDK 8 (1.8.0_151)
+*   **Maven:** Apache Maven 3.5.2
+*   **Operating System:** Ubuntu 14.04.5 LTS (Trusty)
+
+**Severity:** High (Build Failure)
+**Priority:** High (Blocks CI/CD, indicates potential runtime issues)
+
+---
+
+**Description:**
+The CI build for the `acs-aem-commons` project is failing during the `verify` phase, specifically during the execution of unit tests by the `maven-surefire-plugin` for the `acs-aem-commons-bundle` module. All 10 test failures and 3 test errors originate from the `com.adobe.acs.commons.rewriter.impl.VersionedClientlibsTransformerFactoryTest` class.
+
+The failures are `org.junit.ComparisonFailure` indicating that the expected MD5 hash or its placeholder (`[fcadcfb01c1367e9e5b7f2e6d455ba8f.]` or `[ACSHASHfcadcfb01c1367e9e5b7f2e6d455ba8f.]`) is missing from the generated clientlib paths, resulting in an empty string `[]` where the hash should be.
+
+The errors are `java.lang.NullPointerException` occurring in methods like `doFilter_notFoundInCache_md5Match`, `doFilter_notFoundInCacheWithDot_md5MisMatch`, and `doFilter_notFoundInCache_md5MisMatch` within the same test class.
+
+**Steps to Reproduce:**
+1.  Clone the `Adobe-Consulting-Services/acs-aem-commons` repository at commit `4818d0e3ced9ea465d1feb99a61952ca8ae7b7ab` (or the `FETCH_HEAD` of pull request `1209`).
+2.  Execute the Maven verify command: `mvn verify -B`
+
+**Expected Behavior:**
+All unit tests, including those in `VersionedClientlibsTransformerFactoryTest`, should pass successfully, and the build should complete without errors.
+
+**Actual Behavior:**
+The build fails with 10 `ComparisonFailure` and 3 `NullPointerException` in `VersionedClientlibsTransformerFactoryTest`.
+
+**Error Messages / Stack Traces (from Build Log):**
+
+```
+[ERROR] Failures: 
+[ERROR]   VersionedClientlibsTransformerFactoryTest.testCSSClientLibrary:197 expected:<...etc/clientlibs/test.[fcadcfb01c1367e9e5b7f2e6d455ba8f.]css> but was:<...etc/clientlibs/test.[]css>
+[ERROR]   VersionedClientlibsTransformerFactoryTest.testCSSClientLibraryWithDot:240 expected:<...clientlibs/test.foo.[fcadcfb01c1367e9e5b7f2e6d455ba8f.]css> but was:<...clientlibs/test.foo.[]css>
+[ERROR]   VersionedClientlibsTransformerFactoryTest.testCSSClientLibraryWithMd5Enforce:218 expected:<...etc/clientlibs/test.[ACSHASHfcadcfb01c1367e9e5b7f2e6d455ba8f.]css> but was:<...etc/clientlibs/test.[]css>
+[ERROR]   VersionedClientlibsTransformerFactoryTest.testCSSClientLibraryWithRelAttributeValueDiffersFromStylesheet:401 expected:<...etc/clientlibs/test.[fcadcfb01c1367e9e5b7f2e6d455ba8f.]css> but was:<...etc/clientlibs/test.[]css>
+[ERROR]   VersionedClientlibsTransformerFactoryTest.testJavaScriptClientLibrary:300 expected:<...etc/clientlibs/test.[fcadcfb01c1367e9e5b7f2e6d455ba8f.]js> but was:<...etc/clientlibs/test.[]js>
+[ERROR]   VersionedClientlibsTransformerFactoryTest.testJavaScriptClientLibraryWithDot:321 expected:<...clientlibs/test.foo.[fcadcfb01c13621d373cade4e832627b4f6.]js> but was:<...clientlibs/test.foo.[]js>
+[ERROR]   VersionedClientlibsTransformerFactoryTest.testMinifiedCSSClientLibrary:260 expected:<...clientlibs/test.min.[fcadcfb01c1367e9e5b7f2e6d455ba8f.]css> but was:<...clientlibs/test.min.[]css>
+[ERROR]   VersionedClientlibsTransformerFactoryTest.testMinifiedCSSClientLibraryWithEnforceMd5:281 expected:<...clientlibs/test.min.[ACSHASHfcadcfb01c1367e9e5b7f2e6d455ba8f.]css> but was:<...clientlibs/test.min.[]css>
+[ERROR]   VersionedClientlibsTransformerFactoryTest.testMinifiedJavaScriptClientLibrary:361 expected:<...clientlibs/test.min.[fcadcfb01c1367e9e5b7f2e6d455ba8f.]js> but was:<...clientlibs/test.min.[]js>
+[ERROR]   VersionedClientlibsTransformerFactoryTest.testProxiedJavaScriptClientLibrary:340 expected:<...lientlibs/myco/test.[669a712c318596cd7e7520e3e2000cfb.]js> but was:<...lientlibs/myco/test.[]js>
+[ERROR] Errors: 
+[ERROR]   VersionedClientlibsTransformerFactoryTest.doFilter_notFoundInCacheWithDot_md5MisMatch:565 » NullPointer
+[ERROR]   VersionedClientlibsTransformerFactoryTest.doFilter_notFoundInCache_md5Match:537 » NullPointer
+[ERROR]   VersionedClientlibsTransformerFactoryTest.doFilter_notFoundInCache_md5MisMatch:551 » NullPointer
+[INFO] 
+[ERROR] Tests run: 949, Failures: 10, Errors: 3, Skipped: 1
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary:
+[INFO] 
+[INFO] ACS AEM Commons - Reactor Project .................. SUCCESS [  0.384 s]
+[INFO] ACS AEM Commons Bundle ............................. FAILURE [01:21 min]
+[INFO] ACS AEM Commons Twitter Support Bundle ............. SKIPPED
+[INFO] ACS AEM Commons Package ............................ SKIPPED
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+```
+
+**Analysis / Root Cause (Hypothesis):**
+The provided code diff shows changes in `bundle/src/test/java/com/adobe/acs.commons.rewriter.impl.VersionedClientlibsTransformerFactoryTest.java`. Specifically, calls to `when(htmlLibrary.getInputStream()).thenReturn(...)` have been updated to `when(htmlLibrary.getInputStream(false)).thenReturn(...)`.
+
+This indicates a change in the API of `com.adobe.granite.ui.clientlibs.HtmlLibrary`, where the `getInputStream()` method now requires a boolean argument (likely `minify`).
+
+The observed failures and errors suggest a mismatch between how the `HtmlLibrary` is being mocked in the test class and how it's being called in the actual `VersionedClientlibsTransformerFactory` production code.
+1.  **`NullPointerException`:** If the production code is still calling `htmlLibrary.getInputStream()` (without arguments), but the mock is only configured to respond to `htmlLibrary.getInputStream(false)`, then the un-mocked call will return `null`. Subsequent operations on this `null` `InputStream` (e.g., trying to read from it to calculate an MD5 hash) would lead to a `NullPointerException`.
+2.  **`ComparisonFailure`:** If the `InputStream` is `null` or empty due to the mocking issue, the MD5 hash calculation would fail or produce an empty string. This would result in the generated clientlib URL missing the expected hash segment, leading to the `ComparisonFailure` when comparing the actual (missing hash) with the expected (with hash) URL.
+
+**Proposed Solution:**
+1.  **Verify `HtmlLibrary` API:** Confirm the exact API change in the `com.adobe.granite.ui.clientlibs.HtmlLibrary` interface. Determine if the no-argument `getInputStream()` method has been removed, deprecated, or its behavior altered.
+2.  **Update Production Code:** If the `getInputStream()` method without arguments is no longer valid or behaves differently, the `VersionedClientlibsTransformerFactory` (the production code being tested) needs to be updated to use the correct `getInputStream(boolean)` method, passing the appropriate boolean value (likely `false` for raw content, or `true` if minification is desired at that stage).
+3.  **Align Mocks:** Ensure that the mocks in `VersionedClientlibsTransformerFactoryTest` accurately reflect the behavior of the updated `HtmlLibrary` API and the way the production code interacts with it.
+
+This issue likely stems from an underlying dependency update (e.g., AEM/Granite version) that changed the `HtmlLibrary` API, and while the test mocks were partially updated, the production code or the understanding of the API change was not fully aligned.
+
+---
+**Attachments:**
+*   `BUILD LOG` (provided in the prompt)
+*   `CODE DIFF` (provided in the prompt)

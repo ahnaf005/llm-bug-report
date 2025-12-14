@@ -1,0 +1,169 @@
+**Bug Report**
+
+**1. Title:**
+`NullPointerException` in `BinaryMetadataProcessorTest` during `services-camel` module test phase, likely due to corrupted Maven dependencies.
+
+**2. Steps to Reproduce:**
+1.  Clone the repository: `git clone https://github.com/UNC-Libraries/Carolina-Digital-Repository.git`
+2.  Navigate to the repository directory: `cd Carolina-Digital-Repository`
+3.  Ensure Java 8 is active: `jdk_switcher use oraclejdk8`
+4.  Run the Maven install command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+5.  Execute tests for specific modules, including `services-camel`: `mvn test -pl access-common,access,admin,deposit,fcrepo-clients,metadata,persistence,security,solr-ingest,solr-search,sword-server,services-camel`
+
+**3. Triggering Input:**
+The bug is triggered during the execution of unit tests within the `edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest` class. Specifically, the `nonbinaryTest`, `validTest`, and `noLocalBinaryTest` methods are failing.
+
+**4. Expected Behavior:**
+All unit tests, including those in `BinaryMetadataProcessorTest`, should execute successfully without any `NullPointerException` or other errors, leading to a `BUILD SUCCESS` status for the `services-camel` module and the overall build.
+
+**5. Observed Behavior:**
+The build fails during the `test` phase of the `services-camel` module with `java.lang.NullPointerException` errors originating from `edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest`.
+
+Prior to the test execution, the build log shows multiple warnings about invalid POMs and "error in opening zip file" for `com.claymoresystems:puretls:jar:1.1` and `org.globus.jglobus:cog-jglobus:jar:1.8.0` dependencies during compilation of several modules, including `services-camel`. These warnings indicate that critical dependency JARs might be corrupted or improperly downloaded, which is the likely root cause of the subsequent `NullPointerException`s.
+
+**Error Messages:**
+```
+[ERROR] Tests run: 3, Failures: 0, Errors: 3, Skipped: 0, Time elapsed: 0.511 s <<< FAILURE! - in edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest
+[ERROR] nonbinaryTest(edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest)  Time elapsed: 0.499 s  <<< ERROR!
+java.lang.NullPointerException
+	at edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest.nonbinaryTest(BinaryMetadataProcessorTest.java:129)
+
+[ERROR] validTest(edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest)  Time elapsed: 0.001 s  <<< ERROR!
+java.lang.NullPointerException
+	at edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest.validTest(BinaryMetadataProcessorTest.java:102)
+
+[ERROR] noLocalBinaryTest(edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest)  Time elapsed: 0.008 s  <<< ERROR!
+java.lang.NullPointerException
+	at edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest.noLocalBinaryTest(BinaryMetadataProcessorTest.java:149)
+
+[ERROR] Errors:
+[ERROR]   BinaryMetadataProcessorTest.noLocalBinaryTest:149 » NullPointer
+[ERROR]   BinaryMetadataProcessorTest.nonbinaryTest:129 » NullPointer
+[ERROR]   BinaryMetadataProcessorTest.validTest:102 NullPointer
+[INFO] Tests run: 58, Failures: 0, Errors: 3, Skipped: 0
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary:
+...
+[INFO] services-camel ..................................... FAILURE [ 28.403 s]
+...
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.20:test (default-test) on project services-camel: There are test failures.
+```
+
+**Relevant Warnings from Build Log:**
+```
+[WARNING] The POM for com.claymoresystems:puretls:jar:1.1 is invalid, transitive dependencies (if any) will not be available, enable debug logging for more details
+[WARNING] The POM for org.globus.jglobus:cog-jglobus:jar:1.8.0 is invalid, transitive dependencies (if any) will not be available, enable debug logging for more details
+[WARNING] error reading /home/travis/.m2/repository/org/globus/jglobus/cog-jglobus/1.8.0/cog-jglobus-1.8.0.jar; error in opening zip file
+[WARNING] error reading /home/travis/.m2/repository/com/claymoresystems/puretls/1.1/puretls-1.1.jar; error in opening zip file
+```
+
+**6. Relevant Code Snippets:**
+The uploaded file contained a 404 error message instead of a code diff, so no specific code snippets from the changes are available. The stack trace points to `BinaryMetadataProcessorTest.java` at lines 102, 129, and 149.
+
+**7. Stack Traces:**
+```
+java.lang.NullPointerException
+	at edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest.nonbinaryTest(BinaryMetadataProcessorTest.java:129)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.lang.reflect.Method.invoke(Method.java:498)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:50)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:47)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:325)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:78)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:57)
+	at org.junit.runners.ParentRunner$3.run(ParentRunner.java:290)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:71)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:288)
+	at org.junit.runners.ParentRunner.access$000(ParentRunner.java:58)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:268)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:363)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.execute(JUnit4Provider.java:365)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.executeWithRerun(JUnit4Provider.java:272)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.executeTestSet(JUnit4Provider.java:236)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.invoke(JUnit4Provider.java:159)
+	at org.apache.maven.surefire.booter.ForkedBooter.invokeProviderInSameClassLoader(ForkedBooter.java:386)
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:323)
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:143)
+
+java.lang.NullPointerException
+	at edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest.validTest(BinaryMetadataProcessorTest.java:102)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.lang.reflect.Method.invoke(Method.java:498)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:50)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:47)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:325)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:78)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:57)
+	at org.junit.runners.ParentRunner$3.run(ParentRunner.java:290)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:71)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:288)
+	at org.junit.runners.ParentRunner.access$000(ParentRunner.java:58)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:268)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:363)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.execute(JUnit4Provider.java:365)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.executeWithRerun(JUnit4Provider.java:272)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.executeTestSet(JUnit4Provider.java:236)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.invoke(JUnit4Provider.java:159)
+	at org.apache.maven.surefire.booter.ForkedBooter.invokeProviderInSameClassLoader(ForkedBooter.java:386)
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:323)
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:143)
+
+java.lang.NullPointerException
+	at edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest.noLocalBinaryTest(BinaryMetadataProcessorTest.java:149)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.lang.reflect.Method.invoke(Method.java:498)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:50)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:47)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:325)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:78)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:57)
+	at org.junit.runners.ParentRunner$3.run(ParentRunner.java:290)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:71)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:288)
+	at org.junit.runners.ParentRunner.access$000(ParentRunner.java:58)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:268)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:363)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.execute(JUnit4Provider.java:365)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.executeWithRerun(JUnit4Provider.java:272)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.executeTestSet(JUnit4Provider.java:236)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.invoke(JUnit4Provider.java:159)
+	at org.apache.maven.surefire.booter.ForkedBooter.invokeProviderInSameClassLoader(ForkedBooter.java:386)
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:323)
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:143)
+```
+
+**8. Patches / Suggested Fixes:**
+
+Given the "error in opening zip file" warnings for `puretls` and `cog-jglobus` dependencies, the `NullPointerException`s in `BinaryMetadataProcessorTest` are highly likely caused by these corrupted or incomplete JAR files. The tests probably attempt to use classes or resources from these dependencies, which are unavailable at runtime due to the prior download/corruption issues.
+
+**Suggested Fixes:**
+
+1.  **Clear Maven Local Repository:** The most probable solution is to clear the local Maven repository for the affected dependencies and force a re-download.
+    *   Navigate to your local Maven repository (usually `~/.m2/repository`).
+    *   Delete the directories for the problematic dependencies:
+        *   `rm -rf edu/unc/lib/cdr/puretls` (or `com/claymoresystems/puretls`)
+        *   `rm -rf org/globus/jglobus/cog-jglobus`
+    *   Re-run the full Maven build: `mvn clean install` (or `mvn clean install -pl services-camel` if you want to target only the failing module after a full clean).
+
+2.  **Address Maven Plugin Version Warnings:** While not directly causing the NPE, the warnings about missing plugin versions (`maven-failsafe-plugin`, `build-helper-maven-plugin`, `jacoco-maven-plugin`) indicate a less stable build configuration. It is recommended to explicitly define versions for all plugins in the `pom.xml` files to ensure consistent builds.
+
+3.  **Investigate `BinaryMetadataProcessorTest`:** If clearing and re-downloading dependencies does not resolve the issue, a deeper investigation into the `BinaryMetadataProcessorTest` code at lines 102, 129, and 149 would be necessary. Look for any objects that are expected to be initialized but might be `null` under certain conditions, especially if those conditions are related to external dependencies.
+
+4.  **Logback Configuration:** The warnings about `logback-test.xml` occurring multiple times on the classpath should be addressed by consolidating or properly scoping the Logback configuration files to avoid potential logging issues, although this is unlikely to be related to the NPE.

@@ -1,0 +1,125 @@
+Title
+- Unit test failure after bumping Logback jars in LibraryManager (LibTest.testLibs AssertionError)
+
+Steps to Reproduce
+1. Checkout the commit/branch containing the LibraryManager change (SHA f91cc245... as in the build log).
+2. From project root run: mvn -B package --file pom.xml -P skip-online-tests (or simply mvn -Dtest=net.nikr.eve.jeveasset.lib.LibTest test).
+3. Observe test run and look for failures. The LibTest fails during the testLibs assertion.
+
+Triggering Input / Conditions
+- The code change in:
+  src/main/java/net/nikr/eve/jeveasset/LibraryManager.java
+  where the hard-coded logback jar filenames were changed from version 1.3.14 to 1.3.15.
+
+Expected Behavior
+- The test suite should pass (no unit test failures), or explicitly:
+  - If libraries are intentionally upgraded in LibraryManager, the LibTest should either be updated to expect the new filenames or the test should be made resilient to version bumps (e.g., by comparing library base names without versions or by reading expected versions from a single source).
+
+Observed Behavior
+- Build fails with one test failure:
+  - net.nikr.eve.jeveasset.lib.LibTest -> testLibs assertion fails because the test detected logback jars as "added" (1.3.15) and 1.3.14 jars as "removed".
+- From the build log:
+  - The failing test prints:
+    ---Libs added---
+    logback-core-1.3.15.jar
+    logback-classic-1.3.15.jar
+    ---Libs removed---
+    logback-core-1.3.14.jar
+    logback-classic-1.3.14.jar
+  - The failure is an AssertionError originating at net.nikr.eve.jeveasset.lib.LibTest.testLibs(LibTest.java:78).
+
+Relevant Build Log Stack Trace (excerpt)
+- Test failure summary:
+  [ERROR]   LibTest.test:41->testLibs:78 
+  ---Libs added---
+  logback-core-1.3.15.jar
+  logback-classic-1.3.15.jar
+  ---Libs removed---
+  logback-core-1.3.14.jar
+  logback-classic-1.3.14.jar
+
+- AssertionTrace (from log):
+  java.lang.AssertionError:
+    at org.junit.Assert.fail(Assert.java:89)
+    at org.junit.Assert.assertTrue(Assert.java:42)
+    at org.junit.Assert.assertFalse(Assert.java:65)
+    at net.nikr.eve.jeveasset.lib.LibTest.testLibs(LibTest.java:78)
+    at net.nikr.eve.jeveasset.lib.LibTest.test(LibTest.java:41)
+    ... (JUnit/Surefire frames omitted)
+
+- Other related context:
+  [INFO] Tests run: 328, Failures: 1, Errors: 0, Skipped: 0
+  [INFO] BUILD FAILURE
+  [ERROR] Failed to execute goal ... maven-surefire-plugin:2.22.2:test (default-test) ... There are test failures.
+
+Relevant Code Snippets (from code diff)
+- The change in LibraryManager that triggers the test difference:
+
+--- a/src/main/java/net/nikr/eve/jeveasset/LibraryManager.java
++++ b/src/main/java/net/nikr/eve/jeveasset/LibraryManager.java
+@@ -125,9 +125,9 @@ public class LibraryManager {
+         files.add("slf4j-api-2.0.16.jar");
+         files.add("jul-to-slf4j-2.0.16.jar");
+         files.add("jcl-over-slf4j-2.0.16.jar");
+-        files.add("logback-core-1.3.14.jar");
++        files.add("logback-core-1.3.15.jar");
+         files.add("log4j-over-slf4j-2.0.16.jar");
+-        files.add("logback-classic-1.3.14.jar");
++        files.add("logback-classic-1.3.15.jar");
+         //Native Mac GUI integration
+         files.add("jsvg-1.4.0.jar");
+         files.add("flatlaf-extras-3.4.1.jar");
+
+Patches / Suggested Fixes
+1. If the version bump to 1.3.15 is intentional (recommended):
+   - Update the test expectations (net.nikr.eve.jeveasset.lib.LibTest) to expect the new filenames.
+   - Better: make the test resilient to version changes. Suggested approaches:
+     a) Compare library names without version suffix (e.g., startsWith("logback-core-") instead of exact match).
+     b) Read version numbers from a single source (pom.xml property, a version constant or a libraries.properties file) so both LibraryManager and tests use the same canonical version.
+     c) If libraries are managed via Maven dependencies, avoid hard-coding jar names in LibraryManager; derive names programmatically from the classpath or from dependency metadata.
+
+   Example test fix (concept):
+   - Replace exact equality assertions with checks that confirm:
+     - logback-core-*.jar and logback-classic-*.jar are present (pattern match), or
+     - That only the expected library families changed (no unexpected families added/removed).
+
+2. If the version bump was accidental:
+   - Revert LibraryManager to the previous filenames (1.3.14) so tests remain satisfied:
+     files.add("logback-core-1.3.14.jar");
+     files.add("logback-classic-1.3.14.jar");
+
+3. Long-term improvement (recommended):
+   - Centralize third-party library version declarations (pom properties or a single config), and have LibraryManager reference those properties. That avoids mismatches when dependencies are updated in pom.xml.
+   - Example: in pom.xml define <logback.version>1.3.15</logback.version>, then read that from code (or generate LibraryManager during build) or assert tests against the same property.
+
+Minimal Example Patch (test-tolerant approach)
+- Modify LibTest.testLibs to allow version changes:
+
+Old (pseudo)
+  assertFalse("unexpected change", added.contains("logback-core-1.3.15.jar"));
+
+New (pseudo)
+  assertFalse("Unexpected new library families", added.stream()
+      .anyMatch(n -> !(n.startsWith("logback-core-") || n.startsWith("logback-classic-") ? someOtherAllowedFamilies... : false)));
+
+Or assert equality on base names (without version suffix), or match with regex "logback-(core|classic)-\\d+\\.\\d+\\.\\d+\\.jar".
+
+Why this happened
+- LibraryManager was updated to list Logback jars with version 1.3.15. The existing unit test (LibTest.testLibs) verifies exact filenames and therefore sees the change as removing 1.3.14 and adding 1.3.15 jars, causing an assertion failure. The change itself is small and likely intentional (bumping Logback), but tests were not updated to accept this bump.
+
+Suggested next steps
+1. Confirm whether the version bump is intended:
+   - If yes: update LibTest to accept the new filenames or make the test version-resilient.
+   - If no: revert the LibraryManager change.
+
+2. Consider refactoring how library filenames/versions are managed:
+   - Use a single source of truth (pom property or config file).
+   - Avoid hard-coded filenames in LibraryManager; derive names automatically where possible.
+
+3. Rerun the build/tests after making changes:
+   - mvn -Dtest=net.nikr.eve.jeveasset.lib.LibTest test
+   - or full: mvn -B package --file pom.xml -P skip-online-tests
+
+If you want, I can:
+- Propose an exact patch for LibTest to make it version-tolerant, or
+- Prepare a patch that centralizes the logback version into pom.xml and modifies LibraryManager to use that value (plus a corresponding test change).

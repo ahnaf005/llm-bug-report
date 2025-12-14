@@ -1,0 +1,135 @@
+## Bug Report: NameError: 'Optional' not defined during pytest collection
+
+### 1. Title
+`NameError: name 'Optional' is not defined` during pytest collection due to missing `typing.Optional` import.
+
+### 2. Steps to Reproduce
+1.  Checkout the repository at commit `92b93ebfcc753030479e1305fd138cc9dea405ce` (the state before the provided patch).
+2.  Ensure Python 3.10.11 (or similar version) is installed and active.
+3.  Install project dependencies:
+    ```bash
+    pip install -r requirements.txt -r requirements-dev.txt
+    ```
+4.  Run the pytest suite:
+    ```bash
+    pytest -W error
+    ```
+
+### 3. Triggering Input
+The `pytest -W error` command triggers the test collection process. The bug is caused by the Python interpreter attempting to resolve the type hint `Optional` in `riscemu/types/binary_data_memory_section.py` without `Optional` being imported from the `typing` module.
+
+### 4. Expected Behavior
+Pytest should successfully collect all tests and proceed to execute them. There should be no `NameError` during the import phase of the modules.
+
+### 5. Observed Behavior
+Pytest fails during the test collection phase with a `NameError: name 'Optional' is not defined`. This error occurs when importing modules that depend on `riscemu/types/binary_data_memory_section.py`, specifically at line 19 within the `BinaryDataMemorySection` class definition.
+
+**Error Message Summary:**
+```
+==================================== ERRORS ====================================
+____________________ ERROR collecting test/test_helpers.py _____________________
+E   NameError: name 'Optional' is not defined
+____________________ ERROR collecting test/test_integers.py ____________________
+E   NameError: name 'Optional' is not defined
+______________________ ERROR collecting test/test_isa.py _______________________
+E   NameError: name 'Optional' is not defined
+___________________ ERROR collecting test/test_tokenizer.py ____________________
+E   NameError: name 'Optional' is not defined
+!!!!!!!!!!!!!!!!!!! Interrupted: 4 errors during collection !!!!!!!!!!!!!!!!!!!!
+============================== 4 errors in 0.26s ===============================
+```
+
+### 6. Relevant Code Snippets
+The issue is in `riscemu/types/binary_data_memory_section.py` at line 19, where `Optional` is used as a type hint without being imported.
+
+**riscemu/types/binary_data_memory_section.py (before fix):**
+```python
+# ... other imports
+from . import (
+    MemorySection,
+    InstructionContext,
+    MemoryFlags,
+    SectionType,
+)
+
+class BinaryDataMemorySection(MemorySection):
+    """
+    A memory section that holds binary data.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        base_address: int,
+        size: int,
+        context: InstructionContext,
+        owner: str = "root",
+        flags: Optional[MemoryFlags] = None,  # <-- Error occurs here
+        section_type: SectionType = SectionType.DATA,
+    ):
+        super().__init__(name, base_address, size, context, owner, section_type)
+        self.flags = flags if flags is not None else MemoryFlags.RW
+        self.data = bytearray(size)
+```
+
+### 7. Stack Traces
+```
+2023-05-05T15:32:12.5578542Z ____________________ ERROR collecting test/test_helpers.py _____________________
+2023-05-05T15:32:12.5578982Z /opt/hostedtoolcache/Python/3.10.11/x64/lib/python3.10/importlib/__init__.py:126: in import_module
+2023-05-05T15:32:12.5579415Z     return _bootstrap._gcd_import(name[level:], package, level)
+2023-05-05T15:32:12.5579770Z <frozen importlib._bootstrap>:1050: in _gcd_import
+2023-05-05T15:32:12.5580040Z     ???
+2023-05-05T15:32:12.5580299Z <frozen importlib._bootstrap>:1027: in _find_and_load
+2023-05-05T15:32:12.5580567Z     ???
+2023-05-05T15:32:12.5580850Z <frozen importlib._bootstrap>:992: in _find_and_load_unlocked
+2023-05-05T15:32:12.5581115Z     ???
+2023-05-05T15:32:12.5581408Z <frozen importlib._bootstrap>:241: in _call_with_frames_removed
+2023-05-05T15:32:12.5581686Z     ???
+2023-05-05T15:32:12.5581936Z <frozen importlib._bootstrap>:1050: in _gcd_import
+2023-05-05T15:32:12.5582198Z     ???
+2023-05-05T15:32:12.5582463Z <frozen importlib._bootstrap>:1027: in _find_and_load
+2023-05-05T15:32:12.5582716Z     ???
+2023-05-05T15:32:12.5582999Z <frozen importlib._bootstrap>:1006: in _find_and_load_unlocked
+2023-05-05T15:32:12.5583273Z     ???
+2023-05-05T15:32:12.5583528Z <frozen importlib._bootstrap>:688: in _load_unlocked
+2023-05-05T15:32:12.5583799Z     ???
+2023-05-05T15:32:12.5584077Z <frozen importlib._bootstrap_external>:883: in exec_module
+2023-05-05T15:32:12.5584352Z     ???
+2023-05-05T15:32:12.5584622Z <frozen importlib._bootstrap>:241: in _call_with_frames_removed
+2023-05-05T15:32:12.5584896Z     ???
+2023-05-05T15:32:12.5585123Z test/__init__.py:1: in <module>
+2023-05-05T15:32:12.5585386Z     from .test_tokenizer import *
+2023-05-05T15:32:12.5585700Z <frozen importlib._bootstrap>:1027: in _find_and_load
+2023-05-05T15:32:12.5585974Z     ???
+2023-05-05T15:32:12.5586242Z <frozen importlib._bootstrap>:1006: in _find_and_load_unlocked
+2023-05-05T15:32:12.5586517Z     ???
+2023-05-05T15:32:12.5586785Z <frozen importlib._bootstrap>:688: in _load_unlocked
+2023-05-05T15:32:12.5587035Z     ???
+2023-05-05T15:32:12.5587674Z /opt/hostedtoolcache/Python/3.10.11/x64/lib/python3.10/site-packages/_pytest/assertion/rewrite.py:172: in exec_module
+2023-05-05T15:32:12.5588069Z     exec(co, module.__dict__)
+2023-05-05T15:32:12.5588638Z test/test_tokenizer.py:3: in <module>
+2023-05-05T15:32:12.5588939Z     from riscemu.tokenizer import (
+2023-05-05T15:32:12.5589229Z riscemu/__init__.py:11: in <module>
+2023-05-05T15:32:12.5589516Z     from .types.exceptions import (
+2023-05-05T15:32:12.5589799Z riscemu/types/__init__.py:24: in <module>
+2023-05-05T15:32:12.5590160Z     from .binary_data_memory_section import BinaryDataMemorySection
+2023-05-05T15:32:12.5590605Z riscemu/types/binary_data_memory_section.py:11: in <module>
+2023-05-05T15:32:12.5591167Z     class BinaryDataMemorySection(MemorySection):
+2023-05-05T15:32:12.5591587Z riscemu/types/binary_data_memory_section.py:19: in BinaryDataMemorySection
+2023-05-05T15:32:12.5591960Z     flags: Optional[MemoryFlags] = None,
+2023-05-05T15:32:12.5592345Z E   NameError: name 'Optional' is not defined
+```
+
+### 8. Patches / Suggested Fixes
+The provided code diff already includes the necessary fix: importing `Optional` from the `typing` module in `riscemu/types/binary_data_memory_section.py`.
+
+**Patch from the diff:**
+```diff
+--- a/riscemu/types/binary_data_memory_section.py
++++ b/riscemu/types/binary_data_memory_section.py
+@@ -1,3 +1,4 @@
++from typing import Optional
+ from . import (
+     MemorySection,
+     InstructionContext,
+```

@@ -1,0 +1,97 @@
+Title
+- Unit test failure in ItemDocumentBuilderTest.testChangeOfSubjectId after subject ID change (type mismatch between expected label and actual)
+
+Summary
+- The build fails during the unit test phase with a single failing test:
+  org.wikidata.wdtk.datamodel.helpers.ItemDocumentBuilderTest.testChangeOfSubjectId
+- Failure message: expected:<"pleutre" (fr)> but was:<pleutre>
+- Cause: the test asserts equality between a MonolingualTextValue (with language tag) and a plain String (the label text). The code change in the diff replaces an assertion that used the MonolingualTextValue variable with a literal String, but the failing build shows the older assertion was run (mismatch).
+- Result: Maven test phase fails in module wdtk-datamodel, causing overall CI failure.
+
+Environment (from BUILD LOG)
+- OS: Ubuntu 14.04.5 LTS (trusty)
+- Java: Oracle JDK 8u151 (1.8.0_151)
+- Maven: 3.5.2
+- Build command: mvn test jacoco:report
+- Branch / commit (failed): issue-440-change-subject-id / failed_sha 5c17e54be4ffa4a11969d12dc999ff6fd129abab
+- Module failing: wdtk-datamodel
+- Total tests run in failing run: 533; Failures: 1
+
+Failing test details (from BUILD LOG)
+- Test: org.wikidata.wdtk.datamodel.helpers.ItemDocumentBuilderTest.testChangeOfSubjectId
+- Failure message:
+  java.lang.AssertionError: expected:<"pleutre" (fr)> but was:<pleutre>
+  at org.junit.Assert.fail(Assert.java:88)
+  ...
+  at org.wikidata.wdtk.datamodel.helpers.ItemDocumentBuilderTest.testChangeOfSubjectId(ItemDocumentBuilderTest.java:135)
+
+Relevant code change (CODE DIFF)
+- File: wdtk-datamodel/src/test/java/org/wikidata/wdtk/datamodel/helpers/ItemDocumentBuilderTest.java
+- Patch shown:
+  - Original line removed:
+    assertEquals(label, copy.findLabel("fr"));
+  - New line added:
+    assertEquals("pleutre", copy.findLabel("fr"));
+- The change replaces comparing the variable label (presumably a MonolingualTextValue) with the literal String "pleutre".
+
+Detailed analysis / root cause
+- The test compares two different types (MonolingualTextValue vs String) which are not considered equal by assertEquals:
+  - label likely references a MonolingualTextValue instance which prints as: "pleutre" (fr)
+  - copy.findLabel("fr") appears to return a String "pleutre"
+- In the failing build the assertion used label as expected and copy.findLabel("fr") as actual, which produced:
+  expected:<"pleutre" (fr)> but was:<pleutre>
+- This indicates the expected object was a MonolingualTextValue while the actual was a String (so equality fails).
+- The code diff shows a proposed fix that sets expected to the string literal "pleutre". This would make the types match if copy.findLabel("fr") returns a String.
+- Two viable interpretations / fixes:
+  1. If findLabel(String) is intended to return a String (label text), update the test to compare strings (either use label.getText() or literal "pleutre"). The diff's change to assertEquals("pleutre", ...) is acceptable.
+  2. If findLabel(String) is supposed to return a MonolingualTextValue, then the implementation of findLabel should be changed to return that type (or test should adapt to the API). But the test change suggests the API returns String and test previously used incorrect expected type.
+
+Reproduction steps
+1. Checkout the failing commit (failed_sha 5c17e54be4ffa4a11969d12dc999ff6fd129abab) or branch issue-440-change-subject-id.
+2. Run: mvn test jacoco:report
+3. Observe test failure in module wdtk-datamodel (ItemDocumentBuilderTest.testChangeOfSubjectId).
+
+Exact failing location
+- File: wdtk-datamodel/src/test/java/org/wikidata/wdtk/datamodel/helpers/ItemDocumentBuilderTest.java
+- Failure at or near line: 135 (per stack trace)
+
+Suggested fixes
+- Preferred test fix (keeps test robust and avoids hardcoding text):
+  - Replace the assertion with a comparison of the label text:
+    assertEquals(label.getText(), copy.findLabel("fr"));
+  - This ensures both sides are Strings (the MonolingualTextValue's text vs the value returned by findLabel).
+- Simpler / minimal change (as in the patch):
+  - Use the literal expected string:
+    assertEquals("pleutre", copy.findLabel("fr"));
+  - This removes dependency on label variable, but hardcodes expected text and is less robust if initial fixture changes.
+- Alternative (if API shape is wrong):
+  - If copy.findLabel("fr") is expected by design to return MonolingualTextValue, change its implementation to return MonolingualTextValue or add a method findLabelValue that returns the object; then test can keep asserting label equality.
+- Comments to include in PR / commit message:
+  - Explain why the change is required: the test previously compared mismatched types. Clarify what findLabel(String) is expected to return (String or MonolingualTextValue).
+  - Prefer using label.getText() rather than a literal to keep test maintainable.
+
+Severity / Impact
+- Severity: High for CI (build is blocked by unit test failure).
+- Impact: Prevents successful build and integration (unit-test pipeline fails), but does not change production code behavior — it's a test-only mismatch.
+
+Recommended next steps
+1. Update test assertion to compare Strings consistently:
+   - Change to assertEquals(label.getText(), copy.findLabel("fr")); or to assertEquals("pleutre", copy.findLabel("fr")) if literal is acceptable.
+2. Run mvn test locally to validate fix.
+3. If API confusion exists, add or update javadoc for findLabel(String) to make return type explicit (String vs MonolingualTextValue).
+4. Consider adding an extra assertion verifying types, e.g. assertNotNull(copy.findLabel("fr")), and maybe assertTrue(copy.findLabel("fr") instanceof String) if type expectations matter.
+5. Add a short unit test comment explaining rationale.
+
+Attachments / Important excerpts
+- Build failure excerpt:
+  Failed test:
+  org.wikidata.wdtk.datamodel.helpers.ItemDocumentBuilderTest.testChangeOfSubjectId
+  expected:<"pleutre" (fr)> but was:<pleutre>
+  at org.wikidata.wdtk.datamodel.helpers.ItemDocumentBuilderTest.testChangeOfSubjectId(ItemDocumentBuilderTest.java:135)
+- Code diff excerpt:
+  - assertEquals(label, copy.findLabel("fr"));
+  + assertEquals("pleutre", copy.findLabel("fr"));
+
+If you want, I can:
+- Propose a one-line patch using label.getText() and run static checks on what to change.
+- Create a suggested commit message for the fix.

@@ -1,0 +1,96 @@
+Title
+- Unit test expectation mismatch: FacturaServiceImplTest expects 5 factura types but service returns 4 when both Empresa and Cliente discriminate IVA
+
+Steps to Reproduce
+1. Clone the repository at the commit that produced the failing build (build log showed failed SHA: 7699514d...).
+2. Run the test suite for the API module:
+   - From project root run: mvn -B test (or mvn -DskipTests=false test)
+3. Observe test failures, specifically the failure in sic.service.impl.FacturaServiceImplTest.shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien
+
+Triggering Input / Conditions
+- Test case sets:
+  - condicionIVAqueDiscrimina.isDiscriminaIVA() => true
+  - empresa.getCondicionIVA() => condicionIVAqueDiscrimina
+  - cliente.getCondicionIVA() => condicionIVAqueDiscrimina
+- Then calls:
+  - facturaService.getTipoFacturaVenta(empresa, cliente)
+- The service returns an array of invoice types. In this scenario the returned array contained 4 elements; the test expected 5.
+
+Expected Behavior
+- The test originally expected the array returned by getTipoFacturaVenta(empresa, cliente) to contain 5 elements:
+  ["Factura A", "Factura B", "Factura X", "Factura Y", "Pedido"]
+- Either:
+  - The service should return those five types when both empresa and cliente discriminate IVA (business requirement), or
+  - If the correct business logic is to return only four types in that condition, the test expectation must be updated to match the intended behavior.
+
+Observed Behavior (from build log)
+- The test failed because actual array length was 4 while expected length was 5. JUnit assertion error:
+  java.lang.AssertionError: array lengths differed, expected.length=5 actual.length=4
+- The failing test:
+  sic.service.impl.FacturaServiceImplTest.shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien
+- Maven surefire failed the build as a result.
+
+Relevant Stack Trace (from BUILD LOG)
+- Key part of the failure stack (excerpt):
+  shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien(sic.service.impl.FacturaServiceImplTest)  Time elapsed: 0.009 sec  <<< FAILURE!
+  java.lang.AssertionError: array lengths differed, expected.length=5 actual.length=4
+      at org.junit.Assert.fail(Assert.java:88)
+      at org.junit.internal.ComparisonCriteria.assertArraysAreSameLength(ComparisonCriteria.java:76)
+      at org.junit.internal.ComparisonCriteria.arrayEquals(ComparisonCriteria.java:37)
+      at org.junit.Assert.internalArrayEquals(Assert.java:532)
+      at org.junit.Assert.assertArrayEquals(Assert.java:283)
+      at org.junit.Assert.assertArrayEquals(Assert.java:298)
+      at sic.service.impl.FacturaServiceImplTest.shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien(FacturaServiceImplTest.java:122)
+
+- Maven error summary:
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.18.1:test (default-test) on project SIC-API: There are test failures.
+
+Relevant Code Snippets (from CODE DIFF)
+- The diff shows the test expectation was changed in the patch. Before (old test) and after (new test) shown — patch reduces expected array length from 5 to 4.
+
+--- a/sic-api/src/test/java/sic/service/impl/FacturaServiceImplTest.java
++++ b/sic-api/src/test/java/sic/service/impl/FacturaServiceImplTest.java
+@@ -117,7 +117,7 @@ public class FacturaServiceImplTest {
+         when(condicionIVAqueDiscrimina.isDiscriminaIVA()).thenReturn(Boolean.TRUE);
+         when(empresa.getCondicionIVA()).thenReturn(condicionIVAqueDiscrimina);
+         when(cliente.getCondicionIVA()).thenReturn(condicionIVAqueDiscrimina);
+-        String[] expResult = {"Factura A", "Factura B", "Factura X", "Factura Y", "Pedido"};
++        String[] expResult = {"Factura A", "Factura X", "Factura Y", "Pedido"};
+         String[] result = facturaService.getTipoFacturaVenta(empresa, cliente);
+         assertArrayEquals(expResult, result);
+     }
+
+- File path: sic-api/src/test/java/sic/service/impl/FacturaServiceImplTest.java
+- Test line referenced by failure: FacturaServiceImplTest.java:122 (assertArrayEquals call).
+
+Patches / Suggested Fixes
+- The provided patch (in the diff) already updates the test expectation by removing "Factura B" from the expected result array, making expected length = 4:
+  String[] expResult = {"Factura A", "Factura X", "Factura Y", "Pedido"};
+
+Suggested actions (choose one depending on intended business logic):
+
+1) If service implementation is correct and business rule is that "Factura B" is NOT available when both empresa and cliente discriminate IVA:
+   - Accept the test change in the diff (the patch) which updates expected values to match the real service output.
+   - Commit the change (already prepared in patch).
+   - Re-run mvn test to ensure no other assertions expect the old array.
+
+2) If the business rule requires "Factura B" to be available in that scenario:
+   - Fix the implementation of facturaService.getTipoFacturaVenta(empresa, cliente) to include "Factura B" when both discriminate IVA.
+   - Add/adjust unit test to assert the correct order and content.
+   - Add an additional test asserting why "Factura B" should be present to avoid regressions.
+
+3) Additional recommendations:
+   - Make the test less fragile by asserting set equality (order-insensitive) if order is not important:
+     - Use java.util.Arrays.equals() only if order matters; otherwise use a collection comparison:
+       assertEquals(new HashSet<>(Arrays.asList(expResult)), new HashSet<>(Arrays.asList(result)));
+   - If order is important, assert exact expected order as done currently.
+   - Add a short comment in the test explaining the business rule being asserted (why "Factura B" should or should not appear) to make intent explicit.
+
+Summary / Root Cause
+- The failing test indicates a mismatch between test expectation and actual service output for the case where both Empresa and Cliente discriminate IVA.
+- The included code patch updates the test to expect four types (removes "Factura B"), so the likely fix is to update the test to match the implemented business logic. If instead the business logic should include "Factura B", adjust the service implementation.
+
+If you want, I can:
+- Run through possible implementations of getTipoFacturaVenta to identify why "Factura B" is omitted,
+- Suggest an exact code change to the service if you confirm the business rule requires "Factura B",
+- Or produce a final patch file (git patch) to apply the test update shown above.

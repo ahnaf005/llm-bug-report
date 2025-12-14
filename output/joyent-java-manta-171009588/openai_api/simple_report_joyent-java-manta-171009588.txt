@@ -1,0 +1,122 @@
+Title
+- Build fails on Checkstyle rule "TodoComment" due to a lingering "TODO:" comment in MantaMultipartManager.java
+
+Summary
+- The CI build (Travis) aborted during the maven install step because Checkstyle reported a TodoComment violation in src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java (line ~641). The change set introduced code around multipart completion and removed/added several files, but a single "TODO:" comment remains and triggers the Checkstyle rule, causing the build to fail before compilation.
+
+Environment
+- Repository: joyent/java-manta
+- Failed commit SHA: 6605599062fa7201ccce660f105d6f1ecfe598bf
+- Branch: multipart
+- CI: Travis (container-based)
+- JDK: Oracle JDK8 (1.8.0_31)
+- Maven: Apache Maven 3.2.5
+- Failure occurs during the maven-checkstyle-plugin:2.17:check goal in the module java-manta-client
+- Checkstyle rule: misc.TodoComment (detects comments matching "TODO:")
+
+How to reproduce
+1. Checkout the failing commit:
+   git clone --branch multipart https://github.com/joyent/java-manta.git
+   cd java-manta
+   git checkout 6605599062fa7201ccce660f105d6f1ecfe598bf
+2. Run:
+   mvn install -DskipTests=true -Dmaven.javadoc.skip=true
+
+Expected result
+- Maven build finishes stage "mvn install" (module java-manta-client passes Checkstyle), then tests run in the later stage (or the build completes successfully for CI).
+
+Actual result (from CI log)
+- Build fails immediately with a Checkstyle error:
+  [ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[641] (misc) TodoComment: Comment matches to-do format 'TODO:'.
+  Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation.
+
+Relevant log excerpt
+- From the build log (trimmed):
+  [ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[641] (misc) TodoComment: Comment matches to-do format 'TODO:'.
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation. -> [Help 1]
+
+Root cause analysis
+- The code diff shows that in MantaMultipartManager.java there was a comment:
+    // TODO: Validate parts and match up etags with path
+  This "TODO:" matches the Checkstyle TodoComment rule which fails the build.
+
+- Checkstyle is executed early in the build lifecycle (validate/check), so the build stops before compilation or running tests.
+
+- The code patch replaced the earlier simplistic listing logic with a new flow that:
+  - collects listing into a Map
+  - iterates over the provided parts stream, builds command text, and accumulates missing parts
+  - throws a MantaMultipartException with contextual values if parts are missing
+  All of this is good logic-wise, but the leftover TODO comment is the immediate cause of the CI failure.
+
+Additional potential issues to be aware of (not directly the current CI failure)
+1. Throwing exceptions from inside Stream.forEach lambda:
+   - The code uses partsStream.sorted().forEach(part -> { ... throw new IllegalArgumentException(...); ... throw new MantaMultipartException(...); });
+   - If MantaMultipartException extends a checked exception type (MantaClientException likely is a checked exception in this project), throwing it directly out of the lambda will not compile unless the exception is unchecked (RuntimeException subclass) or wrapped in an unchecked exception. The new MantaMultipartException declares:
+       public class MantaMultipartException extends MantaClientException
+     If MantaClientException is a checked exception, this will cause a compilation error later (after Checkstyle is fixed). The CI hasn't reached compilation because of Checkstyle, but this should be validated.
+2. Using AtomicInteger count for counting parts works, but prefer using an index-aware operation or collecting to a list and then validating size before processing. Throwing inside forEach can leave streams in ambiguous state (but OK for sequential stream).
+3. The new exception is created and context values set (e.setContextValue(...)) — ensure setContextValue exists and MantaMultipartException inherits proper methods for context (not shown in diff).
+
+Files changed by the patch (high-level)
+- Modified: java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java
+  - Added imports: com.joyent.manta.exception.MantaMultipartException, java.util.concurrent.atomic.AtomicInteger
+  - Reworked complete(uploadId, partsStream) logic; removed previous TODO but an occurrence remains (see failing message). The diff shows the original TODO comment in the file; that comment is the Checkstyle trigger.
+- Modified: java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartUploadPart.java
+  - Removed equals/hashCode methods and an import
+- New file: java-manta-client/src/main/java/com/joyent/manta/exception/MantaMultipartException.java
+  - A new exception type extending MantaClientException
+- Tests and resources updated/renamed (MantaMultipartIT -> MantaMultipartManagerIT) and logback-test.xml updated.
+
+Suggested fixes
+1. Immediate fix (resolve Checkstyle violation)
+   - Remove or reword the offending comment so it does not match the Checkstyle todo pattern "TODO:". For example:
+     Replace:
+       // TODO: Validate parts and match up etags with path
+     With:
+       // NOTE: Validate parts and match up etags with path
+     or:
+       // Validate parts and match up etags with path
+
+   - A stricter fix would be to create a JIRA/GitHub issue and reference it:
+       // TODO (GH-<issue-number>): Validate parts and match up etags with path
+     but Checkstyle may still catch "TODO", depending on rule config. If you need to keep "TODO" text, configure Checkstyle to allow TODO with an issue id or annotate with a suppression (not recommended).
+
+   - Minimal patch example:
+     --- a/java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java
+     +++ b/java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java
+     @@
+-        // TODO: Validate parts and match up etags with path
++        // Validate parts and match up etags with path
+
+2. Address potential checked-exception-in-lambda compile problem
+   - Verify the inheritance of MantaClientException:
+     - If MantaClientException is checked, consider making MantaMultipartException extend RuntimeException (or a Runtime subtype of MantaClientException if available), or wrap and rethrow as an unchecked exception inside the lambda (e.g., throw new RuntimeException(e)).
+   - Alternatively, avoid throwing checked exceptions inside forEach lambda by performing processing in a standard for-loop where checked exceptions can be declared or handled.
+
+3. Run local validation
+   - Before pushing, run:
+     mvn -DskipTests=true -Dmaven.javadoc.skip=true install
+     or more simply:
+     mvn -DskipTests=true -Dcheckstyle.skip=false validate
+   - Ensure Checkstyle and compilation pass.
+
+Concrete recommendations (priority)
+1. Remove/reword the "TODO:" comment to satisfy Checkstyle (high priority).
+2. Re-run maven build to see compilation errors (medium priority).
+3. If compilation fails due to MantaMultipartException being checked, change exception to unchecked or adjust code to avoid throwing it from inside a lambda (medium priority).
+4. Add unit tests or extend existing integration tests to verify complete() behavior when there are missing parts (lower priority, but beneficial).
+
+Patch suggestion (one-line change to resolve Checkstyle immediately)
+- Replace the offending comment line in MantaMultipartManager.java:
+  // TODO: Validate parts and match up etags with path
+  with:
+  // Validate parts and match up etags with path
+
+Notes / Additional context
+- The build failed on checkstyle before reaching compile/test, so fixing the TODO is the necessary first step.
+- Once Checkstyle is satisfied, be prepared to fix any compilation errors that may surface (particularly around exception types thrown from lambdas).
+- The patch introduced other cleanups (removal of equals/hashCode in a part class and a new MantaMultipartException) — review those for behavioural correctness and compatibility with rest of codebase.
+
+If you want, I can:
+- Prepare the exact patch file to remove/replace the TODO comment.
+- Inspect MantaClientException to confirm whether MantaMultipartException needs to be unchecked, and propose the minimal change to make the code compile.

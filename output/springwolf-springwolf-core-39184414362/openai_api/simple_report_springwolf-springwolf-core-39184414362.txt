@@ -1,0 +1,141 @@
+Title: Failing test due to changed class-name formatting for inner classes ($ -> .) — SwaggerSchemaServiceTest assertion mismatch
+
+Summary
+- Build failed: 1 test failed (452 total) — failing test: springwolf-core/src/test/java/io/github/springwolf/core/asyncapi/schemas/SwaggerSchemaServiceTest.java::modelConvertersRefsAreResolved
+- Cause: Code was changed to normalize inner-class names by replacing '$' with '.' when assigning schema.name(...). Tests (or earlier commit) still expect the original $-style inner-class name, causing an assertion mismatch: referencedSchemas contains the class name with '.' but the test asserts presence of the name with '$'.
+- Location of change: SimpleClassModelConverter (and an associated test change intended to reflect the new behavior). The build log shows the test run against a commit where test expectation was still the old ($) format, producing the failure.
+
+Build evidence (selected)
+- Failing test shown in build log:
+  - Test failure summary: SwaggerSchemaServiceTest > modelConvertersRefsAreResolved() FAILED
+  - Assertion failure:
+    - "Expecting actual: { ... } to contain key: "io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest$ModelConverterNativeClass""
+  - Immediately prior in the logs, the actual map's key is printed (implicitly) as the dot-form name; elsewhere in testing output many schemas show dotted names rather than $-style.
+- Build status: :springwolf-core:test FAILED (1 failing test) -> build exit code 1.
+
+Code diff (relevant patches)
+1) SimpleClassModelConverter.java (converter change)
+- Before:
+    schema.name(rawClass.getName());
+- After:
+    schema.name(rawClass.getName().replace("$", "."));
+  (i.e., convert inner-class separators from '$' to '.')
+
+2) SwaggerSchemaServiceTest.java (test update shown in diff — but build log shows test still expecting $)
+- The diff indicates the test was updated to replace "$" with "." when asserting keys:
+    .contains(ModelConverterNativeClass.class.getName().replace("$", "."))
+  However, the failing build shows a commit (failed_sha) where the test still expected the $ format (so the failing job ran against a commit where code changed but test expectation was not yet updated, or the test update and code change were out-of-sync).
+
+Root cause
+- The code now uses a dotted representation for inner classes when naming schemas (rawClass.getName().replace("$", ".")), but at least in the failing commit the tests / assertions still expect the original rawClass.getName() (which includes '$') — producing the assertion failure because the map key contains the dotted name, not the dollar-sign name.
+- In other words, the change of canonicalization/normalization of class names is not reflected everywhere (tests and/or other code), causing mismatch.
+
+Why it fails specifically
+- SwaggerSchemaServiceTest.modelConvertersRefsAreResolved asserts that the referencedSchemas map contains a key equal to the inner-class name including '$'. After the converter change the key uses '.' instead, so the containsKey(...) assertion fails.
+
+Impact
+- Tests that rely on rawClass.getName() for inner classes will fail if they expect the $-notation and the code (or other consumers) now produce dotted names.
+- Consumers or code that depend on schema names being the JVM "binary name" (with $) will be affected; tests/consumers that expect canonical or dotted names will match the new behavior.
+- Severity: Medium — unit/integration tests failing blocks CI and merging; behavior change affects schema identification and possibly backwards compatibility.
+
+Reproduction steps
+1. Check out the commit that changed SimpleClassModelConverter (the failing_sha reported by CI: fb2c402...).
+2. Run tests:
+   ./gradlew -p springwolf-core test
+3. Observe the failing test:
+   - io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest::modelConvertersRefsAreResolved
+   - Assertion error: expected referencedSchemas to contain key with '$' but actual keys use '.'
+
+Expected behavior
+- Either:
+  - Keep schema naming consistent with previous behavior (use rawClass.getName() with '$') and update tests accordingly; OR
+  - Adopt dotted representation consistently across codebase (use canonical/dotted name), update tests and any consumers accordingly.
+- Tests and code must be updated consistently to the same canonicalization approach.
+
+Suggested fixes (options)
+
+Option A — Prefer dotted/canonical name (recommended)
+- Use Class.getCanonicalName() when available, falling back to a safe replacement for anonymous/local cases. This produces the dotted notation for nested classes and is more readable / compatible with JSON object keys.
+
+Implementation suggestion for SimpleClassModelConverter.java:
+- Replace the naive replace("$", ".") with something like:
+    String className = rawClass.getCanonicalName() != null
+            ? rawClass.getCanonicalName()
+            : rawClass.getName().replace("$", ".");
+    schema.name(className);
+
+Rationale:
+- getCanonicalName() returns null for anonymous/local classes; fallback preserves behavior for such rare edge cases.
+- Using canonicalName helps avoid manual manipulation and is semantically correct for nested class dotted naming.
+
+Also update all tests to use canonical names in assertions. Example change in SwaggerSchemaServiceTest:
+- Instead of:
+    ModelConverterNativeClass.class.getName()
+  use:
+    Optional.ofNullable(ModelConverterNativeClass.class.getCanonicalName())
+            .orElse(ModelConverterNativeClass.class.getName().replace("$", "."))
+  or simply:
+    ModelConverterNativeClass.class.getName().replace("$", ".")
+  — whichever is consistent project-wide (diff shows tests were updated to use replace already).
+
+Option B — Keep '$' style (if backward compatibility is required)
+- Revert the converter changes so schema name remains rawClass.getName().
+- Update any code or tests that attempted to expect dotted names back to $ format.
+- This option preserves the JVM/binary-name format.
+
+Option C — Dual-key compatibility (temporary)
+- If external consumers depend on the old form, consider adding both forms where referencedSchemas are stored (not ideal long-term).
+- Example (less recommended): ensure referencedSchemas map stores entries under both keys (rawClass.getName() and dotted name) during a transitional period.
+
+Recommended immediate action
+1. Ensure PR includes BOTH:
+   - the converter change (SimpleClassModelConverter) to a stable canonicalization (prefer getCanonicalName fallback approach), and
+   - all test updates that expect the new dotted names (SwaggerSchemaServiceTest and any other affected tests).
+2. Re-run CI locally and in the pipeline to confirm no tests expect the old $ naming.
+3. If the repository has other places that compute schema names from Class.getName(), audit and normalize them to the canonical approach.
+
+Concrete code snippet (fix using canonical name)
+- In SimpleClassModelConverter:
+    String className = rawClass.getCanonicalName() != null
+            ? rawClass.getCanonicalName()
+            : rawClass.getName().replace("$", ".");
+    schema.name(className);
+
+- In tests (example assert update):
+    String expected = Optional.ofNullable(ModelConverterNativeClass.class.getCanonicalName())
+            .orElse(ModelConverterNativeClass.class.getName().replace("$", "."));
+    assertThat(schema.rootSchema().getReference().getRef()).contains(expected);
+    assertThat(schema.referencedSchemas()).hasSize(1).containsKey(expected);
+    assertThat(schema.referencedSchemas().get(expected)).satisfies(...);
+
+Why prefer getCanonicalName()
+- getCanonicalName() provides natural dotted notation for nested classes and is the canonical human-readable class name. It avoids brittle manual replace operations and is semantically clearer.
+
+Other notes / observations from build log
+- Multiple tests and components produce schema outputs in many places (JSON, XML, YAML). The change to dotted naming appears in many outputs. Tests were updated in the provided code diff (SwaggerSchemaServiceTest), but the failing build indicates these changes were not present in the tested commit (out-of-sync). Ensure the PR includes both test and implementation changes together.
+- The code diff in the provided PR already updates the test to expect replace("$", ".") — so the correct fix is to ensure the CI runs on the updated commit that contains both patches.
+
+Files touched
+- springwolf-add-ons/springwolf-common-model-converters/src/main/java/io/github/springwolf/addons/common_model_converters/converters/SimpleClassModelConverter.java
+- springwolf-core/src/test/java/io/github/springwolf/core/asyncapi/schemas/SwaggerSchemaServiceTest.java
+
+Root-cause summary (one-liner)
+- Schema naming normalization changed from JVM binary name (with $) to dotted form (with .) but some tests/consumers still expect the former, causing assertion failures.
+
+Suggested verification after fix
+- Run unit tests:
+  ./gradlew -p springwolf-core test
+- Inspect referencedSchemas keys in SwaggerSchemaServiceTest to ensure the expected key equals the chosen canonicalization (prefer getCanonicalName/fallback to replace).
+- Optionally add a small test ensuring consistent schema name generation for nested classes:
+  - verify that SimpleClassModelConverter produces the expected schema.name for a static inner class, anonymous class, and local class scenario.
+
+Workaround (if immediate fix in PR is delayed)
+- Temporarily modify failing test to accept either key format:
+    String key1 = ModelConverterNativeClass.class.getName();
+    String key2 = key1.replace("$", ".");
+    assertThat(schema.referencedSchemas()).containsKey(key1).or().containsKey(key2);
+  (Not ideal — better to standardize.)
+
+If you want, I can:
+- Propose the exact patch implementing getCanonicalName() fallback and update all tests to use that approach.
+- Generate the minimal test update patch replacing assertions to use canonicalName or the replace("$", ".") approach consistently.

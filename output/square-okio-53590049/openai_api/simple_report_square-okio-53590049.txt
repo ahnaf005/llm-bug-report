@@ -1,0 +1,145 @@
+Title
+- Build fails with "cannot find symbol: variable INSTANCE" in Buffer.java after refactoring SegmentPool singleton.
+
+Summary
+- Maven compilation fails in module okio with two errors: Buffer.java references SegmentPool.INSTANCE but SegmentPool no longer exposes an INSTANCE field. The failure occurs during compile and stops the build.
+- The provided code diff shows an attempted fix that replaces SegmentPool.INSTANCE.recycle(segment) with SegmentPool.recycle(segment), but the failing build still shows the original references to INSTANCE. This indicates an inconsistent refactor: SegmentPool was changed before all call sites were updated (or the intended fix was not included in the failing commit).
+
+Environment
+- Project: square/okio
+- Commit that failed: ffc28d67927d01c2900f3646710e564fc945cd7a (failed_sha)
+- Build system: Travis CI (container-based)
+- JDK: Oracle JDK8 (1.8.0_31)
+- Maven: 3.2.5
+- OS: Ubuntu 12.04.5 LTS (precise)
+- Command: mvn install -DskipTests=true -Dmaven.javadoc.skip=true
+
+Failure (from build log)
+- Errors (two occurrences):
+  - /home/travis/build/square/okio/okio/src/main/java/okio/Buffer.java:[457,20] cannot find symbol
+    symbol:   variable INSTANCE
+    location: class okio.SegmentPool
+  - /home/travis/build/square/okio/okio/src/main/java/okio/Buffer.java:[513,20] cannot find symbol
+    symbol:   variable INSTANCE
+    location: class okio.SegmentPool
+- Build stops with Maven compilation failure.
+
+Relevant build log excerpt
+- "[ERROR] /home/travis/build/square/okio/okio/src/main/java/okio/Buffer.java:[457,20] cannot find symbol
+   symbol: variable INSTANCE
+   location: class okio.SegmentPool"
+- Same error repeated for line 513.
+
+Code diff (attempted fix)
+- The patch in CODE DIFF shows changes in Buffer.java:
+  - At both places where Buffer previously called:
+      SegmentPool.INSTANCE.recycle(segment);
+    it was changed to:
+      SegmentPool.recycle(segment);
+
+- Diff snippet:
+  --- a/okio/src/main/java/okio/Buffer.java
+  +++ b/okio/src/main/java/okio/Buffer.java
+  @@ -454,7 +454,7 @@
+         head = segment.pop();
+  -        SegmentPool.INSTANCE.recycle(segment);
+  +        SegmentPool.recycle(segment);
+  @@ -510,7 +510,7 @@
+         head = segment.pop();
+  -        SegmentPool.INSTANCE.recycle(segment);
+  +        SegmentPool.recycle(segment);
+
+Diagnosis / Root cause
+- The compilation error indicates Buffer.java expects SegmentPool.INSTANCE but SegmentPool no longer defines that field. This is a typical symptom of a partially-completed refactor where the SegmentPool singleton (INSTANCE) was removed or renamed, and either:
+  1) Buffer.java (and possibly other callers) were not updated in the failing commit, or
+  2) SegmentPool was changed to expose a static recycle(...) method, but Buffer.java in the built commit still references INSTANCE (i.e., the Buffer update was not present in the built SHA).
+- The CODE DIFF suggests the intended correct change is to call a static SegmentPool.recycle(...) method (the patch to Buffer.java). The build failure being present means the built commit did not include this patch (or included a different change: removed INSTANCE but didn't add static recycle, or recycle exists but with incorrect visibility/signature).
+
+Likely scenarios:
+- SegmentPool.INSTANCE was removed in an earlier commit, but Buffer.java was not changed in that commit (compile breaks).
+- Or SegmentPool.recycle(Segment) was added, but not as a public static method; Buffer should call it as SegmentPool.recycle(...) (or via INSTANCE if singleton retained). The CODE DIFF modifies Buffer.java correctly, but the failing commit used a version of Buffer.java still referencing INSTANCE.
+
+Proposed fixes
+(Choose one based on intended design)
+
+1) If the design is to move to static SegmentPool.recycle(...) API (recommended):
+- Ensure SegmentPool has a public static method:
+    public static void recycle(Segment segment) {
+      // existing recycle logic (previously in INSTANCE.recycle)
+    }
+- Update Buffer.java (and other callers) to call SegmentPool.recycle(segment);
+- The CODE DIFF already shows the Buffer.java change; ensure it's present in the same commit as the SegmentPool change.
+- Rebuild: mvn clean install -DskipTests=true -Dmaven.javadoc.skip=true
+
+2) If the design is to keep the singleton INSTANCE:
+- Restore the INSTANCE field in SegmentPool:
+    public static final SegmentPool INSTANCE = new SegmentPool();
+- Or reintroduce a public static accessor:
+    public static SegmentPool getInstance() { return INSTANCE; }
+- Keep existing call sites using INSTANCE (less preferred if refactor intended static API).
+
+3) Quick short-term rollback:
+- Revert the commit that removed SegmentPool.INSTANCE until all call sites are updated in a single atomic change.
+
+Recommended code to apply (if switching to static API)
+- SegmentPool.java
+    public final class SegmentPool {
+      // existing pool fields...
+
+      // Add or ensure this method exists and is public static:
+      public static void recycle(Segment segment) {
+        if (segment.next != null || segment.prev != null) {
+          throw new IllegalArgumentException("Segment is still in use.");
+        }
+        synchronized (SegmentPool.class) {
+          if (SegmentPool.SIZE + segment.size <= MAX_SIZE) {
+             // put segment back in pool
+          }
+        }
+      }
+    }
+
+- Buffer.java (as in CODE DIFF)
+    // replace SegmentPool.INSTANCE.recycle(segment);
+    SegmentPool.recycle(segment);
+
+Verification steps (how to reproduce locally)
+1. Checkout the failing commit: git checkout ffc28d67927d01c2900f3646710e564fc945cd7a
+2. Build: mvn clean install -DskipTests=true -Dmaven.javadoc.skip=true
+3. Observe the same two compilation errors complaining about SegmentPool.INSTANCE.
+4. Apply the patch from the CODE DIFF (or ensure SegmentPool exposes the static recycle method), then rebuild and confirm compilation passes.
+
+CI / regression prevention
+- Ensure that refactors that change public APIs (like removing INSTANCE) update all affected files in the same commit/PR. Atomic changes should be enforced by code review.
+- Add a pre-merge compile check that runs 'mvn -T1C -DskipTests=true install' for PRs to catch compile-time regressions early.
+- Add unit tests that exercise Buffer operations which trigger segment recycling (compilation will catch missing APIs anyway).
+- Consider adding an integration check or a small compile-only gate in CI for the java sources.
+
+Files likely impacted beyond Buffer.java
+- Any other callers of SegmentPool.INSTANCE must be updated.
+- Verify okio package for other references to SegmentPool (grep for "SegmentPool.INSTANCE" or "SegmentPool." usages).
+
+Risk / Impact
+- High: compilation failure blocks all downstream builds and releases.
+- Medium: if only a small set of files changed, the change is low-risk functionally once corrected; but inconsistency across commits causes the build outage.
+- Low runtime risk once compile fixes applied (the change is around internal pooling logic). However, tests should be run to ensure the new static method preserves synchronization and safety invariants.
+
+Suggested next steps (action items)
+1. Identify which commit removed/changed SegmentPool.INSTANCE.
+2. Apply atomic patch that:
+   - Adds public static SegmentPool.recycle(...) (if design requires).
+   - Updates all callers (Buffer.java etc.) to call SegmentPool.recycle(segment).
+   - Or restore INSTANCE if that was accidental.
+3. Run mvn clean install locally and in CI.
+4. Add or update CI checks and request code review for the refactor.
+
+Appendix — exact failing lines (from build log)
+- Buffer.java line ~457: SegmentPool.INSTANCE.recycle(segment);
+- Buffer.java line ~513: SegmentPool.INSTANCE.recycle(segment);
+
+Appendix — CODE DIFF (already correct change for Buffer)
+- Replaced SegmentPool.INSTANCE.recycle(segment); with SegmentPool.recycle(segment); in two places.
+
+If you want, I can:
+- Produce a patch that updates SegmentPool to include the public static recycle(...) method (if you paste SegmentPool.java contents), or
+- Generate a revert patch to restore INSTANCE until the full refactor can be landed atomically.

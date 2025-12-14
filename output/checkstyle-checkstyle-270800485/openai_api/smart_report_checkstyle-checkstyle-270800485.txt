@@ -1,0 +1,214 @@
+1) Title
+TranslationCheckTest.testDefaultTranslationFileIsMissing1 fails (XML log mismatch) after TranslationCheck changes — missing fireFileFinished calls and deleted expected XML resource cause environment-dependent diff and ordering differences
+
+2) Steps to Reproduce
+- Checkout the repository/branch that contains the changes in the provided diff.
+- Build and run tests with Maven (as CI does). Example:
+  - mvn -DskipITs=false clean test
+  - or run the single failing test:
+    mvn -Dtest=com.puppycrawl.tools.checkstyle.checks.TranslationCheckTest#testDefaultTranslationFileIsMissing1 test
+- Observe the unit test failure in TranslationCheckTest.testDefaultTranslationFileIsMissing1.
+
+3) Triggering Input / Conditions
+- Running test suite in CI environment (Travis) using JDK8.
+- The Translation check is configured to require translations (ja, de) and the test uses XMLLogger to generate an XML log and compare it to an expected xml file under test resources.
+- The code changes removed calls to MessageDispatcher.fireFileFinished(...) in TranslationCheck and deleted the test's expected xml file (xml-log.xml) and/or changed the test so output expectations no longer match the runtime output.
+
+4) Expected Behavior
+- The test testDefaultTranslationFileIsMissing1 should pass.
+- The XML log produced at runtime by the XMLLogger should match the expected XML log (or the test should be updated to compare only stable, environment-independent portions).
+- The TranslationCheck should notify the logger that a file is finished so that XMLLogger writes tags in the same order and the generated xml matches expected structure.
+
+5) Observed Behavior
+- The test fails with a JUnit ComparisonFailure. The generated XML differs from expected XML in:
+  - Absolute file path prefixes (expected contains /home/valeria/IdeaProjects/... while actual contains /home/travis/build/checkstyle/checkstyle/...).
+  - Order or placement of file tags and error tags (closing tags / file finished events are in a different position).
+- Build log excerpt (key lines):
+  - ERROR at: TranslationCheckTest.testDefaultTranslationFileIsMissing1
+  - org.junit.ComparisonFailure: Unexpected log output expected: <...>/home/valeria/... but was: <...>/home/travis/build/...
+  - Assertion location: TranslationCheckTest.java:248
+  - Maven build fails: "Failed to execute goal ... maven-surefire-plugin:2.20:test ... There are test failures."
+
+Full failing assertion excerpt (from BUILD LOG):
+- Test failure summary:
+  TranslationCheckTest.testDefaultTranslationFileIsMissing1
+  Time elapsed: 0.035 s  <<< FAILURE!
+  org.junit.ComparisonFailure:
+  Unexpected log output expected:<...>
+  <file name="/home/[valeria/IdeaProjects/checkstyle/.../messages_check_fire_errors.properties">
+  ...
+  </checksty...> but was:<...>
+  <file name="/home/[travis/build/checkstyle/checkstyle/src/test/resources/.../messages_check_fire_errors.properties">
+  ...
+  </checksty...>
+
+Maven summary:
+- [ERROR] Failures: 1
+- [ERROR] Tests run: 2476, Failures: 1, Errors: 0, Skipped: 0
+- [ERROR] BUILD FAILURE
+
+6) Relevant Code Snippets (from diff)
+- TranslationCheck.java (removed use of MessageDispatcher.fireFileFinished):
+  --- before (implicit):
+    import com.puppycrawl.tools.checkstyle.api.MessageDispatcher;
+    ...
+    private void logMissingTranslation(String filePath, String fileName) {
+        final MessageDispatcher dispatcher = getMessageDispatcher();
+        log(0, MSG_KEY_MISSING_TRANSLATION_FILE, fileName);
+        fireErrors(filePath);
+        dispatcher.fireFileFinished(filePath);
+    }
+
+    private void checkFilesForConsistencyRegardingTheirKeys(...) {
+        for (File currentFile : fileKeys.keySet()) {
+            final MessageDispatcher dispatcher = getMessageDispatcher();
+            final Set<String> currentFileKeys = fileKeys.get(currentFile);
+            ...
+            final String path = currentFile.getPath();
+            fireErrors(path);
+            dispatcher.fireFileFinished(path);
+        }
+    }
+
+  --- after (in diff):
+    // removed import:
+    - import com.puppycrawl.tools.checkstyle.api.MessageDispatcher;
+
+    private void logMissingTranslation(String filePath, String fileName) {
+        log(0, MSG_KEY_MISSING_TRANSLATION_FILE, fileName);
+        fireErrors(filePath);
+        // dispatcher.fireFileFinished(filePath);  <-- removed
+    }
+
+    private void checkFilesForConsistencyRegardingTheirKeys(SetMultimap<File, String> fileKeys,
+                                                            Set<String> keysThatMustExist) {
+        for (File currentFile : fileKeys.keySet()) {
+            final Set<String> currentFileKeys = fileKeys.get(currentFile);
+            final Set<String> missingKeys = keysThatMustExist.stream()
+                .filter(e -> !currentFileKeys.contains(e)).collect(Collectors.toSet());
+            if (!missingKeys.isEmpty()) {
+                for (String key : missingKeys) {
+                    log(0, MSG_KEY, key);
+                }
+            }
+            fireErrors(currentFile.getPath());
+            // dispatcher.fireFileFinished(path);  <-- removed
+        }
+    }
+
+- TranslationCheckTest.java (diff shows that testDefaultTranslationFileIsMissing1 and related xml-log.xml were removed at some point in the patch; the test in the build still runs and expects the xml-log).
+  - The diff shows deletion of the test method which used XMLLogger and compared full xml-log output:
+    (removed test code that used ByteArrayOutputStream, XMLLogger, writing to xml-log.xml and comparing full xml contents)
+
+- Test resource removal (deleted expected XML with developer-specific absolute paths):
+  src/test/resources/com/puppycrawl/tools/checkstyle/checks/misc/translation/xml-log.xml
+  (this file contained hard-coded paths such as /home/valeria/IdeaProjects/checkstyle/... used as expected comparison)
+
+7) Stack Traces / Build Log Error Lines
+- Primary failing trace lines from BUILD LOG:
+  [ERROR] testDefaultTranslationFileIsMissing1(com.puppycrawl.tools.checkstyle.checks.TranslationCheckTest)  Time elapsed: 0.035 s  <<< FAILURE!
+  org.junit.ComparisonFailure: Unexpected log output expected:<...>
+  <file name="/home/[valeria/IdeaProjects/checkstyle/src/test/resources/.../messages_check_fire_errors.properties"> ... 
+  but was:<...>
+  <file name="/home/travis/build/checkstyle/checkstyle/src/test/resources/.../messages_check_fire_errors.properties"> ...
+    at com.puppycrawl.tools.checkstyle.checks.TranslationCheckTest.testDefaultTranslationFileIsMissing1(TranslationCheckTest.java:248)
+
+  Maven summary:
+  [ERROR] Failures: 
+  [ERROR]   TranslationCheckTest.testDefaultTranslationFileIsMissing1:248 Unexpected log output expected:<...> but was:<...>
+  [ERROR] Tests run: 2476, Failures: 1, Errors: 0, Skipped: 0
+  [ERROR] BUILD FAILURE
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.20:test (default-test) on project checkstyle: There are test failures.
+
+8) Patches / Suggested Fixes (from analysis + concrete recommendations)
+
+Root causes (observed from diff and failure):
+- Removing MessageDispatcher.fireFileFinished(...) calls changes the timing/order in which XMLLogger receives file finished events; XMLLogger may emit file end tags only when fireFileFinished is invoked. Removing these calls results in different XML ordering (errors or file closing tags) than expected by tests.
+- The expected XML resource used in the test contained absolute, developer-specific file paths. CI environment produces different absolute paths (/home/travis/...). This causes direct string equality to fail.
+- The test that compared full XML (xml-log.xml) was removed in the diff but the build still ran a version expecting the old XML — indicates inconsistency between test expectations and actual runtime behavior. (Make sure the test and its expected resource are aligned with the new behavior.)
+
+Suggested fixes (pick one or combination depending on intended design):
+
+Option A — Restore message dispatching to preserve XMLLogger behavior (minimal change)
+- Re-add calls to MessageDispatcher.fireFileFinished(filePath) where appropriate, immediately after fireErrors(filePath), so XMLLogger gets notified and emits file closing tags in the same order as before.
+- Re-add the import of MessageDispatcher.
+- Example patch (conceptual):
+
+  In TranslationCheck.java:
+
+  + import com.puppycrawl.tools.checkstyle.api.MessageDispatcher;
+    ...
+    private void logMissingTranslation(String filePath, String fileName) {
+        final MessageDispatcher dispatcher = getMessageDispatcher();
+        log(0, MSG_KEY_MISSING_TRANSLATION_FILE, fileName);
+        fireErrors(filePath);
+        dispatcher.fireFileFinished(filePath);   // <-- restore
+    }
+
+    private void checkFilesForConsistencyRegardingTheirKeys(...) {
+        for (File currentFile : fileKeys.keySet()) {
+            final MessageDispatcher dispatcher = getMessageDispatcher();
+            ...
+            fireErrors(currentFile.getPath());
+            dispatcher.fireFileFinished(currentFile.getPath()); // <-- restore
+        }
+    }
+
+- Rationale: This restores the previous behavior that tests (or the XMLLogger) depend on. This is the simplest change if the removal was accidental.
+
+Option B — Update tests to be environment-independent / to match new behavior
+- Modify testDefaultTranslationFileIsMissing1 (and any XML comparison tests) to:
+  - Not compare the entire XML text as a raw string.
+  - Normalize file paths before comparison (e.g., replace absolute base path with placeholder).
+  - Verify only the important parts: the error messages are present and associated with the right filenames (relative paths), not the absolute system path.
+  - If the XML logger structure changed (order of tags), either update expected XML to match or use an XML parser to assert expected nodes and attributes regardless of ordering.
+
+- Example test changes:
+  - Instead of out.toString().equals(expectedXml), parse both strings into DOM and compare structure ignoring system-dependent file paths or replace path prefixes with getPath("") or System.getProperty("user.dir") or a placeholder.
+  - Or assert that the output contains:
+      getCheckMessage(MSG_KEY_MISSING_TRANSLATION_FILE, "messages_check_fire_errors_ja.properties")
+    and
+      getCheckMessage(MSG_KEY, "anotherKey")
+
+- Also re-create or update the xml-log.xml resource, but replace absolute path with a placeholder or compute expected paths at runtime using getPath("").
+
+Option C — Make XMLLogger produce relative paths or canonicalize paths
+- Change the code that produces file name attributes for XMLLogger so that it uses relative paths (relative to project root) or normalized canonical paths (but in a stable way across developer machines and CI).
+- Then update tests to compute expected relative paths as well.
+
+Recommendation
+- If the intent of the change was to alter TranslationCheck behaviour, then update tests accordingly (Option B) and ensure removed xml-log.xml is not referenced anywhere.
+- If the removal of dispatcher.fireFileFinished was accidental or the tests rely on the old behavior, restore the MessageDispatcher.fireFileFinished(...) calls (Option A). This will re-align the XML output ordering and likely make existing tests pass without changing test resources.
+- Also make tests robust to environment-specific absolute paths by removing hard-coded absolute paths from expected resources (use placeholders or compute expected paths at runtime), or compare XML structurally rather than by raw string equality.
+
+Small concrete patch (if choosing to restore behavior)
+- In TranslationCheck.java re-add import and the two lines calling dispatcher.fireFileFinished(...). Example snippet:
+
+  + import com.puppycrawl.tools.checkstyle.api.MessageDispatcher;
+  ...
+    private void logMissingTranslation(String filePath, String fileName) {
+        final MessageDispatcher dispatcher = getMessageDispatcher();
+        log(0, MSG_KEY_MISSING_TRANSLATION_FILE, fileName);
+        fireErrors(filePath);
+        dispatcher.fireFileFinished(filePath);
+    }
+  ...
+    private void checkFilesForConsistencyRegardingTheirKeys(...) {
+        for (File currentFile : fileKeys.keySet()) {
+            final MessageDispatcher dispatcher = getMessageDispatcher();
+            ...
+            fireErrors(currentFile.getPath());
+            dispatcher.fireFileFinished(currentFile.getPath());
+        }
+    }
+
+And in tests:
+- Either re-add or update the expected xml resource to use the CI path (not recommended), or better: change the test comparisons to normalize/ignore path prefix differences.
+
+Additional notes
+- The code diff also shows removal of xml-log.xml (expected test resource) which contained developer-specific paths (/home/valeria/...). That file must be updated or removed from tests that reference it; otherwise tests that compare to it will fail in CI because the runtime absolute path is different.
+- Ensure that when tests are removed or modified (as in diff where testDefaultTranslationFileIsMissing1 was removed), no remaining references assert against deleted resources.
+
+If you want, I can:
+- Produce a concrete patch to reintroduce dispatcher.fireFileFinished calls (with proper imports),
+- Or produce a concrete patch to rewrite testDefaultTranslationFileIsMissing1 to use normalized/relative paths or to compare XML structures instead of raw strings. Which would you prefer?

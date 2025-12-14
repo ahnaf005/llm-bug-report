@@ -1,0 +1,124 @@
+## Software Bug Report
+
+**Bug ID:** #BUG-228471368
+
+**Title:** Build Failure: `OWLProfileTestCase` Reports Fewer Violations Than Expected, Contradicting Code Diff
+
+**Status:** Failed
+
+**Priority:** High
+
+**Severity:** Major (Build failure, potential functional regression in profile validation)
+
+**Component:** `owlapi-contract`
+
+**Version:** `6.0.0-SNAPSHOT`
+
+**Environment:**
+*   **Operating System:** Ubuntu 12.04.5 LTS (precise)
+*   **Kernel:** 3.13.0-29-generic
+*   **Java Version:** Oracle JDK 1.8.0_131 (Java HotSpot(TM) 64-Bit Server VM, build 25.131-b11)
+*   **Maven Version:** Apache Maven 3.2.5
+*   **Git SHA (Failed Build):** `bb13bbc85174d8b0c004255ee811353d619af40a`
+*   **Git SHA (Previously Passed):** `0805fbd786b6447b119a75c86374fab870e3aba7`
+
+**Description:**
+The build for the `OWLAPI` project failed during the `mvn verify` phase, specifically within the `owlapi-contract` module. Two tests in `org.semanticweb.owlapi.profiles.OWLProfileTestCase` reported fewer profile violations than they expected.
+
+The provided code diff indicates that the `failed_sha` (`bb13bbc85174d8b0c004255ee811353d619af40a`) *should* contain changes that *reduce* the `expected` number of violations for these specific tests. However, the build log for this `failed_sha` *still reports the original, higher expected values* from the `passed_sha` (`0805fbd786b6447b119a75c86374fab870e3aba7`), and shows that even these higher expectations are not met.
+
+This presents a critical inconsistency:
+1.  The build log for `bb13bbc85174d8b0c004255ee811353d619af40a` shows the tests expecting 2 and 4 violations respectively.
+2.  The code diff, which represents changes *to* `bb13bbc85174d8b0c004255ee811353d619af40a` from `0805fbd786b6447b119a75c86374fab870e3aba7`, explicitly changes these `expected` values in the source code to 1 and 3.
+
+This contradiction suggests either:
+*   The code changes shown in the diff were not effectively applied or compiled when the build was run for `bb13bbc85174d8b0c004255ee811353d619af40a`.
+*   The test reporting mechanism is displaying an incorrect "expected" value, possibly from a cached or baseline state.
+*   The `failed_sha` and `passed_sha` labels in the diff are misleading regarding the direction of the changes.
+
+Regardless of the root cause of the inconsistency, the immediate problem is that the profile checker is not detecting all expected violations, leading to test failures.
+
+**Steps to Reproduce:**
+1.  Clone the `owlcs/owlapi` repository.
+2.  Checkout the commit `bb13bbc85174d8b0c004255ee811353d619af40a`.
+3.  Ensure Java 8 and Maven 3.2.5 are installed.
+4.  Run `mvn verify` from the project root.
+
+**Expected Behavior (Based on Code Diff for `bb13bbc85174d8b0c004255ee811353d619af40a`):**
+The tests `shouldCreateViolationForOWLDatatypeDefinitionAxiomInOWL2Profile` and `shouldCreateViolationForOWLDatatypeRestrictionInOWL2Profile` should pass, expecting 1 and 3 violations respectively, and finding exactly those numbers.
+
+**Actual Behavior (Observed in Build Log for `bb13bbc85174d8b0c004255ee811353d619af40a`):**
+The build fails with the following test failures:
+
+1.  **`OWLProfileTestCase.shouldCreateViolationForOWLDatatypeDefinitionAxiomInOWL2Profile`**:
+    *   **Expected:** `2` violations (as reported in the log, despite the diff changing the code's `expected` to 1).
+    *   **Actual:** `1` violation.
+    *   **Missing Violation:** `Use of undeclared datatype: <urn:datatype#fakedatatype>` (one instance).
+
+2.  **`OWLProfileTestCase.shouldCreateViolationForOWLDatatypeRestrictionInOWL2Profile`**:
+    *   **Expected:** `4` violations (as reported in the log, despite the diff changing the code's `expected` to 3).
+    *   **Actual:** `3` violations.
+    *   **Missing Violation:** `UseOfBuiltInDatatypeInDatatypeDefinition.class` (one instance).
+
+The build output clearly states:
+`[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.19.1:test (default-test) on project owlapi-contract: There are test failures.`
+`Tests run: 5128, Failures: 2, Errors: 0, Skipped: 40`
+
+**Impact:**
+The `OWL2_FULL` profile checker is not correctly identifying all expected violations related to datatype definitions and restrictions. This could lead to invalid OWL ontologies being accepted as conformant, potentially causing issues in downstream applications that rely on strict OWL2 profile adherence. The inconsistency between the code diff and the build log further complicates debugging and indicates a deeper issue with the build process or test reporting.
+
+**Suggested Action:**
+1.  **Investigate the Contradiction:** Determine why the `expected` values reported in the build log's test output do not match the `expected` values in the source code at `bb13bbc85174d8b0c004255ee811353d619af40a` as shown in the diff. This might involve checking the actual files on the build agent, Maven's compilation/caching behavior, or the test framework's reporting.
+2.  **Revert Test Expectation Changes:** Revert the changes made in `bb13bbc85174d8b0c004255ee811353d619af40a` to `OWLProfileTestCase.java` (i.e., restore `expected` to 2 and 4, and the full `expectedViolations` arrays).
+3.  **Fix Profile Checker Logic:** Address the underlying issue in the OWLAPI profile checker that causes it to miss the `UseOfBuiltInDatatypeInDatatypeDefinition` violation and one instance of `UseOfUndeclaredDatatype` violation.
+4.  **Verify:** Ensure that after fixing the profile checker, all tests in `OWLProfileTestCase` pass with the original, higher expectations.
+
+---
+**Relevant Build Log Snippets:**
+
+```
+[INFO] --- maven-surefire-plugin:2.19.1:test (default-test) @ owlapi-contract ---
+...
+Failed tests: 
+  OWLProfileTestCase.shouldCreateViolationForOWLDatatypeDefinitionAxiomInOWL2Profile:689->runAssert:218 [Use of undeclared datatype: <urn:datatype#fakedatatype> [DatatypeDefinition(<urn:datatype#fakedatatype> xsd:boolean) in OntologyID(OntologyIRI(<urn:test#ontology>) VersionIRI(<null>))]] expected:<2> but was:<1>
+  OWLProfileTestCase.shouldCreateViolationForOWLDatatypeRestrictionInOWL2Profile:680->runAssert:218 [Use of defined datatype in datatype restriction DataRangeRestriction(xsd:integer facetRestriction(langRange "1"^^xsd:integer)) [DataPropertyRange(<urn:datatype#fakedatatypeproperty> DataRangeRestriction(xsd:integer facetRestriction(langRange "1"^^xsd:integer))) in OntologyID(OntologyIRI(<urn:test#ontology>) VersionIRI(<null>))], Use of undeclared datatype: http://www.w3.org/2001/XMLSchema#integer [DatatypeDefinition(xsd:integer xsd:boolean) in OntologyID(OntologyIRI(<urn:test#ontology>) VersionIRI(<null>))], Facet in datatype restriction does not belong to restricted datatype: langRange in DataRangeRestriction(xsd:integer facetRestriction(langRange "1"^^xsd:integer)) [DataPropertyRange(<urn:datatype#fakedatatypeproperty> DataRangeRestriction(xsd:integer facetRestriction(langRange "1"^^xsd:integer))) in OntologyID(OntologyIRI(<urn:test#ontology>) VersionIRI(<null>))]] expected:<4> but was:<3>
+
+Tests run: 5128, Failures: 2, Errors: 0, Skipped: 40
+...
+[INFO] OWLAPI :: Tests and Tutorials ...................... FAILURE [ 54.767 s]
+...
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.19.1:test (default-test) on project owlapi-contract: There are test failures.
+```
+
+---
+**Code Diff (`bb13bbc85174d8b0c004255ee811353d619af40a` relative to `0805fbd786b6447b119a75c86374fab870e3aba7`):**
+
+```diff
+--- a/contract/src/test/java/org/semanticweb/owlapi/profiles/OWLProfileTestCase.java
++++ b/contract/src/test/java/org/semanticweb/owlapi/profiles/OWLProfileTestCase.java
+@@ -673,10 +673,9 @@ public class OWLProfileTestCase extends TestBase {
+     public void shouldCreateViolationForOWLDatatypeRestrictionInOWL2Profile() {
+         declare(o, DATAP);
+         o.add(DatatypeDefinition(Integer(), Boolean()), DATA_PROPERTY_RANGE2);
+-        int expected = 4;
+-        Class[] expectedViolations = {UseOfBuiltInDatatypeInDatatypeDefinition.class,
+-            UseOfDefinedDatatypeInDatatypeRestriction.class, UseOfIllegalFacetRestriction.class,
+-            UseOfUndeclaredDatatype.class};
++        int expected = 3;
++        Class[] expectedViolations = {UseOfDefinedDatatypeInDatatypeRestriction.class,
++            UseOfIllegalFacetRestriction.class, UseOfUndeclaredDatatype.class};
+         runAssert(o, Profiles.OWL2_FULL, expected, expectedViolations);
+     }
+ 
+@@ -684,8 +683,8 @@ public class OWLProfileTestCase extends TestBase {
+     @Tests(method = "public Object visit(OWLDatatypeDefinitionAxiom axiom)")
+     public void shouldCreateViolationForOWLDatatypeDefinitionAxiomInOWL2Profile() {
+         o.add(DatatypeDefinition(FAKEDATATYPE, Boolean()));
+-        int expected = 2;
+-        Class[] expectedViolations = {UseOfUndeclaredDatatype.class, UseOfUndeclaredDatatype.class};
++        int expected = 1;
++        Class[] expectedViolations = {UseOfUndeclaredDatatype.class};
+         runAssert(o, Profiles.OWL2_FULL, expected, expectedViolations);
+     }
+ 
+```

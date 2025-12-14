@@ -1,0 +1,90 @@
+## Bug Report: WebSocketEcho Sample Fails to Compile Due to API Changes
+
+**1. Title:**
+Compilation Failure in `WebSocketEcho` Sample Due to Outdated WebSocket API Usage
+
+**2. Steps to Reproduce:**
+1. Clone the OkHttp repository: `git clone git://github.com/square/okhttp.git`
+2. Navigate into the repository directory: `cd square/okhttp`
+3. Checkout the specific commit or branch corresponding to the build (implied by `git fetch origin +refs/pull/1260/merge:` and `git checkout -qf FETCH_HEAD`).
+4. Run the Maven install command, skipping tests and javadoc: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+**3. Triggering Input:**
+The compilation of the `com.squareup.okhttp.recipes.WebSocketEcho` class within the `samples/guide` module.
+
+**4. Expected Behavior:**
+The Maven build should complete successfully, compiling all modules including the `Sample: Guide` module and its `WebSocketEcho` class.
+
+**5. Observed Behavior:**
+The Maven build fails during the compilation of the `Sample: Guide` module. Specifically, the `WebSocketEcho.java` file fails to compile with multiple "cannot find symbol" and "does not override abstract method" errors, indicating API incompatibilities with the underlying WebSocket implementation.
+
+**Error Messages:**
+```
+[ERROR] /home/travis/build/square/okhttp/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java:[8,39] cannot find symbol
+  symbol:   class WebSocketResponse
+  location: package com.squareup.okhttp.internal.ws
+[ERROR] /home/travis/build/square/okhttp/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java:[20,14] com.squareup.okhttp.recipes.WebSocketEcho is not abstract and does not override abstract method onPong(okio.Buffer) in com.squareup.okhttp.internal.ws.WebSocketListener
+[ERROR] /home/travis/build/square/okhttp/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java:[28,5] cannot find symbol
+  symbol:   class WebSocketResponse
+  location: class com.squareup.okhttp.recipes.WebSocketEcho
+[ERROR] /home/travis/build/square/okhttp/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java:[28,47] cannot find symbol
+  symbol:   method execute(com.squareup.okhttp.recipes.WebSocketEcho)
+  location: variable call of type com.squareup.okhttp.internal.ws.WebSocketCall
+```
+
+**6. Relevant Code Snippets:**
+*Note: The provided code diff was empty, so specific line-by-line changes cannot be included. However, based on the error messages, the problematic areas in `WebSocketEcho.java` are related to:*
+
+*   **Import statement:** `import com.squareup.okhttp.internal.ws.WebSocketResponse;` (or similar, as `WebSocketResponse` is not found).
+*   **Class declaration/method override:** The `WebSocketEcho` class is declared as implementing `com.squareup.okhttp.internal.ws.WebSocketListener` but is missing an implementation for `onPong(okio.Buffer)`.
+*   **Method call:** A call to `call.execute(this)` or similar, where `call` is a `WebSocketCall` and `this` refers to `WebSocketEcho`, indicating a mismatch in the `execute` method's expected argument type or its existence.
+*   **Variable declaration:** A variable of type `WebSocketResponse` is likely declared or used, which is now an unknown symbol.
+
+**7. Stack Traces:**
+```
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary:
+[INFO] 
+[INFO] OkHttp (Parent) .................................... SUCCESS [  1.931 s]
+[INFO] OkHttp ............................................. SUCCESS [  7.492 s]
+[INFO] MockWebServer ...................................... SUCCESS [  5.293 s]
+[INFO] OkHttp Apache HttpClient ........................... SUCCESS [  0.662 s]
+[INFO] OkHttp URLConnection ............................... SUCCESS [  1.105 s]
+[INFO] OkHttp Tests ....................................... SUCCESS [  1.092 s]
+[INFO] OkCurl ............................................. SUCCESS [  3.032 s]
+[INFO] Samples (Parent) ................................... SUCCESS [  0.170 s]
+[INFO] Sample: Guide ...................................... FAILURE [  0.049 s]
+[INFO] Sample: Crawler .................................... SKIPPED
+[INFO] Sample: Simple Client .............................. SKIPPED
+[INFO] Sample: Static Server .............................. SKIPPED
+[INFO] Benchmarks ......................................... SKIPPED
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time: 21.171 s
+[INFO] Finished at: 2015-01-01T00:14:14+00:00
+[INFO] Final Memory: 45M/412M
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.0:compile (default-compile) on project guide: Compilation failure: Compilation failure:
+[ERROR] /home/travis/build/square/okhttp/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java:[8,39] cannot find symbol
+[ERROR] symbol:   class WebSocketResponse
+[ERROR] location: package com.squareup.okhttp.internal.ws
+[ERROR] /home/travis/build/square/okhttp/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java:[20,14] com.squareup.okhttp.recipes.WebSocketEcho is not abstract and does not override abstract method onPong(okio.Buffer) in com.squareup.okhttp.internal.ws.WebSocketListener
+[ERROR] /home/travis/build/square/okhttp/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java:[28,5] cannot find symbol
+[ERROR] symbol:   class WebSocketResponse
+[ERROR] location: class com.squareup.okhttp.recipes.WebSocketEcho
+[ERROR] /home/travis/build/square/okhttp/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java:[28,47] cannot find symbol
+[ERROR] symbol:   method execute(com.squareup.okhttp.recipes.WebSocketEcho)
+[ERROR] location: variable call of type com.squareup.okhttp.internal.ws.WebSocketCall
+[ERROR] -> [Help 1]
+```
+
+**8. Patches / Suggested Fixes:**
+*Note: Without the actual code diff, a precise patch cannot be provided. However, based on the compilation errors, the following types of changes are required:*
+
+1.  **Update WebSocket API Usage:** The `WebSocketEcho` sample needs to be updated to conform to the current OkHttp WebSocket API.
+2.  **`WebSocketResponse` Removal/Renaming:** The `WebSocketResponse` class appears to have been removed or renamed. Any references to it in `WebSocketEcho.java` (e.g., import statements, variable declarations) must be updated or removed.
+3.  **`WebSocketListener` Interface Change:** The `WebSocketListener` interface has changed, specifically requiring an implementation for the `onPong(okio.Buffer)` method. The `WebSocketEcho` class must implement this method.
+4.  **`WebSocketCall.execute()` Signature Change:** The `execute` method on `WebSocketCall` no longer accepts `com.squareup.okhttp.recipes.WebSocketEcho` as an argument. The call site needs to be updated to match the new method signature, likely by passing a `WebSocketListener` instance directly or using a different method for initiating the WebSocket connection.
+
+The fix would involve modifying `samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java` to align with the latest OkHttp WebSocket API.

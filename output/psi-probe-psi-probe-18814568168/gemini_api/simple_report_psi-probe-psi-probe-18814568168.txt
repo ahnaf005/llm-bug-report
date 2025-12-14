@@ -1,0 +1,140 @@
+## Software Bug Report
+
+**Bug Title:** Build Failure: `OpenEjbManagedDatasourceAccessorTest` fails with `NoClassDefFoundError` for `javax.transaction` on Java 21 due to Jakarta EE migration issues.
+
+**Bug ID:** [To be assigned]
+
+**Severity:** High
+
+**Priority:** High (Blocks CI/CD pipeline)
+
+**Status:** New
+
+**Reporter:** [Your Name/Role]
+
+**Date:** 2023-11-18
+
+---
+
+### 1. Description
+
+The CI build for the `psi-probe` project is failing in the `psi-probe-core` module during the `test` phase. Specifically, three tests within `psiprobe.beans.accessors.OpenEjbManagedDatasourceAccessorTest` are encountering critical errors: `java.lang.NoClassDefFoundError`, `java.lang.IllegalArgumentException`, and `java.lang.InternalError`. These errors indicate a fundamental classloading issue related to the `javax.transaction` API and class redefinition by the `mockit` framework, likely stemming from a mismatch between Java EE and Jakarta EE specifications when running on Java 21.
+
+### 2. Environment
+
+*   **Operating System:** Ubuntu 22.04.3 LTS (GitHub Actions hosted runner)
+*   **Java Version:** OpenJDK Temurin 21.0.1 (Eclipse Adoptium)
+*   **Maven Version:** 3.9.5
+*   **Project:** `psi-probe` (specifically `psi-probe-core` module)
+*   **Failing Commit SHA:** `ef519dacb9b65cc7a66b8c9f2a71869e0fcd0b51`
+*   **Last Known Good Commit SHA:** `d5d0b9a3af8740b095b01009d2b0ae73d8f4a59f`
+*   **Relevant Dependencies:**
+    *   `jakarta.transaction-api:2.0.1` (root `pom.xml`)
+    *   `jmockit:1.51.0` (root `pom.xml`)
+    *   `openejb-api`, `openejb-core`, `openejb-loader`, `tomee-jdbc` (all `tomee.version:8.0.16`, `provided` scope in `psi-probe-core/pom.xml`)
+
+### 3. Steps to Reproduce
+
+1.  Checkout the failing commit: `git checkout ef519dacb9b65cc7a66b8c9f2a71869e0fcd0b51`
+2.  Ensure Java 21 is configured as the active JDK.
+3.  Run Maven tests from the project root: `./mvnw test -B -V --no-transfer-progress -D"license.skip=true"`
+
+### 4. Expected Behavior
+
+The Maven build should complete successfully, with all tests passing in the `psi-probe-core` module.
+
+### 5. Actual Behavior
+
+The Maven build fails during the `test` phase of the `psi-probe-core` module. The `OpenEjbManagedDatasourceAccessorTest` class reports 3 errors:
+
+```
+[ERROR] Tests run: 3, Failures: 0, Errors: 3, Skipped: 0, Time elapsed: 0.018 s <<< FAILURE! -- in psiprobe.beans.accessors.OpenEjbManagedDatasourceAccessorTest
+[ERROR] psiprobe.beans.accessors.OpenEjbManagedDatasourceAccessorTest.getInfoTest -- Time elapsed: 0.002 s <<< ERROR!
+java.lang.InternalError: class redefinition failed: invalid class
+	at java.instrument/sun.instrument.InstrumentationImpl.retransformClasses0(Native Method)
+	at java.instrument/sun.instrument.InstrumentationImpl.retransformClasses(InstrumentationImpl.java:225)
+	at mockit.internal.startup.Startup.retransformClass(Startup.java:78)
+	at mockit.internal.state.CachedClassfiles.getClassfile(CachedClassfiles.java:130)
+	at mockit.internal.ClassFile.createReaderOrGetFromCache(ClassFile.java:98)
+	at mockit.internal.expectations.mocking.BaseTypeRedefinition.redefineClassAndItsSuperClasses(BaseTypeRedefinition.java:198)
+	at mockit.internal.expectations.mocking.BaseTypeRedefinition.redefineMethodsAndConstructorsInTargetType(BaseTypeRedefinition.java:193)
+	at mockit.internal.expectations.mocking.BaseTypeRedefinition.redefineTargetClassAndCreateInstanceFactory(BaseTypeRedefinition.java:265)
+	at mockit.internal.expectations.mocking.BaseTypeRedefinition.redefineType(BaseTypeRedefinition.java:86)
+	at mockit.internal.expectations.mocking.TypeRedefinition.redefineType(TypeRedefinition.java:31)
+	at mockit.internal.expectations.mocking.FieldTypeRedefinitions.redefineFieldType(FieldTypeRedefinitions.java:83)
+	at mockit.internal.expectations.mocking.FieldTypeRedefinitions.redefineFieldType(FieldTypeRedefinitions.java:70)
+	at mockit.internal.expectations.mocking.FieldTypeRedefinitions.redefineFieldTypes(FieldTypeRedefinitions.java:58)
+	at mockit.internal.expectations.mocking.FieldTypeRedefinitions.<init>(FieldTypeRedefinitions.java:39)
+	at mockit.integration.TestRunnerDecorator.handleMockFieldsForWholeTestClass(TestRunnerDecorator.java:161)
+	at mockit.integration.junit5.JMockitExtension.postProcessTestInstance(JMockitExtension.java:98)
+	... (truncated)
+
+[ERROR] psiprobe.beans.accessors.OpenEjbManagedDatasourceAccessorTest.canMapTest -- Time elapsed: 0.001 s <<< ERROR!
+java.lang.IllegalArgumentException: No class with name "javax.transaction.Transaction" found
+	at mockit.internal.util.ClassLoad.loadClassFromAClassLoader(ClassLoad.java:70)
+	at mockit.internal.util.ClassLoad.loadClass(ClassLoad.java:41)
+	at mockit.internal.util.ClassLoad.loadByInternalName(ClassLoad.java:31)
+	at mockit.internal.util.ClassLoad.getSuperClass(ClassLoad.java:148)
+	at mockit.internal.util.ClassLoad.actualSuperClass(ClassLoad.java:176)
+	at mockit.internal.util.ClassLoad.whichIsSuperClass(ClassLoad.java:162)
+	at mockit.asm.constantPool.ConstantPoolGeneration.getCommonSuperClass(ConstantPoolGeneration.java:616)
+	at mockit.asm.constantPool.ConstantPoolGeneration.getMergedType(ConstantPoolGeneration.java:581)
+	at mockit.asm.controlFlow.Frame.merge(Frame.java:1313)
+	at mockit.asm.controlFlow.Frame.merge(Frame.java:1201)
+	... (truncated)
+
+[ERROR] psiprobe.beans.accessors.OpenEjbManagedDatasourceAccessorTest.cannotMapTest -- Time elapsed: 0.001 s <<< ERROR!
+java.lang.IllegalArgumentException: No class with name "javax.transaction.Transaction" found
+	at mockit.internal.util.ClassLoad.loadClassFromAClassLoader(ClassLoad.java:70)
+	at mockit.internal.util.ClassLoad.loadClass(ClassLoad.java:41)
+	at mockit.internal.util.ClassLoad.loadByInternalName(ClassLoad.java:31)
+	at mockit.internal.util.ClassLoad.getSuperClass(ClassLoad.java:148)
+	at mockit.internal.util.ClassLoad.actualSuperClass(ClassLoad.java:176)
+	at mockit.internal.util.ClassLoad.whichIsSuperClass(ClassLoad.java:162)
+	at mockit.asm.constantPool.ConstantPoolGeneration.getCommonSuperClass(ConstantPoolGeneration.java:616)
+	at mockit.asm.constantPool.ConstantPoolGeneration.getMergedType(ConstantPoolGeneration.java:581)
+	at mockit.asm.controlFlow.Frame.merge(Frame.java:1313)
+	at mockit.asm.controlFlow.Frame.merge(Frame.java:1201)
+	... (truncated)
+```
+
+### 6. Root Cause Analysis (Hypothesis)
+
+The core problem appears to be a classloading conflict arising from the transition from Java EE (`javax.*` packages) to Jakarta EE (`jakarta.*` packages) when running on Java 21.
+
+1.  **Java EE vs. Jakarta EE Mismatch:**
+    *   The build environment uses Java 21. Java 9 and later versions do not include Java EE APIs (`javax.*`) on the default classpath. Applications targeting these JVMs should use Jakarta EE APIs (`jakarta.*`).
+    *   The root `pom.xml` correctly includes `jakarta.transaction-api` (version `2.0.1`), which provides the Jakarta EE version of the Transaction API.
+    *   However, the error messages explicitly state `No class with name "javax.transaction.Transaction" found` and `javax/transaction/SystemException`. This indicates that `OpenEjbManagedDatasourceAccessorTest` or one of its transitive dependencies is still attempting to load classes from the old `javax.transaction` namespace.
+
+2.  **`tomee.version` Incompatibility:**
+    *   The `CODE DIFF` shows that `openejb.version` was removed and `tomee.version` was introduced, set to `8.0.16`.
+    *   Apache TomEE 8.x is based on Apache Tomcat 9.x and implements **Java EE 8**, which uses the `javax.*` namespace.
+    *   Running TomEE 8.0.16 (Java EE 8) on Java 21, while the project's `pom.xml` also declares `jakarta.transaction-api`, creates a direct conflict. The `OpenEjbManagedDatasourceAccessorTest` likely relies on the `openejb-core` and `openejb-api` from TomEE 8.0.16, which are still using `javax.transaction`.
+
+3.  **`mockit` Class Redefinition Issue:**
+    *   The `java.lang.InternalError: class redefinition failed: invalid class` error, originating from `mockit.internal.startup.Startup.retransformClass`, is a strong indicator that the `mockit` framework (version 1.51.0) is struggling with the classloading environment.
+    *   `mockit` performs bytecode instrumentation and class redefinition. This process is highly sensitive to the JVM version, module system (introduced in Java 9), and the presence of conflicting API versions (like `javax` vs `jakarta`).
+    *   The underlying `javax` vs `jakarta` conflict is likely causing `mockit` to fail when it tries to redefine classes that depend on the `javax.transaction` API, as the JVM expects `jakarta.transaction`.
+
+### 7. Proposed Solution / Workaround
+
+**Immediate Workaround (to unblock CI):**
+
+*   Temporarily disable `OpenEjbManagedDatasourceAccessorTest` to allow the build to pass. This can be done by adding `@Disabled` to the test class or configuring the Surefire plugin to exclude it.
+
+**Long-Term Solution (to fix the root cause):**
+
+1.  **Align TomEE Version with Jakarta EE:**
+    *   The project needs to decide whether to target Java EE 8 (using `javax.*` APIs) or Jakarta EE (using `jakarta.*` APIs).
+    *   Since Java 21 is being used, the project should fully migrate to Jakarta EE. This means upgrading TomEE to a version that supports Jakarta EE 9 or later (e.g., TomEE 9.x or 10.x, which are based on Jakarta EE 9/10 respectively).
+    *   Update the `tomee.version` in the `pom.xml` to a Jakarta EE compatible version.
+
+2.  **Dependency Tree Analysis:**
+    *   Run `mvn dependency:tree -Dverbose` on the `psi-probe-core` module to identify all transitive dependencies that might be pulling in `javax.transaction` or other Java EE APIs.
+    *   Explicitly exclude any conflicting `javax.*` dependencies if they are brought in by other libraries that cannot yet be upgraded to Jakarta EE versions.
+
+3.  **`jmockit` Compatibility:**
+    *   Verify the compatibility of `jmockit` version 1.51.0 with Java 21 and Jakarta EE. If known issues exist, upgrade `jmockit` to a newer version that explicitly supports this environment, or consider migrating to an alternative mocking framework (e.g., Mockito) if `jmockit` proves problematic with modern Java versions and module systems.
+
+The most critical step is to resolve the Java EE / Jakarta EE version mismatch introduced by `tomee.version` 8.0.16 on a Java 21 environment.

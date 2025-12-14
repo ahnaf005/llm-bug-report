@@ -1,0 +1,91 @@
+## Detailed Bug Report
+
+### 1. Title:
+Incorrect Violation Count in OWL2 Profile Tests for Datatype Definitions and Restrictions
+
+### 2. Steps to Reproduce:
+1.  Clone the `owlcs/owlapi` repository.
+2.  Checkout the specific commit `bb13bbc85174d8b0c004255ee811353d619af40a`.
+3.  Execute the Maven `verify` phase: `mvn verify`
+
+### 3. Triggering Input:
+The bug is triggered by specific test cases within `OWLProfileTestCase.java` that check for OWL2 Profile violations:
+
+*   **For `shouldCreateViolationForOWLDatatypeDefinitionAxiomInOWL2Profile`:**
+    An `OWLDatatypeDefinitionAxiom` is added: `DatatypeDefinition(FAKEDATATYPE, Boolean())`.
+*   **For `shouldCreateViolationForOWLDatatypeRestrictionInOWL2Profile`:**
+    A `DataPropertyRange` axiom with a `DataRangeRestriction` is added:
+    `DataPropertyRange(<urn:datatype#fakedatatypeproperty> DataRangeRestriction(xsd:integer facetRestriction(langRange "1"^^xsd:integer)))`
+    and a `DatatypeDefinition` for `xsd:integer` is also added: `DatatypeDefinition(Integer(), Boolean())`.
+
+### 4. Expected Behavior:
+Based on the failing tests' original assertions:
+*   `OWLProfileTestCase.shouldCreateViolationForOWLDatatypeDefinitionAxiomInOWL2Profile` was expected to find **2** violations.
+*   `OWLProfileTestCase.shouldCreateViolationForOWLDatatypeRestrictionInOWL2Profile` was expected to find **4** violations.
+
+### 5. Observed Behavior:
+The `mvn verify` command fails during the `test` phase of the `owlapi-contract` module, indicating two test failures in `OWLProfileTestCase`. The observed number of violations is less than expected.
+
+*   **For `OWLProfileTestCase.shouldCreateViolationForOWLDatatypeDefinitionAxiomInOWL2Profile`:**
+    *   **Observed Violations:** 1
+    *   **Error Message:** `expected:<2> but was:<1>`
+    *   **Details:** `Use of undeclared datatype: <urn:datatype#fakedatatype> [DatatypeDefinition(<urn:datatype#fakedatatype> xsd:boolean) in OntologyID(OntologyIRI(<urn:test#ontology>) VersionIRI(<null>))]`
+
+*   **For `OWLProfileTestCase.shouldCreateViolationForOWLDatatypeRestrictionInOWL2Profile`:**
+    *   **Observed Violations:** 3
+    *   **Error Message:** `expected:<4> but was:<3>`
+    *   **Details:**
+        *   `Use of defined datatype in datatype restriction DataRangeRestriction(xsd:integer facetRestriction(langRange "1"^^xsd:integer)) [DataPropertyRange(<urn:datatype#fakedatatypeproperty> DataRangeRestriction(xsd:integer facetRestriction(langRange "1"^^xsd:integer))) in OntologyID(OntologyIRI(<urn:test#ontology>) VersionIRI(<null>))]`
+        *   `Use of undeclared datatype: http://www.w3.org/2001/XMLSchema#integer [DatatypeDefinition(xsd:integer xsd:boolean) in OntologyID(OntologyIRI(<urn:test#ontology>) VersionIRI(<null>))]`
+        *   `Facet in datatype restriction does not belong to restricted datatype: langRange in DataRangeRestriction(xsd:integer facetRestriction(langRange "1"^^xsd:integer)) [DataPropertyRange(<urn:datatype#fakedatatypeproperty> DataRangeRestriction(xsd:integer facetRestriction(langRange "1"^^xsd:integer))) in OntologyID(OntologyIRI(<urn:test#ontology>) VersionIRI(<null>))]`
+
+The build ultimately fails with:
+`[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.19.1:test (default-test) on project owlapi-contract: There are test failures.`
+
+### 6. Relevant Code Snippets:
+The following code snippet from `contract/src/test/java/org/semanticweb/owlapi/profiles/OWLProfileTestCase.java` shows the changes made to fix the issue:
+
+```diff
+--- a/contract/src/test/java/org/semanticweb/owlapi/profiles/OWLProfileTestCase.java
++++ b/contract/src/test/java/org/semanticweb/owlapi/profiles/OWLProfileTestCase.java
+@@ -673,10 +673,9 @@ public class OWLProfileTestCase extends TestBase {
+     public void shouldCreateViolationForOWLDatatypeRestrictionInOWL2Profile() {
+         declare(o, DATAP);
+         o.add(DatatypeDefinition(Integer(), Boolean()), DATA_PROPERTY_RANGE2);
+-        int expected = 4;
+-        Class[] expectedViolations = {UseOfBuiltInDatatypeInDatatypeDefinition.class,
+-            UseOfDefinedDatatypeInDatatypeRestriction.class, UseOfIllegalFacetRestriction.class,
+-            UseOfUndeclaredDatatype.class};
++        int expected = 3;
++        Class[] expectedViolations = {UseOfDefinedDatatypeInDatatypeRestriction.class,
++            UseOfIllegalFacetRestriction.class, UseOfUndeclaredDatatype.class};
+         runAssert(o, Profiles.OWL2_FULL, expected, expectedViolations);
+     }
+ 
+@@ -684,8 +683,8 @@ public class OWLProfileTestCase extends TestBase {
+     @Tests(method = "public Object visit(OWLDatatypeDefinitionAxiom axiom)")
+     public void shouldCreateViolationForOWLDatatypeDefinitionAxiomInOWL2Profile() {
+         o.add(DatatypeDefinition(FAKEDATATYPE, Boolean()));
+-        int expected = 2;
+-        Class[] expectedViolations = {UseOfUndeclaredDatatype.class, UseOfUndeclaredDatatype.class};
++        int expected = 1;
++        Class[] expectedViolations = {UseOfUndeclaredDatatype.class};
+         runAssert(o, Profiles.OWL2_FULL, expected, expectedViolations);
+     }
+ 
+```
+
+### 7. Stack Traces:
+The provided build log does not include the full stack trace for the test failures. It directs to `Please refer to /home/travis/build/owlcs/owlapi/contract/target/surefire-reports for the individual test results.` and suggests re-running Maven with the `-e` switch for full debug logging.
+
+### 8. Patches / Suggested Fixes:
+The provided code diff includes the patch that resolves the issue. The fix involves adjusting the `expected` count of violations and the `expectedViolations` array in the `OWLProfileTestCase.java` file for the two failing tests:
+
+*   **For `shouldCreateViolationForOWLDatatypeRestrictionInOWL2Profile`:**
+    *   `expected` changed from `4` to `3`.
+    *   `UseOfBuiltInDatatypeInDatatypeDefinition.class` was removed from `expectedViolations`.
+*   **For `shouldCreateViolationForOWLDatatypeDefinitionAxiomInOWL2Profile`:**
+    *   `expected` changed from `2` to `1`.
+    *   One instance of `UseOfUndeclaredDatatype.class` was removed from `expectedViolations`.
+
+This suggests that the profile checker was either producing fewer violations than previously expected, or the test's expectation was incorrect for the given inputs. The patch aligns the test expectations with the actual behavior of the profile checker.

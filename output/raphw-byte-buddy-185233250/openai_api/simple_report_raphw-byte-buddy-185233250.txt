@@ -1,0 +1,105 @@
+Title: FindBugs: EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS in TypeCache.equals — build fails on findbugs check
+
+Summary
+- The Maven build fails during the findbugs check on module byte-buddy-dep because FindBugs reports two EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS warnings in net.bytebuddy.TypeCache.
+- These warnings cause the findbugs-maven-plugin:3.0.3:check goal to fail the build (FAILURE in byte-buddy-dep).
+- A proposed patch (shown in the CODE DIFF) attempts to suppress these warnings and to slightly reorder comparisons in equals() implementations; this is the intended fix.
+
+Environment
+- Project: raphw/byte-buddy
+- Commit that failed: ea2bfdcab95a270cd5ca7c0f02c2733569eebfb1
+- Maven goal that failed: mvn jacoco:prepare-agent verify jacoco:report ... -Pintegration -Dnet.bytebuddy.test.travis=true
+- Build system: Travis CI; Java 1.8.0_111; Maven 3.2.5
+- FindBugs plugin: org.codehaus.mojo:findbugs-maven-plugin:3.0.3
+
+Failure (excerpt)
+- Maven build result: BUILD FAILURE (see last part of BUILD LOG)
+- Key error:
+
+[ERROR] Failed to execute goal org.codehaus.mojo:findbugs-maven-plugin:3.0.3:check (default) on project byte-buddy-dep: failed with 2 bugs and 0 errors -> [Help 1]
+
+FindBugs summary (from log):
+- Total bugs: 2
+  - net.bytebuddy.TypeCache$LookupKey.equals(Object) checks for operand being a TypeCache$StorageKey [TypeCache.java:[line 258]]
+    - EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS
+  - net.bytebuddy.TypeCache$StorageKey.equals(Object) checks for operand being a TypeCache$LookupKey [TypeCache.java:[line 299]]
+    - EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS
+
+What FindBugs is warning about
+- FindBugs flags equals() implementations that compare "this" with an instanceof check for a different (usually incompatible) type.
+- In this code the behavior is intentional: the two nested key types (LookupKey and StorageKey) are designed to be cross-comparable — a LookupKey should be equal to a StorageKey under certain conditions (matching loader/hashes).
+- FindBugs therefore raises EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS because it expects equals to only check for same-compatible types.
+
+Code change (from CODE DIFF)
+- File modified: byte-buddy-dep/src/main/java/net/bytebuddy/TypeCache.java
+- Changes applied:
+  1. Added import:
+     import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+  2. Annotated both equals(Object) methods with:
+     @SuppressFBWarnings(value = "EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS", justification = "Cross-comparison is intended")
+  3. Reordered comparisons inside equals to check hashCode first and then classLoader/get() equality (reordering of operands). Example:
+     - Old:
+         (other instanceof StorageKey && ((StorageKey) other).get() == classLoader && ((StorageKey) other).hashCode == hashCode);
+     - New:
+         (other instanceof StorageKey && ((StorageKey) other).hashCode == hashCode && ((StorageKey) other).get() == classLoader);
+
+Why the patch
+- Two objectives:
+  1. Explicitly suppress the FindBugs warning because the cross-class equals check is intentional and correct for this design.
+  2. Reorder comparisons to test primitive/hashCode equality before dereferencing Reference.get(), which avoids unnecessary dereferences and is defensive in case the reference was cleared between calls (and can be marginally faster).
+
+Root cause
+- Static analysis (FindBugs) detects the cross-class instanceof checks in TypeCache.LookupKey.equals and TypeCache.StorageKey.equals and flags them as suspicious.
+- The project has a strict findbugs-maven-plugin:check configuration that fails the build on any FindBugs warnings; therefore the build fails.
+
+Suggested resolution
+Option A (applied in diff and recommended):
+- Keep the cross-class equals semantics but suppress the FindBugs warnings with explicit @SuppressFBWarnings annotations on the relevant equals() methods, justifying the cross-class comparison.
+- Reorder equality checks to compare hashCode first, then dereference reference/compare classLoader — this is defensive and reduces the chance of races/cleared references causing false negatives or additional overhead.
+
+Option B (alternative, more conservative):
+- Replace the cross-class equals logic by normalizing both keys to an identical representation and comparing that. For example:
+  - Define a private, immutable KeyData object that encapsulates the classLoader identity (or its identity hash) and the stored hashCode, and use that for equals/hashCode across both key types. This satisfies FindBugs without suppression, but requires more refactor.
+
+Recommended next steps
+1. Apply the patch in CODE DIFF (it imports SuppressFBWarnings and annotates both equals).
+2. Re-run the findbugs/spotbugs check locally:
+   mvn org.codehaus.mojo:findbugs-maven-plugin:3.0.3:check -DskipTests
+   or re-run your full CI command:
+   mvn jacoco:prepare-agent verify jacoco:report ... -Pintegration -Dnet.bytebuddy.test.travis=true
+3. Add unit tests that assert symmetric equality and hashCode consistency between LookupKey and StorageKey to avoid future regressions:
+   - LookupKey.equals(StorageKey) == true when values match
+   - StorageKey.equals(LookupKey) == true when values match
+   - hashCode contract: equal keys have equal hashCode
+   - Behavior when Reference.get() returns null (cleared): ensure equals is consistent and well-documented.
+4. Document the rationale in code comment or JIRA issue: the equals() intentionally compares across nested types and is suppressed for FindBugs with a clear justification string.
+
+Risks and considerations
+- Using @SuppressFBWarnings hides the FindBugs warning for that code. Only use it with an explicit, documented justification (which the patch does).
+- Ensure equals() remains symmetric and consistent with hashCode(). Adding suppression should not mask a correctness issue; add tests to validate correctness.
+- Ensure the edu.umd.cs.findbugs.annotations dependency is available at compile time; the import is present and should compile (annotation classes are typically available via findbugs/lib, but the project already uses FindBugs plugin, so this import is acceptable). If the annotation class is not present in compile classpath, add the findbugs annotations artifact as a dependency (groupId: com.h3xstream.findbugs, artifact or the original findbugs-annotation artifact) — but in the diff it was imported from edu.umd.cs.findbugs.annotations, which is the canonical package.
+
+Patch summary (as in CODE DIFF)
+- + added import SuppressFBWarnings
+- + annotated both equals(Object) implementations with @SuppressFBWarnings(value = "EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS", justification = "Cross-comparison is intended")
+- + reordered equality checks in both equals methods to compare hashCode before dereferencing/getting the referent.
+
+Acceptance criteria
+- Running the original failing command should succeed:
+  mvn jacoco:prepare-agent verify jacoco:report $TARGET -Pintegration -Dnet.bytebuddy.test.travis=true
+- findbugs-maven-plugin:check must report 0 warnings for the two previously flagged equals methods
+- All unit tests and integration tests must pass
+- Added tests for equals/hashCode symmetry between LookupKey and StorageKey
+
+References / Relevant lines in BUILD LOG
+- FindBugs failure lines (extracted):
+  - "Total bugs: 2"
+  - "net.bytebuddy.TypeCache$LookupKey.equals(Object) checks for operand being a TypeCache$StorageKey  [TypeCache.java:[line 258]] EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS"
+  - "net.bytebuddy.TypeCache$StorageKey.equals(Object) checks for operand being a TypeCache$LookupKey  [TypeCache.java:[line 299]] EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS"
+- Plugin failing the build:
+  - "[ERROR] Failed to execute goal org.codehaus.mojo:findbugs-maven-plugin:3.0.3:check (default) on project byte-buddy-dep: failed with 2 bugs and 0 errors"
+
+If you want, I can:
+- Produce a small unit test to add to the repo that verifies equals/hashCode symmetry for LookupKey and StorageKey and covers the cleared-reference scenario.
+- Suggest the exact Maven dependency to add if the edu.umd.cs.findbugs.annotations.SuppressFBWarnings import is not resolvable in your environment.
+- Propose the Option B refactor (normalizing key representation) with a concrete patch if you prefer to eliminate suppression entirely.

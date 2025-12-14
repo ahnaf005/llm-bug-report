@@ -1,0 +1,99 @@
+Title
+- Compilation failure: possible lossy conversion from double to float in MesosTaskStatisticsObject.java
+
+Steps to Reproduce
+1. Clone the repository and checkout the failing commit/branch (example from the build log: commit e8fd6892f326916c3da9359a216a7e0e06cd4f47 on branch hs_qa).
+2. Ensure JDK 8 is in use (build log used Oracle JDK8).
+3. Run Maven build: mvn -Pbuild-swagger-documentation -DskipTests=true -B -q -fae install
+4. Observe the compile errors from the maven-compiler-plugin during compilation of the SingularityBase module.
+
+Triggering Input / Conditions
+- Building with Java 8 and Maven (maven-compiler-plugin) on the code that contains MesosTaskStatisticsObject.java.
+- The code attempts to assign double values to float fields (or otherwise perform an implicit narrowing conversion double -> float) without an explicit cast.
+
+Expected Behavior
+- The project should compile cleanly under the configured JDK/Maven environment.
+- No implicit narrowing assignments should remain; code should either use matching types (double) or explicit casts where safe and intended.
+
+Observed Behavior (from build log)
+- Maven compile fails with three compilation errors in MesosTaskStatisticsObject.java indicating incompatible types: possible lossy conversion from double to float:
+  - /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[60,12] incompatible types: possible lossy conversion from double to float
+  - /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[64,12] incompatible types: possible lossy conversion from double to float
+  - /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[68,12] incompatible types: possible lossy conversion from double to float
+
+Relevant Build Log / Stack Trace
+- Key excerpt (verbatim):
+  [ERROR] COMPILATION ERROR :
+  [ERROR] /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[60,12] incompatible types: possible lossy conversion from double to float
+  [ERROR] /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[64,12] incompatible types: possible lossy conversion from double to float
+  [ERROR] /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[68,12] incompatible types: possible lossy conversion from double to float
+  ...
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.3:compile (default-compile) on project SingularityBase: Compilation failure: Compilation failure:
+  [ERROR] /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[60,12] incompatible types: possible lossy conversion from double to float
+  [ERROR] /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[64,12] incompatible types: possible lossy conversion from double to float
+  [ERROR] /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[68,12] incompatible types: possible lossy conversion from double to float
+
+Relevant Code Snippets (inferred from error — actual diff not provided)
+- The provided CODE DIFF content appears to be an HTTP 404 JSON response (no code diff available):
+  {
+    "_error": {
+      "code": 404,
+      "message": "The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again."
+    },
+    "_status": "ERR"
+  }
+- The compiler errors indicate code similar to the following pattern (this is an inferred example showing the problematic assignments):
+
+  // MesosTaskStatisticsObject.java (inferred)
+  public class MesosTaskStatisticsObject {
+      // fields declared as float
+      private float someMetric1;
+      private float someMetric2;
+      private float someMetric3;
+
+      // constructor (or setters) assign double-returning values to float fields
+      public MesosTaskStatisticsObject(MesosStats stats) {
+          this.someMetric1 = stats.getSomeMetric1(); // getSomeMetric1() returns double -> compile error
+          this.someMetric2 = stats.getSomeMetric2(); // double -> float
+          this.someMetric3 = stats.getSomeMetric3(); // double -> float
+      }
+  }
+
+Suggested Fixes / Patches
+There are two broad correct approaches. Choose one based on desired numeric precision and API design:
+
+1) Change the field types to double (recommended if original source values are double-precision):
+- Rationale: avoids narrowing conversions and preserves precision. If upstream Mesos / library returns doubles, representing them as double in your data object is consistent.
+
+Example patch (replace float with double):
+- Before:
+  private float someMetric1;
+  private float someMetric2;
+  private float someMetric3;
+
+- After:
+  private double someMetric1;
+  private double someMetric2;
+  private double someMetric3;
+
+- Also update getters/setters/signatures to return/accept double.
+
+2) Keep float fields but perform explicit casts where the narrowing is intentional:
+- Rationale: if you deliberately want to store as float to save memory or match a pre-existing API, you must explicitly cast double -> float to satisfy Java's type system.
+- Be aware this may lose precision.
+
+Example patch (add casts):
+  this.someMetric1 = (float) stats.getSomeMetric1();
+  this.someMetric2 = (float) stats.getSomeMetric2();
+  this.someMetric3 = (float) stats.getSomeMetric3();
+
+3) Alternative: modify the source of the values so they return float instead of double (less preferred unless you control that API and it's logically float).
+
+Additional Recommendations
+- Update unit tests / API docs if changing types (float -> double) to avoid downstream surprises.
+- If this error arose after an upgrade (e.g., Mesos client now returns double), prefer double in the model to match upstream types.
+- Since the code diff supplied in the report was a 404 JSON, ensure the code changes/PR includes the actual diff and the CI job references the correct file paths/PR. The missing diff makes automated review harder.
+
+Notes
+- The build log shows the environment used (Oracle JDK8, Maven 3.2.5). The error is a Java compile-time type error and is deterministic; reproducing it requires building the referenced commit under JDK8.
+- The actual file MesosTaskStatisticsObject.java and exact variable names/line numbers exist in the repository; apply one of the suggested fixes to the lines reported (60, 64, 68) to resolve the compilation errors.

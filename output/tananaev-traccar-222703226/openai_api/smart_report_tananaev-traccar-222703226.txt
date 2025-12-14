@@ -1,0 +1,120 @@
+Title
+- Build fails due to Checkstyle violation: unused import org.traccar.helper.Log in ReportUtils.java
+
+Summary
+- A change set modifies report-related code/tests. The CI build fails at the Checkstyle phase because ReportUtils.java contains an unused import (org.traccar.helper.Log). This causes Maven Checkstyle to abort the build before tests or compilation complete.
+
+Steps to Reproduce
+1. Checkout the repository at the failing commit / run the same build as CI:
+   - Commit: 136a302846ad340f6babaa5f0f35018d867f73e8 (failed_sha in diff metadata)
+2. Run maven install with the project's build options:
+   - mvn install -DskipTests=true -Dmaven.javadoc.skip=true
+3. Observe maven-checkstyle-plugin output.
+
+Triggering Input / Conditions
+- File: src/org/traccar/reports/ReportUtils.java contains import:
+  - import org.traccar.helper.Log;
+- Checkstyle configuration (checkstyle.xml) flags unused imports as errors. The presence of an unused import triggers a Checkstyle violation at build time.
+
+Expected Behavior
+- The project should compile and the Maven build should pass (with -DskipTests=true, etc.). If code changes remove uses of a class, imports should be cleaned up so Checkstyle does not report unused imports.
+
+Observed Behavior (from build log)
+- Maven fails in the checkstyle phase with the following error:
+  - [ERROR] src/org/traccar/reports/ReportUtils.java:[29,8] (imports) UnusedImports: Unused import - org.traccar.helper.Log.
+- Result: BUILD FAILURE and the maven-checkstyle-plugin goal fails:
+  - [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project traccar: You have 1 Checkstyle violation.
+- CI retries the build 3 times; each attempt fails with the same Checkstyle error and the job is stopped.
+
+Relevant Build Log / Stack Trace (extracts)
+- The important lines from the CI build log:
+  - [INFO] --- maven-checkstyle-plugin:2.17:check (checkstyle) @ traccar ---
+  - [INFO] There is 1 error reported by Checkstyle 6.11.2 with checkstyle.xml ruleset.
+  - [ERROR] src/org/traccar/reports/ReportUtils.java:[29,8] (imports) UnusedImports: Unused import - org.traccar.helper.Log.
+  - [INFO] ------------------------------------------------------------------------
+  - [INFO] BUILD FAILURE
+  - [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project traccar: You have 1 Checkstyle violation. -> [Help 1]
+
+Relevant Code Snippets (from code diff)
+- ReportUtils.java (diff shows removal — this is the intended fix). The offending import is:
+  - import org.traccar.helper.Log;
+- Diff context (unified style) that removes the import:
+  --- a/src/org/traccar/reports/ReportUtils.java
+  +++ b/src/org/traccar/reports/ReportUtils.java
+  @@ -26,7 +26,6 @@ import org.jxls.transform.Transformer;
+   import org.jxls.transform.poi.PoiTransformer;
+   import org.jxls.util.TransformerFactory;
+   import org.traccar.Context;
+  -import org.traccar.helper.Log;
+   import org.traccar.model.Position;
+   
+   import java.io.IOException;
+
+- Test changes that accompany the patch (tests were updated and expect different behaviour):
+  --- a/test/org/traccar/reports/ReportUtilsTest.java
+  +++ b/test/org/traccar/reports/ReportUtilsTest.java
+  @@ -22,15 +22,10 @@ public class ReportUtilsTest {
+       public void testCalculateSpentFuel() {
+           Position startPosition = new Position();
+           Position endPosition = new Position();
+  -        Assert.assertEquals(ReportUtils.calculateFuel(startPosition, endPosition), "-");
+  -        startPosition.setProtocol("meitrack");
+  -        startPosition.set(Position.KEY_FUEL_LEVEL, 0.07);
+  -        endPosition.set(Position.KEY_FUEL_LEVEL, 0.05);
+  -        Assert.assertEquals(ReportUtils.calculateFuel(startPosition, endPosition), "0.02 %");
+  -        startPosition.setProtocol("galileo");
+  -        Assert.assertEquals(ReportUtils.calculateFuel(startPosition, endPosition), "0.02 %");
+  -        startPosition.setProtocol("noran");
+  -        Assert.assertEquals(ReportUtils.calculateFuel(startPosition, endPosition), "0.02 %");
+  +        Assert.assertNull(ReportUtils.calculateFuel(startPosition, endPosition));
+  +        startPosition.set(Position.KEY_FUEL_LEVEL, 0.7);
+  +        endPosition.set(Position.KEY_FUEL_LEVEL, 0.5);
+  +        Assert.assertEquals(ReportUtils.calculateFuel(startPosition, endPosition), "0.2");
+       }
+  }
+
+What went wrong / Root Cause
+- The build fails because Checkstyle (configured as a required build step) found an unused import in ReportUtils.java. The code change(s) that removed the only usages of Log left the import behind (or the import was present in the failing commit). Checkstyle is configured to treat unused imports as errors, so the entire build fails at the checkstyle:check phase before further actions.
+
+Patches / Suggested Fixes
+1. Remove the unused import (the simplest and intended fix).
+   - The code diff already shows the removal:
+     - Remove line: import org.traccar.helper.Log;
+   - Confirmed in code diff patch: that import line is deleted.
+
+2. If Log is needed later, either:
+   - Reintroduce a usage of Log in ReportUtils.java if logging is required; or
+   - Keep the import removed and add logging only when used.
+
+3. Add local pre-commit or CI step to run Checkstyle (or mvn checkstyle:check) before pushing to avoid re-run failures.
+
+4. Re-run the build:
+   - mvn install -DskipTests=true -Dmaven.javadoc.skip=true
+   - Or run just the checkstyle goal locally:
+     - mvn org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check
+
+Example minimal patch (already present in diff)
+- Remove the unused import (one-line removal):
+  - Old:
+    import org.traccar.Context;
+    import org.traccar.helper.Log;
+    import org.traccar.model.Position;
+  - New:
+    import org.traccar.Context;
+    import org.traccar.model.Position;
+
+Notes about the related test change
+- Tests were modified to change expected behaviour of ReportUtils.calculateFuel:
+  - Old expectations used formatted strings with percent sign and values like "0.02 %".
+  - New expectations use null for missing fuel fields and a string like "0.2" for difference between 0.7 and 0.5.
+- Ensure the implementation of ReportUtils.calculateFuel matches updated test expectations. The Checkstyle failure prevents unit tests from executing, so once the import is removed and build passes Checkstyle, the tests will run and may reveal additional issues to fix.
+
+Recommended Action
+1. Apply the import deletion patch (remove unused import).
+2. Run mvn checkstyle:check locally to confirm no Checkstyle violations remain.
+3. Re-run the CI build.
+4. If the build reaches the test phase, run tests and address any test failures related to the calculateFuel behaviour change.
+
+If you want, I can:
+- Provide a git patch file (.patch) that removes the import.
+- Run through likely follow-up fixes for ReportUtils.calculateFuel if tests fail after Checkstyle is fixed.

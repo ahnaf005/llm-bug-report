@@ -1,0 +1,260 @@
+## Bug Report: NullPointerException in PojosTest during Swagger Models Build
+
+### 1. Title
+Build Failure: `NullPointerException` in `io.swagger.PojosTest.testEqualsAndHashcodes` due to `Responses` and `Paths` class incompatibility.
+
+### 2. Steps to Reproduce
+1.  Clone the `swagger-api/swagger-core` repository at commit `a16ef3b26633ed0b5b9bd25a56e04337cff1e0d5`.
+2.  Navigate to the project root directory.
+3.  Execute the Maven command: `./mvnw clean verify`
+
+### 3. Triggering Input
+The `io.swagger.PojosTest.testEqualsAndHashcodes` method, specifically when attempting to reflectively test the `io.swagger.models.Responses` and `io.swagger.models.Paths` classes for correct `equals()` and `hashCode()` implementations.
+
+### 4. Expected Behavior
+The `testEqualsAndHashcodes` method should execute successfully for all relevant POJO classes, verifying the correctness of their `equals()` and `hashCode()` implementations. The entire Maven build process should complete with `BUILD SUCCESS`.
+
+### 5. Observed Behavior
+The Maven build fails during the `test` phase of the `swagger-models` module. A `java.lang.NullPointerException` occurs in `io.swagger.PojosTest.testEqualsAndHashcodes` at line 113.
+
+Additionally, during the `jetty-maven-plugin:start` phase for the `swagger-jaxrs` module, multiple `java.lang.IncompatibleClassChangeError` warnings are logged. These warnings indicate a class loading issue where `org.eclipse.jetty.annotations.AnnotationParser$MyClassVisitor` expects `org.objectweb.asm.ClassVisitor` to be an interface, but it is loaded as a class, suggesting a conflict in ASM library versions used by Jetty and other dependencies. While these warnings are not the direct cause of the build failure in `swagger-models`, they indicate a broader dependency or environment issue.
+
+**Error Message (NullPointerException):**
+```
+[ERROR] Tests run: 249, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 10.073 s <<< FAILURE! - in TestSuite
+[ERROR] testEqualsAndHashcodes(io.swagger.PojosTest)  Time elapsed: 0.092 s  <<< FAILURE!
+java.lang.NullPointerException
+	at io.swagger.PojosTest.testEqualsAndHashcodes(PojosTest.java:113)
+```
+
+**Example Warning Message (IncompatibleClassChangeError):**
+```
+[WARNING] 
+java.lang.IncompatibleClassChangeError: class org.eclipse.jetty.annotations.AnnotationParser$MyClassVisitor has interface org.objectweb.asm.ClassVisitor as super class
+	at java.lang.ClassLoader.defineClass1(Native Method)
+	at java.lang.ClassLoader.defineClass(ClassLoader.java:803)
+	at java.security.SecureClassLoader.defineClass(SecureClassLoader.java:142)
+	at java.net.URLClassLoader.defineClass(URLClassLoader.java:442)
+	at java.net.URLClassLoader.access$100(URLClassLoader.java:64)
+	at java.net.URLClassLoader$1.run(URLClassLoader.java:354)
+	at java.net.URLClassLoader$1.run(URLClassLoader.java:348)
+	at java.security.AccessController.doPrivileged(Native Method)
+	at java.net.URLClassLoader.findClass(URLClassLoader.java:347)
+	at org.codehaus.plexus.classworlds.realm.ClassRealm.loadClassFromSelf(ClassRealm.java:401)
+	at org.codehaus.plexus.classworlds.strategy.SelfFirstStrategy.loadClass(SelfFirstStrategy.java:42)
+	at org.codehaus.plexus.classworlds.realm.ClassRealm.unsynchronizedLoadClass(ClassRealm.java:271)
+	at org.codehaus.plexus.classworlds.realm.ClassRealm.loadClass(ClassRealm.java:247)
+	at org.codehaus.plexus.classworlds.realm.ClassRealm.loadClass(ClassRealm.java:239)
+	at org.eclipse.jetty.annotations.AnnotationParser.scanClass(AnnotationParser.java:974)
+	at org.eclipse.jetty.annotations.AnnotationParser.parseJarEntry(AnnotationParser.java:956)
+	at org.eclipse.jetty.annotations.AnnotationParser.parseJar(AnnotationParser.java:909)
+	at org.eclipse.jetty.annotations.AnnotationParser.parse(AnnotationParser.java:831)
+	at org.eclipse.jetty.annotations.AnnotationConfiguration$ParserTask.call(AnnotationConfiguration.java:163)
+	at org.eclipse.jetty.annotations.AnnotationConfiguration$1.run(AnnotationConfiguration.java:548)
+	at org.eclipse.jetty.util.thread.QueuedThreadPool.runJob(QueuedThreadPool.java:635)
+	at org.eclipse.jetty.util.thread.QueuedThreadPool$3.run(QueuedThreadPool.java:555)
+	at java.lang.Thread.run(Thread.java:748)
+```
+
+### 6. Relevant Code Snippets
+
+**`modules/swagger-models/src/test/java/io/swagger/PojosTest.java` (before patch, line 113 is where `excludedClasses` is defined)**
+```java
+        classesExclusions.put(RefModel.class, new HashSet<String>(Arrays.asList("title")));
+        classesExclusions.put(RefResponse.class,
+                new HashSet<String>(Arrays.asList("headers", "schema")));
+        // Line 113 in the original file would be the definition of excludedClasses
+        Set<Class<?>> classesUsingInheritedFields = new HashSet<Class<?>>(Arrays.asList(ApiKeyAuthDefinition.class,
+                BodyParameter.class, ArrayProperty.class, BaseIntegerProperty.class, CookieParameter.class));
+        Set<Class<?>> excludedClasses = new HashSet<Class<?>>(Arrays.asList(PropertyBuilder.class)); // This line is modified by the patch
+        for (PojoClass clazz : pojoClasses) {
+            if (excludedClasses.contains(clazz.getClazz()))
+                continue;
+```
+
+**`modules/swagger-models/src/main/java/io/swagger/models/Responses.java` (before patch, relevant parts)**
+```java
+public class Responses extends LinkedHashMap<String, Response> {
+
+    public static final String DEFAULT = "default"; // This constant is removed
+
+    // ... (methods like getDefault(), setDefault(), _default() are removed) ...
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        if (!super.equals(o)) {
+            return false;
+        }
+        Responses apiResponses = (Responses) o;
+        return Objects.equals(this.vendorExtensions, apiResponses.vendorExtensions);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(vendorExtensions, super.hashCode());
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("class ApiResponses {\\n");
+        sb.append("    ").append(toIndentedString(super.toString())).append("\\n");
+        sb.append("    vendorExtensions: ").append(toIndentedString(vendorExtensions)).append("\\n");
+        sb.append("}");
+        return sb.toString();
+    }
+```
+
+### 7. Stack Traces
+The primary stack trace for the build failure is:
+```
+[ERROR] Tests run: 249, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 10.073 s <<< FAILURE! - in TestSuite
+[ERROR] testEqualsAndHashcodes(io.swagger.PojosTest)  Time elapsed: 0.092 s  <<< FAILURE!
+java.lang.NullPointerException
+	at io.swagger.PojosTest.testEqualsAndHashcodes(PojosTest.java:113)
+```
+Multiple `java.lang.IncompatibleClassChangeError` warnings also appear earlier in the log, for example:
+```
+[WARNING] 
+java.lang.IncompatibleClassChangeError: class org.eclipse.jetty.annotations.AnnotationParser$MyClassVisitor has interface org.objectweb.asm.ClassVisitor as super class
+	at java.lang.ClassLoader.defineClass1(Native Method)
+	at java.lang.ClassLoader.defineClass(ClassLoader.java:803)
+	at java.security.SecureClassLoader.defineClass(SecureClassLoader.java:142)
+	at java.net.URLClassLoader.defineClass(URLClassLoader.java:442)
+	at java.net.URLClassLoader.access$100(URLClassLoader.java:64)
+	at java.net.URLClassLoader$1.run(URLClassLoader.java:354)
+	at java.net.URLClassLoader$1.run(URLClassLoader.java:348)
+	at java.security.AccessController.doPrivileged(Native Method)
+	at java.net.URLClassLoader.findClass(ClassLoader.java:347)
+	at org.codehaus.plexus.classworlds.realm.ClassRealm.loadClassFromSelf(ClassRealm.java:401)
+	at org.codehaus.plexus.classworlds.strategy.SelfFirstStrategy.loadClass(SelfFirstStrategy.java:42)
+	at org.codehaus.plexus.classworlds.realm.ClassRealm.unsynchronizedLoadClass(ClassRealm.java:271)
+	at org.codehaus.plexus.classworlds.realm.ClassRealm.loadClass(ClassRealm.java:247)
+	at org.codehaus.plexus.classworlds.realm.ClassRealm.loadClass(ClassRealm.java:239)
+	at org.eclipse.jetty.annotations.AnnotationParser.scanClass(AnnotationParser.java:974)
+	at org.eclipse.jetty.annotations.AnnotationParser.parseJarEntry(AnnotationParser.java:956)
+	at org.eclipse.jetty.annotations.AnnotationParser.parseJar(AnnotationParser.java:909)
+	at org.eclipse.jetty.annotations.AnnotationParser.parse(AnnotationParser.java:831)
+	at org.eclipse.jetty.annotations.AnnotationConfiguration$ParserTask.call(AnnotationConfiguration.java:163)
+	at org.eclipse.jetty.annotations.AnnotationConfiguration$1.run(AnnotationConfiguration.java:548)
+	at org.eclipse.jetty.util.thread.QueuedThreadPool.runJob(QueuedThreadPool.java:635)
+	at org.eclipse.jetty.util.thread.QueuedThreadPool$3.run(QueuedThreadPool.java:555)
+	at java.lang.Thread.run(Thread.java:748)
+```
+
+### 8. Patches / Suggested Fixes
+
+The provided code diff includes the following patches to resolve the issue:
+
+1.  **`modules/swagger-models/src/main/java/io/swagger/models/Paths.java`**:
+    *   Reorders arguments in `Objects.hash` for consistency.
+    *   Adds `vendorExtensions` to the `toString()` representation.
+    ```diff
+    --- a/modules/swagger-models/src/main/java/io/swagger/models/Paths.java
+    +++ b/modules/swagger-models/src/main/java/io/swagger/models/Paths.java
+    @@ -30,7 +30,7 @@ public class Paths extends LinkedHashMap<String, Path> {
+     
+         @Override
+         public int hashCode() {
+    -        return Objects.hash(vendorExtensions, super.hashCode());
+    +        return Objects.hash(super.hashCode(), vendorExtensions);
+         }
+     
+         public java.util.Map<String, Object> getVendorExtensions() {
+    @@ -61,6 +61,7 @@ public class Paths extends LinkedHashMap<String, Path> {
+             StringBuilder sb = new StringBuilder();
+             sb.append("class Paths {\\n");
+             sb.append("    ").append(toIndentedString(super.toString())).append("\\n");
+    +        sb.append("    vendorExtensions: ").append(toIndentedString(vendorExtensions)).append("\\n");
+             sb.append("}");
+             return sb.toString();
+         }
+    ```
+
+2.  **`modules/swagger-models/src/main/java/io/swagger/models/Responses.java`**:
+    *   Removes the `DEFAULT` constant and associated `getDefault()`, `setDefault()`, and `_default()` methods.
+    *   Corrects the `equals()` method to properly include the `super.equals(o)` check.
+    ```diff
+    --- a/modules/swagger-models/src/main/java/io/swagger/models/Responses.java
+    +++ b/modules/swagger-models/src/main/java/io/swagger/models/Responses.java
+    @@ -6,8 +6,6 @@ import java.util.Objects;
+     
+     public class Responses extends LinkedHashMap<String, Response> {
+     
+    -    public static final String DEFAULT = "default";
+    -
+         private java.util.Map<String, Object> vendorExtensions = null;
+     
+         public Responses addResponse(String name, Response item) {
+    @@ -15,24 +13,6 @@ public class Responses extends LinkedHashMap<String, Response> {
+             return this;
+         }
+     
+    -    /**
+    -     * returns the default property from a ApiResponses instance.
+    -     *
+    -     * @return ApiResponse _default
+    -     **/\n-
+    -    public Response getDefault() {
+    -        return this.get(DEFAULT);
+    -    }
+    -
+    -    public void setDefault(Response _default) {
+    -        addResponse(DEFAULT, _default);
+    -    }
+    -
+    -    public Responses _default(Response _default) {
+    -        setDefault(_default);
+    -        return this;
+    -    }
+     
+         public java.util.Map<String, Object> getVendorExtensions() {
+             return vendorExtensions;
+    @@ -69,8 +49,9 @@ public class Responses extends LinkedHashMap<String, Response> {
+             if (!super.equals(o)) {
+                 return false;
+             }
+    -        Responses apiResponses = (Responses) o;
+    -        return Objects.equals(this.vendorExtensions, apiResponses.vendorExtensions);
+    +        Responses responses = (Responses) o;
+    +        return Objects.equals(this.vendorExtensions, responses.vendorExtensions) &&
+    +                super.equals(o);
+         }
+     
+         @Override
+    @@ -81,7 +62,7 @@ public class Responses extends LinkedHashMap<String, Response> {
+         @Override
+         public String toString() {
+             StringBuilder sb = new StringBuilder();
+    -        sb.append("class ApiResponses {\\n");
+    +        sb.append("class Responses {\\n");
+             sb.append("    ").append(toIndentedString(super.toString())).append("\\n");
+             sb.append("    vendorExtensions: ").append(toIndentedString(vendorExtensions)).append("\\n");
+             sb.append("}");
+    ```
+
+3.  **`modules/swagger-models/src/test/java/io/swagger/PojosTest.java`**:
+    *   Excludes `Responses.class` and `Paths.class` from the `testEqualsAndHashcodes` method, preventing the `NullPointerException` that occurs when these classes are reflectively tested.
+    ```diff
+    --- a/modules/swagger-models/src/test/java/io/swagger/PojosTest.java
+    +++ b/modules/swagger-models/src/test/java/io/swagger/PojosTest.java
+    @@ -102,10 +102,11 @@ public class PojosTest extends PowerMockTestCase {
+             classesExclusions.put(RefModel.class, new HashSet<String>(Arrays.asList("title")));
+             classesExclusions.put(RefResponse.class,
+                     new HashSet<String>(Arrays.asList("headers", "schema")));
+    +        
+     
+             Set<Class<?>> classesUsingInheritedFields = new HashSet<Class<?>>(Arrays.asList(ApiKeyAuthDefinition.class,
+                     BodyParameter.class, ArrayProperty.class, BaseIntegerProperty.class, CookieParameter.class));
+    -        Set<Class<?>> excludedClasses = new HashSet<Class<?>>(Arrays.asList(PropertyBuilder.class));
+    +        Set<Class<?>> excludedClasses = new HashSet<Class<?>>(Arrays.asList(PropertyBuilder.class,Responses.class,Paths.class));
+             for (PojoClass clazz : pojoClasses) {
+                 if (excludedClasses.contains(clazz.getClazz()))
+                     continue;
+    ```

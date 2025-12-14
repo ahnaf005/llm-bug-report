@@ -1,0 +1,90 @@
+## Software Bug Report
+
+**Bug ID:** #20240626-001 (Assigned for tracking)
+
+**Bug Title:** Build Failure: Checkstyle Violation for TODO Comment in `MantaMultipartManager.java` during `mvn install`
+
+**Project:** joyent/java-manta
+**Module:** `java-manta-client`
+**Version/Commit:** `e5c53bf1f1df1d34783f390562179d6a48292f95` (Failed SHA)
+**Build ID:** 171009591
+**Build URL:** (If available, would be added here)
+
+**Environment:**
+*   **CI System:** Travis CI
+*   **Operating System:** Ubuntu 12.04.5 LTS (Precise)
+*   **Linux Kernel:** 3.13.0-29-generic
+*   **Java Version:** Oracle JDK 1.8.0_31 (Java HotSpot(TM) 64-Bit Server VM, build 25.31-b07)
+*   **Maven Version:** Apache Maven 3.2.5
+
+**Severity:** High (Build-blocking)
+**Priority:** High (Prevents successful integration and deployment)
+
+---
+
+### Description
+
+The continuous integration (CI) build is failing during the `install` phase due to a Checkstyle violation. Specifically, the `maven-checkstyle-plugin` is flagging a "TodoComment" in the `MantaMultipartManager.java` file. The build attempts to retry the `mvn install` command multiple times but consistently fails for the same reason.
+
+---
+
+### Steps to Reproduce
+
+1.  Clone the `joyent/java-manta` repository.
+2.  Checkout the failing commit: `git checkout e5c53bf1f1df1d34783f390562179d6a48292f95`
+3.  Execute the Maven install command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+---
+
+### Expected Behavior
+
+The `mvn install` command should complete successfully, building and installing the project artifacts without any Checkstyle violations or other errors.
+
+---
+
+### Actual Behavior
+
+The `mvn install` command fails with a Checkstyle violation related to a "TodoComment" in `MantaMultipartManager.java`. The build log shows the following error:
+
+```
+[ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[641] (misc) TodoComment: Comment matches to-do format 'TODO:'.
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation. -> [Help 1]
+```
+
+This error occurs repeatedly across all retries, leading to a complete build failure.
+
+---
+
+### Root Cause Analysis
+
+1.  **Checkstyle Configuration:** The `maven-checkstyle-plugin` is configured to treat `TODO:` comments as violations, preventing the build from passing if such comments exist in the codebase.
+2.  **Code Change:** The provided code diff shows significant changes to the `complete` method in `MantaMultipartManager.java`. While new logic was introduced, the existing `// TODO: Validate parts and match up etags with path` comment on line 641 (or its new equivalent line number after the diff) was retained.
+3.  **Build Command:** The failing command `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V` does *not* include `-Dcheckstyle.skip=true`. Although the subsequent `CMD="mvn clean test -Dcheckstyle.skip=true"` variable *does* include this flag, the build fails during the `install` phase, before the `test` phase would be executed. Therefore, Checkstyle is actively run during `install`.
+
+The bug is caused by the presence of a `TODO:` comment that violates the project's Checkstyle rules, combined with the `install` phase not explicitly skipping Checkstyle checks.
+
+---
+
+### Proposed Solution / Workaround
+
+**Immediate Workaround:**
+1.  **Remove/Rephrase TODO:** Modify `java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java` on line 641 (or the line containing the `TODO:` comment) to either:
+    *   Remove the `TODO:` comment entirely if the task has been addressed by the new code.
+    *   Rephrase the comment to not match the "TodoComment" pattern (e.g., `// FIXME: Validate parts...` or `// Future work: Validate parts...`).
+2.  **Skip Checkstyle during Install (if desired):** If Checkstyle is not intended to run during the `install` phase, add `-Dcheckstyle.skip=true` to the `mvn install` command in the `.travis.yml` file, similar to how it's used for the `test` command.
+
+**Long-Term Solution:**
+*   **Address the TODO:** If the `TODO:` comment represents outstanding work, it should be completed and the comment removed.
+*   **Review Checkstyle Rules:** Evaluate if the "TodoComment" rule is appropriate for the project's development workflow. If `TODO` comments are acceptable for tracking future work, the Checkstyle configuration should be updated to relax or remove this specific rule.
+*   **Consistent Checkstyle Execution:** Ensure that Checkstyle is run consistently across all desired Maven phases (e.g., `verify`) and that the CI configuration aligns with this strategy.
+
+---
+
+### Relevant Files and Lines
+
+*   `java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java`: Line 641 (or nearby, depending on exact diff application)
+    ```java
+    // TODO: Validate parts and match up etags with path
+    ```
+*   `.travis.yml` (implied, for build command configuration)
+*   `java-manta-client/pom.xml` (implied, for `maven-checkstyle-plugin` configuration)

@@ -1,0 +1,120 @@
+## Software Bug Report
+
+**Bug ID:** BB-FB-001
+**Title:** Build Failure: FindBugs `EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS` in `TypeCache.java`
+**Project:** Byte Buddy
+**Module:** `byte-buddy-dep`
+**Version:** `1.5.11-SNAPSHOT`
+**Severity:** High (Build Failure)
+**Priority:** High (Blocks CI/CD pipeline)
+**Status:** Open
+**Assigned To:** Core Development Team
+**Reported By:** Debugging System
+**Date Reported:** 2024-06-26
+
+---
+
+### 1. Description
+
+The build for the `byte-buddy-dep` module is failing during the FindBugs analysis phase. The failure is caused by two instances of the `EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS` warning, which the FindBugs Maven plugin is configured to treat as errors.
+
+The warnings occur in the `equals` methods of `net.bytebuddy.TypeCache$LookupKey` and `net.bytebuddy.TypeCache$StorageKey`. FindBugs flags these because the `equals` implementations perform cross-type comparisons, where a `LookupKey` can be compared to a `StorageKey` and vice-versa. While the developer's intention, as indicated by the added `@SuppressFBWarnings` annotation and its justification, is for this cross-comparison to be valid, the FindBugs plugin's default configuration treats this pattern as a potential bug.
+
+The provided code diff shows an attempt to address this by adding `@SuppressFBWarnings` annotations to the affected `equals` methods. However, this suppression is not taking effect, or the build is being run against a version of the code *before* this suppression was fully integrated or recognized by the build system. Additionally, a minor reordering of conditions within the `equals` methods was observed, but this does not alter the logical behavior or address the FindBugs warning itself.
+
+### 2. Steps to Reproduce
+
+1.  Checkout the Byte Buddy repository at commit `ea2bfdcab95a270cd5ca7c0f02c2733569eebfb1`.
+2.  Navigate to the root directory of the project.
+3.  Execute the Maven build command: `mvn jacoco:prepare-agent verify jacoco:report -Pintegration -Dnet.bytebuddy.test.travis=true`
+4.  Observe the build failure during the `findbugs-maven-plugin:3.0.3:check` phase for the `byte-buddy-dep` module.
+
+### 3. Expected Behavior
+
+The build should complete successfully without any FindBugs errors. If the cross-type comparison in the `equals` methods is indeed intentional and correct by design, the `@SuppressFBWarnings` annotation should be correctly applied and recognized by the FindBugs plugin, preventing the build from failing.
+
+### 4. Actual Behavior
+
+The build fails with the following FindBugs errors:
+
+```
+[ERROR] Failed to execute goal org.codehaus.mojo:findbugs-maven-plugin:3.0.3:check (default) on project byte-buddy-dep: failed with 2 bugs and 0 errors -> [Help 1]
+...
+[INFO] BugInstance size is 2
+[INFO] Error size is 0
+[INFO] Total bugs: 2
+[INFO] net.bytebuddy.TypeCache$LookupKey.equals(Object) checks for operand being a TypeCache$StorageKey  [net.bytebuddy.TypeCache$LookupKey, net.bytebuddy.TypeCache$LookupKey] At TypeCache.java:[line 258]Another occurrence at TypeCache.java:[line 259] EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS
+[INFO] net.bytebuddy.TypeCache$StorageKey.equals(Object) checks for operand being a TypeCache$LookupKey  [net.bytebuddy.TypeCache$StorageKey] At TypeCache.java:[line 299] EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS
+```
+
+The build process for the `byte-buddy-dep` module is marked as `FAILURE`.
+
+### 5. Environment
+
+*   **Operating System:** Ubuntu 12.04.5 LTS (precise), Linux 3.13.0-29-generic (amd64)
+*   **Java Version:** Oracle JDK 1.8.0_111 (Java HotSpot(TM) 64-Bit Server VM, build 25.111-b14)
+*   **Build Tool:** Apache Maven 3.2.5
+*   **FindBugs Plugin Version:** `org.codehaus.mojo:findbugs-maven-plugin:3.0.3`
+*   **Git Commit SHA:** `ea2bfdcab95a270cd5ca7c0f02c2733569eebfb1`
+
+### 6. Logs / Screenshots
+
+The full build log and code diff are provided in the uploaded file. Key excerpts are included in the "Description" and "Actual Behavior" sections above.
+
+### 7. Proposed Solution / Workaround
+
+The provided code diff indicates that the developer intended to suppress these specific FindBugs warnings by adding `@SuppressFBWarnings` annotations to the `equals` methods in `TypeCache.java`.
+
+**Code Diff Analysis:**
+```diff
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/TypeCache.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/TypeCache.java
+@@ -1,5 +1,6 @@
+ package net.bytebuddy;
+ 
++import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+ import net.bytebuddy.utility.CompoundList;
+ 
+ import java.lang.ref.Reference;
+@@ -254,9 +255,10 @@ public class TypeCache<T> extends ReferenceQueue<ClassLoader> {\
+         }\
+ 
+         @Override
++        @SuppressFBWarnings(value = "EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS", justification = "Cross-comparison is intended")
+         public boolean equals(Object other) {\
+             return (other instanceof LookupKey && ((LookupKey) other).classLoader == classLoader)\
+-                    || (other instanceof StorageKey && ((StorageKey) other).get() == classLoader && ((StorageKey) other).hashCode == hashCode);\
++                    || (other instanceof StorageKey && ((StorageKey) other).hashCode == hashCode && ((StorageKey) other).get() == classLoader);\
+         }\
+ 
+         @Override
+@@ -295,8 +297,9 @@ public class TypeCache<T> extends ReferenceQueue<ClassLoader> {\
+         }\
+ 
+         @Override
++        @SuppressFBWarnings(value = "EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS", justification = "Cross-comparison is intended")
+         public boolean equals(Object other) {\
+-            return (other instanceof LookupKey && ((LookupKey) other).classLoader == get() && ((LookupKey) other).hashCode == hashCode)\
++            return (other instanceof LookupKey && ((LookupKey) other).hashCode == hashCode && ((LookupKey) other).classLoader == get())\
+                     || (other instanceof StorageKey && ((StorageKey) other).get() == get());\
+         }\
+ 
+```
+
+The proposed solution is to ensure that the `@SuppressFBWarnings` annotations are correctly applied and recognized by the FindBugs Maven plugin. This might involve:
+1.  Verifying that the `edu.umd.cs.findbugs:findbugs-annotations` dependency is correctly configured and available to the compiler and FindBugs plugin.
+2.  Confirming that the FindBugs plugin version supports and correctly processes these annotations.
+3.  Re-running the build after ensuring the changes from the diff (including the import and annotations) are fully incorporated into the source code being compiled and analyzed.
+
+The reordering of conditions within the `equals` methods (e.g., `((StorageKey) other).get() == classLoader && ((StorageKey) other).hashCode == hashCode)` to `((StorageKey) other).hashCode == hashCode && ((StorageKey) other).get() == classLoader)`) is a minor change and does not directly address the FindBugs warning, but rather the annotation is intended to.
+
+### 8. Root Cause Analysis
+
+The root cause of the build failure is the FindBugs plugin reporting `EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS` warnings as errors. This specific warning is triggered because the `equals` methods in `TypeCache.LookupKey` and `TypeCache.StorageKey` are designed to compare instances of different types, which is an unusual pattern for `equals` and is flagged by FindBugs as a potential logical error.
+
+The developer's intent is to allow this cross-type comparison, as indicated by the `justification = "Cross-comparison is intended"` in the `@SuppressFBWarnings` annotation. The failure suggests that either:
+1.  The `@SuppressFBWarnings` annotation is not being correctly processed by the FindBugs plugin.
+2.  The build environment or configuration is not correctly linking the FindBugs annotations library.
+3.  The build was executed on a state of the code where the suppression annotations were not yet present or fully committed/applied.
+
+Given the diff shows the addition of the suppression, the most likely immediate cause of the *failure* in this specific build log is that the FindBugs plugin is not correctly interpreting or applying the `@SuppressFBWarnings` annotation, or there's a mismatch in the code state being analyzed versus the code state with the suppression.

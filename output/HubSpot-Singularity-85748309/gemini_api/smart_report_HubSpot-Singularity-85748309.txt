@@ -1,0 +1,99 @@
+Here is a detailed bug report based on the provided build log and the (missing) code diff:
+
+---
+
+### Bug Report: Compilation Failure - Lossy Conversion from Double to Float
+
+**1. Title:**
+Compilation Failure: Lossy Conversion from Double to Float in `MesosTaskStatisticsObject.java`
+
+**2. Steps to Reproduce:**
+1.  Clone the Singularity repository:
+    `git clone https://github.com/HubSpot/Singularity.git`
+2.  Navigate into the repository directory:
+    `cd HubSpot/Singularity`
+3.  Checkout the specific commit:
+    `git checkout e8fd6892f326916c3da9359a216a7e0e06cd4f47`
+4.  Ensure Java 8 (specifically Oracle JDK 1.8.0_31) and Apache Maven 3.2.5 are configured in the environment.
+5.  Execute the Maven build command:
+    `mvn -Pbuild-swagger-documentation -DskipTests=true -B -q -fae install`
+
+**3. Triggering Input:**
+The build is triggered by the Maven `install` goal with the `-Pbuild-swagger-documentation` profile. The underlying cause is the source code of `SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java`, which contains assignments of `double` values to `float` fields without explicit casting, leading to a compilation error under Java 8.
+
+**4. Expected Behavior:**
+The `SingularityBase` project, and subsequently the entire Singularity project, should compile successfully without any errors, and the Maven build should complete.
+
+**5. Observed Behavior:**
+The Maven build fails during the compilation phase of the `SingularityBase` module. The Java compiler reports "incompatible types: possible lossy conversion from double to float" errors for assignments within the `MesosTaskStatisticsObject.java` file at lines 60, 64, and 68. The build terminates with an error code.
+
+**6. Relevant Code Snippets:**
+The provided "CODE DIFF" was not a code diff but an API error message (`404 Not Found`). Therefore, the exact code snippets from the diff are unavailable.
+
+However, based on the compilation error message, the code at lines 60, 64, and 68 of `MesosTaskStatisticsObject.java` likely involves assigning a `double` literal or a `double` variable to a `float` type variable or field without an explicit cast. An example of such problematic code would be:
+
+```java
+// Example of code structure that would cause the error
+package com.hubspot.mesos.json;
+
+public class MesosTaskStatisticsObject {
+    private float cpusLimit; // Assuming this is one of the fields involved
+    private float memLimit;  // Assuming this is one of the fields involved
+    private float diskLimit; // Assuming this is one of the fields involved
+
+    // ... other fields and methods
+
+    public MesosTaskStatisticsObject(
+        // ... other parameters
+        double cpusLimitDouble, // Input parameter is a double
+        double memLimitDouble,  // Input parameter is a double
+        double diskLimitDouble  // Input parameter is a double
+    ) {
+        // ... other assignments
+        this.cpusLimit = cpusLimitDouble; // Line 60: incompatible types: possible lossy conversion from double to float
+        // ... some other code
+        this.memLimit = memLimitDouble;   // Line 64: incompatible types: possible lossy conversion from double to float
+        // ... some other code
+        this.diskLimit = diskLimitDouble; // Line 68: incompatible types: possible lossy conversion from double to float
+    }
+}
+```
+
+**7. Stack Traces:**
+```
+[ERROR] COMPILATION ERROR : 
+[ERROR] /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[60,12] incompatible types: possible lossy conversion from double to float
+[ERROR] /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[64,12] incompatible types: possible lossy conversion from double to float
+[ERROR] /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[68,12] incompatible types: possible lossy conversion from double to float
+     [java] Oct 16, 2015 3:44:51 PM java.util.prefs.FileSystemPreferences$1 run
+     [java] INFO: Created user preferences directory.
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.3:compile (default-compile) on project SingularityBase: Compilation failure: Compilation failure:
+[ERROR] /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[60,12] incompatible types: possible lossy conversion from double to float
+[ERROR] /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[64,12] incompatible types: possible lossy conversion from double to float
+[ERROR] /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[68,12] incompatible types: possible lossy conversion from double to float
+[ERROR] -> [Help 1]
+```
+
+**8. Patches / Suggested Fixes:**
+The provided "CODE DIFF" was not a code diff, so no specific patch is available.
+
+To resolve the "incompatible types: possible lossy conversion from double to float" error, the `double` values being assigned to `float` fields must be explicitly cast to `float`.
+
+*   **Option 1: Explicit Cast (Recommended if `float` precision is sufficient):**
+    Modify the assignments at lines 60, 64, and 68 in `MesosTaskStatisticsObject.java` to include an explicit `(float)` cast.
+    ```java
+    // Example fix for line 60
+    this.cpusLimit = (float) cpusLimitDouble; 
+    // Example fix for line 64
+    this.memLimit = (float) memLimitDouble;
+    // Example fix for line 68
+    this.diskLimit = (float) diskLimitDouble;
+    ```
+*   **Option 2: Use Float Literals (If assigning hardcoded values):**
+    If the values being assigned are hardcoded literals, append `f` or `F` to them to explicitly define them as `float` literals.
+    ```java
+    // Example fix if assigning a literal
+    this.someFloatValue = 1.23f; 
+    ```
+*   **Option 3: Change Field Type (If `double` precision is required):**
+    If the full precision of `double` is necessary for these values, consider changing the data type of the fields (e.g., `cpusLimit`, `memLimit`, `diskLimit`) from `float` to `double` in `MesosTaskStatisticsObject.java`. This option would require a broader impact analysis to ensure compatibility with other parts of the codebase.

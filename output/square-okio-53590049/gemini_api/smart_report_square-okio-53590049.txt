@@ -1,0 +1,104 @@
+Here is a detailed bug report based on the provided build log and code diff:
+
+---
+
+### Bug Report: Compilation Failure - `SegmentPool.INSTANCE` symbol not found
+
+**1. Title:**
+Compilation Failure: `SegmentPool.INSTANCE` symbol not found in `Buffer.java`
+
+**2. Steps to Reproduce:**
+1.  Clone the `square/okio` repository.
+2.  Checkout the specific commit `ffc28d67927d01c2900f3646710e564fc945cd7a`.
+3.  Ensure Java Development Kit (JDK) 1.8.0_31 is active.
+4.  Navigate to the project root directory (`square/okio`).
+5.  Execute the Maven build command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+**3. Triggering Input:**
+The compilation error is triggered by the code in `okio/src/main/java/okio/Buffer.java` at commit `ffc28d67927d01c2900f3646710e564fc945cd7a`, which attempts to access `SegmentPool.INSTANCE.recycle(segment)`. This indicates a change in the `SegmentPool` class where the `INSTANCE` field is no longer available or the `recycle` method has become static.
+
+**4. Expected Behavior:**
+The `okio` project should compile successfully, and the Maven build should complete without any compilation errors, leading to a successful installation of the artifacts.
+
+**5. Observed Behavior:**
+The Maven build fails during the `compile` phase of the `okio` module. The compiler reports "cannot find symbol" errors in `Buffer.java` because it cannot locate the `INSTANCE` variable within the `okio.SegmentPool` class. The build retries twice but fails consistently.
+
+**6. Relevant Code Snippets:**
+The problematic lines from `okio/src/main/java/okio/Buffer.java` at the `failed_sha` (`ffc28d67927d01c2900f3646710e564fc945cd7a`) are:
+
+```java
+// okio/src/main/java/okio/Buffer.java
+// ...
+      if (pos == limit) {
+        head = segment.pop();
+        SegmentPool.INSTANCE.recycle(segment); // Line 457
+      } else {
+        segment.pos = pos;
+      }
+// ...
+      if (pos == limit) {
+        head = segment.pop();
+        SegmentPool.INSTANCE.recycle(segment); // Line 513
+      } else {
+        segment.pos = pos;
+      }
+// ...
+```
+
+**7. Stack Traces:**
+```
+[INFO] -------------------------------------------------------------
+[ERROR] COMPILATION ERROR :
+[INFO] -------------------------------------------------------------
+[ERROR] /home/travis/build/square/okio/okio/src/main/java/okio/Buffer.java:[457,20] cannot find symbol
+  symbol:   variable INSTANCE
+  location: class okio.SegmentPool
+[ERROR] /home/travis/build/square/okio/okio/src/main/java/okio/Buffer.java:[513,20] cannot find symbol
+  symbol:   variable INSTANCE
+  location: class okio.SegmentPool
+[INFO] 2 errors
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary:
+[INFO]
+[INFO] Okio (Parent) ...................................... SUCCESS [  2.152 s]
+[INFO] Okio ............................................... FAILURE [  4.304 s]
+[INFO] Okio Performance Benchmarks ........................ SKIPPED
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.0:compile (default-compile) on project okio: Compilation failure: Compilation failure:
+[ERROR] /home/travis/build/square/okio/okio/src/main/java/okio/Buffer.java:[457,20] cannot find symbol
+[ERROR] symbol:   variable INSTANCE
+[ERROR] location: class okio.SegmentPool
+[ERROR] /home/travis/build/square/okio/okio/src/main/java/okio/Buffer.java:[513,20] cannot find symbol
+[ERROR] symbol:   variable INSTANCE
+[ERROR] location: class okio.SegmentPool
+[ERROR] -> [Help 1]
+```
+
+**8. Patches / Suggested Fixes:**
+The provided code diff (`d07412cc7cb917f852442d3d8ea056e374bad402` vs `ffc28d67927d01c2900f3646710e564fc945cd7a`) indicates the fix involves changing the call from `SegmentPool.INSTANCE.recycle(segment)` to `SegmentPool.recycle(segment)`. This suggests that the `recycle` method in `SegmentPool` was refactored to be a static method, or the `INSTANCE` field was removed, making the direct static call the correct usage.
+
+```diff
+--- a/okio/src/main/java/okio/Buffer.java
++++ b/okio/src/main/java/okio/Buffer.java
+@@ -454,7 +454,7 @@ public final class Buffer implements BufferedSource, BufferedSink, Cloneable {
+
+       if (pos == limit) {
+         head = segment.pop();
+-        SegmentPool.INSTANCE.recycle(segment);
++        SegmentPool.recycle(segment);
+       } else {
+         segment.pos = pos;
+       }
+@@ -510,7 +510,7 @@ public final class Buffer implements BufferedSource, BufferedSink, Cloneable {
+
+       if (pos == limit) {
+         head = segment.pop();
+-        SegmentPool.INSTANCE.recycle(segment);
++        SegmentPool.recycle(segment);
+       } else {
+         segment.pos = pos;
+       }
+```

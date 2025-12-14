@@ -1,0 +1,123 @@
+Title
+- Test failures in OWLProfileTestCase: expected violation counts mismatch for datatype definition and datatype restriction tests
+
+Steps to Reproduce
+1. Clone the owlapi repository at the commit that produced the build (see build log):
+   - git clone --depth=50 --branch=master https://github.com/owlcs/owlapi.git
+   - git checkout bb13bbc85174d8b0c004255ee811353d619af40a
+2. Build and run tests:
+   - mvn verify
+3. Observe the failing tests reported by surefire (in module owlapi-contract).
+
+Triggering Input (conditions that cause the failure)
+- Two unit tests in contract/src/test/java/org/semanticweb/owlapi/profiles/OWLProfileTestCase.java:
+  1. shouldCreateViolationForOWLDatatypeRestrictionInOWL2Profile
+     - Test setup adds a DatatypeDefinition and a DataPropertyRange set to a DataRangeRestriction using built-in xsd:integer and a facetRestriction with langRange.
+     - The test asserts the number and types of profile violations produced for Profiles.OWL2_FULL.
+  2. shouldCreateViolationForOWLDatatypeDefinitionAxiomInOWL2Profile
+     - Test setup adds DatatypeDefinition(FAKEDATATYPE, Boolean()).
+     - The test asserts number and types of profile violations produced for Profiles.OWL2_FULL.
+
+Expected Behavior
+- The test expectations should match the validator's actual behavior:
+  - Either the validator should produce the older set of violations (4 violations for the restriction test and 2 for the datatype definition test), or tests should be updated to assert the currently observed violations (3 and 1 respectively).
+- In other words, test assertions and observed validation results must be consistent.
+
+Observed Behavior (from the build log)
+- mvn verify fails because two tests in OWLProfileTestCase report mismatched expected vs actual violation counts:
+  - shouldCreateViolationForOWLDatatypeDefinitionAxiomInOWL2Profile
+    - Failure message shows: expected:<2> but was:<1>
+    - The observed violation list contains a single message:
+      Use of undeclared datatype: <urn:datatype#fakedatatype> [DatatypeDefinition(<urn:datatype#fakedatatype> xsd:boolean) ...]
+  - shouldCreateViolationForOWLDatatypeRestrictionInOWL2Profile
+    - Failure message shows: expected:<4> but was:<3>
+    - The observed violation messages include:
+      - Use of defined datatype in datatype restriction ...
+      - Use of undeclared datatype: http://www.w3.org/2001/XMLSchema#integer ...
+      - Facet in datatype restriction does not belong to restricted datatype: langRange ...
+      - (But one of the previously expected violations is missing, so count is 3)
+- Build summary:
+  - Tests run: 5128, Failures: 2, Errors: 0, Skipped: 40
+  - Maven build failed: org.apache.maven.plugins:maven-surefire-plugin:2.19.1:test produced test failures
+
+Relevant Build Log Excerpts / Error Messages
+- From the failing test report summary (trimmed):
+  - OWLProfileTestCase.shouldCreateViolationForOWLDatatypeDefinitionAxiomInOWL2Profile:689->runAssert:218 [Use of undeclared datatype: <urn:datatype#fakedatatype> ...] expected:<2> but was:<1>
+  - OWLProfileTestCase.shouldCreateViolationForOWLDatatypeRestrictionInOWL2Profile:680->runAssert:218 [... Use of defined datatype ... , Use of undeclared datatype: http://www.w3.org/2001/XMLSchema#integer ..., Facet in datatype restriction ... , Use of undeclared datatype: <urn:datatype#fakedatatype> ...] expected:<4> but was:<3>
+- Final surefire/Maven error:
+  - [ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.19.1:test (default-test) on project owlapi-contract: There are test failures.
+
+Relevant Code Snippets (from the diff)
+- The diff shows a proposed test update that changes expected counts and expected violation classes:
+
+Before (old expectations):
+- shouldCreateViolationForOWLDatatypeRestrictionInOWL2Profile:
+  int expected = 4;
+  Class[] expectedViolations = {UseOfBuiltInDatatypeInDatatypeDefinition.class,
+      UseOfDefinedDatatypeInDatatypeRestriction.class, UseOfIllegalFacetRestriction.class,
+      UseOfUndeclaredDatatype.class};
+
+- shouldCreateViolationForOWLDatatypeDefinitionAxiomInOWL2Profile:
+  int expected = 2;
+  Class[] expectedViolations = {UseOfUndeclaredDatatype.class, UseOfUndeclaredDatatype.class};
+
+After (patch in diff):
+- shouldCreateViolationForOWLDatatypeRestrictionInOWL2Profile:
+  int expected = 3;
+  Class[] expectedViolations = {UseOfDefinedDatatypeInDatatypeRestriction.class,
+      UseOfIllegalFacetRestriction.class, UseOfUndeclaredDatatype.class};
+
+- shouldCreateViolationForOWLDatatypeDefinitionAxiomInOWL2Profile:
+  int expected = 1;
+  Class[] expectedViolations = {UseOfUndeclaredDatatype.class};
+
+Patch content (excerpt):
+--- a/contract/src/test/java/org/semanticweb/owlapi/profiles/OWLProfileTestCase.java
++++ b/contract/src/test/java/org/semanticweb/owlapi/profiles/OWLProfileTestCase.java
+@@
+-        int expected = 4;
+-        Class[] expectedViolations = {UseOfBuiltInDatatypeInDatatypeDefinition.class,
+-            UseOfDefinedDatatypeInDatatypeRestriction.class, UseOfIllegalFacetRestriction.class,
+-            UseOfUndeclaredDatatype.class};
++        int expected = 3;
++        Class[] expectedViolations = {UseOfDefinedDatatypeInDatatypeRestriction.class,
++            UseOfIllegalFacetRestriction.class, UseOfUndeclaredDatatype.class};
+@@
+-        int expected = 2;
+-        Class[] expectedViolations = {UseOfUndeclaredDatatype.class, UseOfUndeclaredDatatype.class};
++        int expected = 1;
++        Class[] expectedViolations = {UseOfUndeclaredDatatype.class};
+
+Interpretation / Root Cause Hypothesis
+- The runtime validation currently produces fewer violations than the tests originally expected. This can be for two reasons:
+  1. The production validation code was changed and now consolidates or removes one of the previously reported violation types (for example, UseOfBuiltInDatatypeInDatatypeDefinition may no longer be reported, or duplicate UseOfUndeclaredDatatype messages are deduplicated).
+  2. The tests were written expecting previous behavior; they need to be updated to reflect the validator's intended semantics (if the validator change is intentional). The diff included in this report appears to be a test update intended to match observed behavior.
+- The build log shows the test suite failed with the old expectations (expected 4 & 2) while actual was 3 & 1. The provided patch reduces the expected numbers to match what was observed, which suggests the correct fix is to update the tests. The failing build indicates that the patch either was not present in the tested commit or there is an inconsistency between the test code and runtime behavior elsewhere.
+
+Patches / Suggested Fixes
+1. Apply the test changes included in the diff (this is already prepared in the diff):
+   - In OWLProfileTestCase.shouldCreateViolationForOWLDatatypeRestrictionInOWL2Profile change:
+     - expected from 4 to 3
+     - remove UseOfBuiltInDatatypeInDatatypeDefinition.class from expectedViolations array
+   - In OWLProfileTestCase.shouldCreateViolationForOWLDatatypeDefinitionAxiomInOWL2Profile change:
+     - expected from 2 to 1
+     - change expectedViolations array to a single UseOfUndeclaredDatatype.class
+
+   The diff that accomplishes this is included above; applying it should make the tests assert counts consistent with current validator output.
+
+2. Verify whether the validator's change is intentional:
+   - If the validator intentionally stopped emitting one of the violation types (for example deduplicated entries or removed UseOfBuiltInDatatypeInDatatypeDefinition), then the test update in the patch is appropriate.
+   - If the validator change was accidental (regression), restore the validator code so that it emits the previously expected violations, and keep tests unchanged.
+
+3. Additional recommendations:
+   - If duplicate violation classes were previously expected (two occurrences of UseOfUndeclaredDatatype), prefer asserting counts and the set of unique violation types separately (i.e., assert the count of violations and assert the set of violation classes), or assert exact message contents if necessary. This prevents brittle tests when reporting semantics change (e.g., deduplication).
+   - Add comments in tests explaining the reasoning behind each expected violation class and whether duplicates are intentional.
+
+Files/lines to inspect
+- contract/src/test/java/org/semanticweb/owlapi/profiles/OWLProfileTestCase.java — the two methods changed by the patch.
+- The validator code that produces profile violations for datatype definitions and datatype restrictions (to check whether the missing violation used to be emitted intentionally).
+
+Summary
+- Two tests in OWLProfileTestCase are failing because the actual set/count of OWL profile violations produced during validation is smaller than what the tests assert.
+- A patch (shown above) reduces the expected counts (4→3 and 2→1) and removes one expected violation class, aligning tests with observed output.
+- Apply the patch or revert/adjust validator behavior depending on whether the change in validator output was intended. After applying the appropriate fix, run mvn verify to confirm tests pass.

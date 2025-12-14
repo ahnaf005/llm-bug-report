@@ -1,0 +1,67 @@
+## Software Bug Report: Maven Checkstyle Failure - Missing `package-info.java`
+
+**Bug ID:** N/A (No specific ID provided)
+**Project:** joyent/java-manta
+**Component/Module:** `java-manta-client`
+**Version/Branch:** `multipart` branch, commit `a61829b9dbcc2195859716d626ca09a828c3a2d4`
+**Severity:** High (Build Failure)
+**Priority:** High (Blocks CI/CD pipeline)
+**Status:** Resolved (Fix identified in `e8aab2acd244ebbfd121234d71417ccfae69ea1c`)
+
+---
+
+### 1. Summary
+
+The Maven build for the `java-manta-client` module is failing due to a Checkstyle violation. Specifically, the `maven-checkstyle-plugin` reports a `JavadocPackage` error, indicating a missing `package-info.java` file in the `com.joyent.manta.client.multipart` package.
+
+### 2. Description
+
+The continuous integration (CI) build on Travis CI for the `multipart` branch of the `joyent/java-manta` repository consistently fails during the `mvn install` phase. The failure is caused by the `maven-checkstyle-plugin:2.17:check` goal, which identifies a single Checkstyle violation: `JavadocPackage: Missing package-info.java file.` The error is reported against `src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java`, but the root cause is the absence of the `package-info.java` file for the `com.joyent.manta.client.multipart` package itself.
+
+The build attempts to retry the failed command multiple times but fails consistently, indicating a deterministic issue.
+
+### 3. Steps to Reproduce
+
+1.  Checkout the `multipart` branch of the `joyent/java-manta` repository at commit `a61829b9dbcc2195859716d626ca09a828c3a2d4`.
+2.  Navigate to the project root directory (`joyent/java-manta`).
+3.  Execute the Maven install command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+### 4. Observed Behavior
+
+The build fails with the following error message, repeated across three retries:
+
+```
+[ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[0] (javadoc) JavadocPackage: Missing package-info.java file.
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation. -> [Help 1]
+```
+
+The build process terminates with an exit code of 1.
+
+### 5. Expected Behavior
+
+The Maven build should complete successfully without any Checkstyle violations. Specifically, if the `JavadocPackage` rule is enforced, a `package-info.java` file with appropriate Javadoc should be present in the `com.joyent.manta.client.multipart` package.
+
+### 6. Environment
+
+*   **Build System:** Travis CI (container-based infrastructure)
+*   **Operating System:** Ubuntu 12.04.5 LTS (Precise)
+*   **Linux Kernel:** 3.13.0-29-generic
+*   **Java Version:** Oracle JDK 1.8.0_31
+*   **Maven Version:** Apache Maven 3.2.5
+*   **Checkstyle Plugin:** `org.apache.maven.plugins:maven-checkstyle-plugin:2.17`
+
+### 7. Root Cause Analysis
+
+The `maven-checkstyle-plugin` is configured to enforce the `JavadocPackage` rule, which mandates the presence of a `package-info.java` file in every package to provide package-level Javadoc. At the time of the failing commit (`a61829b9dbcc2195859716d626ca09a828c3a2d4`), the `com.joyent.manta.client.multipart` package did not contain this required file, leading to the Checkstyle violation and subsequent build failure.
+
+### 8. Proposed Solution / Fix
+
+The provided `CODE DIFF` (between `failed_sha`: `a61829b9dbcc2195859716d626ca09a828c3a2d4` and `passed_sha`: `e8aab2acd244ebbfd121234d71417ccfae69ea1c`) indicates the solution:
+
+1.  **Add `package-info.java`:** A new file `java-manta-client/src/main/java/com/joyent/manta/client/multipart/package-info.java` was introduced. This file contains the necessary package-level Javadoc, satisfying the `JavadocPackage` Checkstyle rule.
+
+The diff also shows other related changes, such as the extraction of `MantaMultipartUpload.Part` into a new top-level class `MantaMultipartUploadPart.java` and corresponding updates in `MantaMultipartManager.java` and `MantaMultipartUploadManagerTest.java`. While these are significant refactorings, the direct fix for the reported Checkstyle error is the addition of `package-info.java`.
+
+### 9. Resolution / Verification
+
+The `CODE DIFF` clearly shows the addition of the `package-info.java` file, which directly addresses the `JavadocPackage` Checkstyle violation. Since the `passed_sha` (`e8aab2acd244ebbfd121234d71417ccfae69ea1c`) is associated with a successful build, it can be concluded that this change, along with other refactorings, resolved the build failure.

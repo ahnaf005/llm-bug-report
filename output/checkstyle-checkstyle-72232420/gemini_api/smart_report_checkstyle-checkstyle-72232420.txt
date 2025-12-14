@@ -1,0 +1,112 @@
+## Bug Report: Checkstyle Violations Cause Build Failure in `FileContentsTest.java`
+
+### 1. Title:
+Build Fails Due to Checkstyle Header and Whitespace Violations in `FileContentsTest.java`
+
+### 2. Steps to Reproduce:
+1.  Clone the `checkstyle/checkstyle` repository.
+2.  Checkout the specific commit `f1b28dbcdeab04227463ffe9bfb476e891962418`.
+3.  Execute the Maven build command: `mvn clean verify -DskipTests -DskipITs -Dpmd.skip=true -Dfindbugs.skip=true -Dcobertura.skip=true`
+
+### 3. Triggering Input:
+The Checkstyle errors are triggered by the content of the file `/home/travis/build/checkstyle/checkstyle/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java` at the specified commit, which violates the project's defined header and whitespace rules.
+
+### 4. Expected Behavior:
+The Maven build should complete successfully, indicating that all source code adheres to the project's Checkstyle rules.
+
+### 5. Observed Behavior:
+The Maven build fails during the `ant-phase-verify` step, specifically during the Checkstyle execution. Checkstyle reports 3 errors and 0 warnings, leading to a `BUILD FAILURE`.
+
+The specific errors reported are:
+*   `/home/travis/build/checkstyle/checkstyle/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java:1: Line does not match expected header line of '////////////////////////////////////////////////////////////////////////////////'.`
+*   `/home/travis/build/checkstyle/checkstyle/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java:1: Line does not match expected header line of '^/{80}$'.`
+*   `/home/travis/build/checkstyle/checkstyle/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java:25:30: ',' is not followed by whitespace.`
+
+The build process exits with an error code 1.
+
+### 6. Relevant Code Snippets:
+The following diff highlights the changes made to resolve the Checkstyle violations in `FileContentsTest.java`:
+
+```diff
+--- a/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java
++++ b/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java
+@@ -1,3 +1,22 @@
++////////////////////////////////////////////////////////////////////////////////
++// checkstyle: Checks Java source code for adherence to a set of rules.
++// Copyright (C) 2001-2015 the original author or authors.
++//
++// This library is free software; you can redistribute it and/or
++// modify it under the terms of the GNU Lesser General Public
++// License as published by the Free Software Foundation; either
++// version 2.1 of the License, or (at your option) any later version.
++//
++// This library is distributed in the hope that it will be useful,\
++// but WITHOUT ANY WARRANTY; without even the implied warranty of\
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU\
++// Lesser General Public License for more details.\
++//\
++// You should have received a copy of the GNU Lesser General Public\
++// License along with this library; if not, write to the Free Software,\
++// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA\
++////////////////////////////////////////////////////////////////////////////////\
++\
+ package com.puppycrawl.tools.checkstyle.api;
+ 
+ import org.junit.Test;
+@@ -22,7 +41,7 @@ public class FileContentsTest {
+         // just to make UT coverage 100%
+         FileContents o = new FileContents(\
+                 FileText.fromLines(new File("filename"), Arrays.asList("  //  ")));
+-        o.reportCppComment(1,2);\
++        o.reportCppComment(1, 2);\
+         assertFalse(o.hasIntersectionWithComment(1, 0, 1, 1));
+     }\
+ 
+```
+Additionally, the `pom.xml` was modified to remove coverage regex patterns, though this is not directly related to the build failure itself:
+```diff
+--- a/pom.xml
++++ b/pom.xml
+@@ -1092,8 +1092,6 @@
+             <regex><pattern>.*.api.JavadocTagInfo</pattern><branchRate>25</branchRate><lineRate>77</lineRate></regex>
+             <regex><pattern>.*.api.JavadocTagInfo\\$.*</pattern><branchRate>0</branchRate><lineRate>8</lineRate></regex>
+             <regex><pattern>.*.api.LocalizedMessage\\$.*</pattern><branchRate>41</branchRate><lineRate>66</lineRate></regex>
+-            <regex><pattern>.*.api.TokenTypes</pattern><branchRate>62</branchRate><lineRate>80</branchRate></regex>
+-
+             <regex><pattern>.*.checks.AbstractOptionCheck</pattern><branchRate>100</branchRate><lineRate>80</lineRate></regex>
+             <regex><pattern>.*.checks.AbstractTypeAwareCheck</pattern><branchRate>87</branchRate><lineRate>84</lineRate></regex>
+```
+
+### 7. Stack Traces:
+```
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time: 01:54 min
+[INFO] Finished at: 2015-07-23T03:55:47+00:00
+[INFO] Final Memory: 43M/482M
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-antrun-plugin:1.8:run (ant-phase-verify) on project checkstyle: An Ant BuildException has occured: The following error occurred while executing this line:
+[ERROR] /home/travis/build/checkstyle/checkstyle/config/ant-phase-verify.xml:50: Checkstyle failed: Got 3 errors and 0 warnings.
+[ERROR] around Ant part ...<ant antfile="config/ant-phase-verify.xml"/>... @ 7:47 in /home/travis/build/checkstyle/checkstyle/target/antrun/build-main.xml
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException
+```
+The Checkstyle output leading to the failure:
+```
+[checkstyle] Running Checkstyle 6.9-SNAPSHOT on 677 files
+[checkstyle] /home/travis/build/checkstyle/checkstyle/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java:1: Line does not match expected header line of '////////////////////////////////////////////////////////////////////////////////'.
+[checkstyle] /home/travis/build/checkstyle/checkstyle/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java:1: Line does not match expected header line of '^/{80}$'.
+[checkstyle] /home/travis/build/checkstyle/checkstyle/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java:25:30: ',' is not followed by whitespace.
+```
+
+### 8. Patches / Suggested Fixes:
+The provided code diff contains the necessary patches to resolve the reported Checkstyle violations:
+1.  **Add Copyright Header**: A multi-line copyright header is added to the `src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java` file, starting at line 1, to satisfy the header check.
+2.  **Fix Whitespace**: A space is added after the comma in the method call `o.reportCppComment(1,2);` changing it to `o.reportCppComment(1, 2);` on line 25 of `src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java`.
+3.  **Update `pom.xml`**: Two `<regex>` patterns related to `TokenTypes` are removed from the `jacoco-maven-plugin` configuration in `pom.xml`. While not directly fixing the Checkstyle errors, this is part of the overall changes in the commit that passes the build.

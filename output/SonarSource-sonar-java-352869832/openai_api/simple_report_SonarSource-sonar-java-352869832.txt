@@ -1,0 +1,228 @@
+Bug report: build/test failures after adding rule S3366 and ITS ruling files
+========================================================================
+
+Summary
+-------
+After the changes in the provided diff (adding rule S3366 assets and ITS ruling JSON files), the Maven build fails during unit tests in the java-checks module. Two failing symptoms were observed:
+
+- A test assertion failure: "No description for S3366 S3366" (CheckListTest.test)
+- A NullPointerException in CheckListTest.rules_targeting_tests_should_have_tests_tag
+
+Full failing build is in the BUILD LOG; the failing test block is in the java-checks module around "CheckListTest" and the reactor shows "SonarQube Java :: Checks ... FAILURE".
+
+Relevant failures/excerpts from the build log
+---------------------------------------------
+- Test assertion:
+  ERROR: CheckListTest.test:146 No description for S3366 S3366
+
+- NullPointer:
+  ERROR: CheckListTest.rules_targeting_tests_should_have_tests_tag(org.sonar.java.checks.CheckListTest) ... java.lang.NullPointerException at CheckListTest.rules_targeting_tests_should_have_tests_tag(CheckListTest.java:194)
+
+- The Maven surefire plugin reports test failures:
+  [ERROR] Failed to execute goal ... maven-surefire-plugin:2.20.1:test ... There are test failures.
+  See /home/travis/build/SonarSource/sonar-java/java-checks/target/surefire-reports
+
+What changed (from CODE DIFF)
+-----------------------------
+Files added in the diff (relevant ones):
+
+1) ITS ruling JSON files (new files):
+- its/ruling/src/test/resources/commons-beanutils/squid-S3366.json
+- its/ruling/src/test/resources/guava/squid-S3366.json
+- its/ruling/src/test/resources/jdk6/squid-S3366.json
+
+2) Rule localization / metadata:
+- java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.html
+- java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.json
+
+Observed behavior
+-----------------
+- CheckListTest reports that S3366 has no description.
+- CheckListTest throws NullPointerException in rules_targeting_tests_should_have_tests_tag.
+- As a consequence, the java-checks module tests fail and the build fails.
+
+Expected behavior
+-----------------
+- CheckListTest should find a description/HTML documentation for S3366 and should not throw NPE.
+- Maven build should succeed with all tests passing.
+
+Root causes (analysis)
+----------------------
+There are two separate but related issues introduced by the diff:
+
+1) Localization/description file naming mismatch (causing "No description for S3366"):
+   - The new rule HTML file is named S3366_java.html:
+     java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.html
+   - The test that verifies that each rule has a description (CheckListTest.test) expects the description file in the localization folder using the rule key name (S3366.html) — not S3366_java.html. Because the test could not locate the description file for key "S3366", it raises the "No description for S3366" assertion.
+   - Fix: use the expected file name (S3366.html) in that path. (Rename or create the correct file name that test expects.)
+
+2) Invalid JSON in ITS ruling files (causing NPE during CheckListTest.rules_targeting_tests_should_have_tests_tag):
+   - The ITS ruling JSON files added use invalid JSON syntax:
+     - They use single quotes (') instead of double quotes (") for strings.
+     - They have trailing commas inside arrays and objects.
+     - Example from the diff (invalid):
+       {
+       'com.google.guava:guava:src/com/google/common/collect/FluentIterable.java':[
+       80,
+       ],
+       ...
+       }
+   - These files are loaded by tests that parse the ITS ruling JSON. Because the JSON is malformed, the parser/loader either fails to produce the expected object structure or returns null, which then causes a NullPointerException further in the CheckListTest flow (the test expects the parsed structure to be non-null and to contain specific information).
+   - Fix: make the ITS ruling files valid JSON (use double quotes, remove trailing commas, make arrays and objects syntactically correct).
+
+Additional potential minor issue
+- The new rule JSON (java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.json) defines tags [ "multi-threading", "cert", "suspicious" ]. If the rule is intended to "target tests" (i.e., apply to test sources), then tests expect a "tests" tag. The failing tests refer to rules_targeting_tests_should_have_tests_tag; if S3366 actually targets tests it needs a "tests" tag. However, based on the ITS entries (pointing to src/main), S3366 probably does not target test sources, so omitting "tests" tag is likely OK. The immediate blockers are the two issues above.
+
+Suggested fixes (concrete)
+-------------------------
+
+1) Rename the HTML documentation file to the canonical name expected by localization tests.
+
+- Rename:
+  java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.html
+- To:
+  java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366.html
+
+(If the project uses language suffixing convention everywhere, confirm with other files. The failing test log specifically complains "No description for S3366", so name must match the rule key.)
+
+2) Fix ITS ruling JSON files to be valid JSON. Replace current contents with properly quoted, trailing-comma-free JSON. Example corrected content:
+
+- its/ruling/src/test/resources/commons-beanutils/squid-S3366.json
+  {
+    "commons-beanutils:commons-beanutils:src/main/java/org/apache/commons/beanutils/LazyDynaMap.java": [
+      106
+    ]
+  }
+
+- its/ruling/src/test/resources/guava/squid-S3366.json
+  {
+    "com.google.guava:guava:src/com/google/common/collect/FluentIterable.java": [
+      80
+    ],
+    "com.google.guava:guava:src/com/google/common/collect/LinkedHashMultimap.java": [
+      323,
+      324
+    ],
+    "com.google.guava:guava:src/com/google/common/util/concurrent/AbstractFuture.java": [
+      155
+    ]
+  }
+
+- its/ruling/src/test/resources/jdk6/squid-S3366.json
+  {
+    "jdk6:java/awt/Checkbox.java": [
+      185,
+      701
+    ],
+    "jdk6:java/awt/Dialog.java": [
+      659,
+      710
+    ],
+    "jdk6:java/awt/List.java": [
+      1276,
+      1277
+    ],
+    "jdk6:java/awt/SequencedEvent.java": [
+      56
+    ],
+    "jdk6:java/awt/TextComponent.java": [
+      883
+    ],
+    "jdk6:java/awt/TrayIcon.java": [
+      135
+    ],
+    "jdk6:java/awt/dnd/DropTarget.java": [
+      93
+    ],
+    "jdk6:java/awt/font/TextAttribute.java": [
+      252
+    ],
+    "jdk6:java/beans/beancontext/BeanContextChildSupport.java": [
+      54
+    ],
+    "jdk6:java/io/ObjectStreamClass.java": [
+      408
+    ],
+    "jdk6:java/io/Reader.java": [
+      50
+    ],
+    "jdk6:java/io/Writer.java": [
+      59
+    ],
+    "jdk6:java/net/ServerSocket.java": [
+      60
+    ],
+    "jdk6:java/net/Socket.java": [
+      122,
+      127,
+      150
+    ],
+    "jdk6:java/net/URL.java": [
+      596
+    ],
+    "jdk6:java/security/Identity.java": [
+      103
+    ],
+    "jdk6:java/text/AttributedCharacterIterator.java": [
+      84
+    ],
+    "jdk6:java/text/DateFormat.java": [
+      780,
+      783
+    ],
+    "jdk6:java/text/NumberFormat.java": [
+      1032
+    ],
+    "jdk6:java/util/Collections.java": [
+      1549,
+      1954
+    ],
+    "jdk6:java/util/concurrent/ConcurrentSkipListMap.java": [
+      394
+    ],
+    "jdk6:java/util/logging/Level.java": [
+      189
+    ],
+    "jdk6:java/util/prefs/AbstractPreferences.java": [
+      187
+    ]
+  }
+
+Note: the above corrections remove trailing commas and use double quotes. Validate each JSON file with a JSON linter.
+
+3) (Optional) If S3366 should target test code, add the "tests" tag to S3366_java.json's "tags" array:
+   "tags": ["multi-threading", "cert", "suspicious", "tests"]
+However, only do this if S3366 indeed targets test sources.
+
+Suggested patch (high-level)
+----------------------------
+- Move or rename S3366_java.html to S3366.html:
+  git mv java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.html \
+         java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366.html
+
+- Replace content of the three its/ruling JSON files with the corrected JSON content (ensure proper quoting and no trailing commas).
+
+Why these fixes will resolve the failures
+-----------------------------------------
+- CheckListTest.test looks up rule descriptions by rule key (S3366). Providing S3366.html in the expected localization path satisfies the test that requires a description file for each rule.
+- The ITS ruling JSON files are read/parsed by tests. Fixing them to valid JSON means the parser returns valid data structures and the tests that process these structures won't encounter unexpected null values or parsing exceptions that lead to NullPointerException.
+
+How to verify locally
+---------------------
+1) After applying fixes, run:
+   mvn -T1C -e -U -DskipTests=false clean test
+
+2) Confirm that:
+   - java-checks tests (in particular CheckListTest) pass
+   - No JSON parsing errors are logged for its/ruling files
+   - The build completes successfully (BUILD SUCCESS)
+
+Additional notes & pointers
+--------------------------
+- The build log contains many INFO/WARN messages unrelated to this change; the two failing tests are the blocking ones.
+- The JSON files in the diff appear to have been written with single quotes and trailing commas (probably exported from a non-strict JSON generator or a JS literal). Always use a JSON linter before committing files intended to be parsed by Java JSON libraries.
+- The localization file naming scheme must follow the project's conventions — examine neighboring rule files to match naming exactly (e.g. SXXXX.html). If language suffixing is used elsewhere, adjust naming accordingly; the test expectation is to find a file for key S3366.
+
+If you want, I can:
+- produce the exact git-style patch for the rename and JSON corrections,
+- or run a synthetic check (validate JSON and list existing localization file naming patterns) to confirm the expected naming convention.

@@ -1,0 +1,177 @@
+Title
+- New rule S3366 resources added with incorrect filenames / malformed test resource JSON — causes CheckListTest failures (No description for S3366 + NPE) and breaks the java-checks test suite.
+
+Summary (one-line)
+- Adding the S3366 rule files (and some ITS resources) in this patch causes unit test failures: CheckListTest reports "No description for S3366" and a NullPointerException in rules_targeting_tests_should_have_tests_tag.
+
+Steps to reproduce
+1. Checkout the branch containing the changes from the diff.
+2. Run the test target that failed in CI:
+   - From project root run: mvn -pl java-checks -am test
+   - Or run the full build: mvn test
+3. Observe the test failures in module java-checks (CheckListTest).
+
+Triggering input / conditions
+- The code diff added these new files:
+  - java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.html
+  - java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.json
+  - its/ruling/src/test/resources/.../squid-S3366.json (several JSON files for test data)
+- The test suite (CheckListTest and related checks) attempts to load rule descriptions / metadata for rule key S3366 and validate rule tags.
+
+Expected behavior
+- All tests in the java-checks module pass.
+- The CheckListTest finds a rule description for S3366 and does not raise an exception.
+- Any ITS/test resources that are added are in valid JSON format (if parsed) and follow the repository naming conventions.
+
+Observed behavior (from build log)
+- The build fails in module java-checks with test failures:
+  - Assertion failure: "No description for S3366 S3366"
+  - Error: NullPointerException at CheckListTest.rules_targeting_tests_should_have_tests_tag (line referenced in the log)
+- Final failing output (excerpt) in the build log:
+  - [ERROR] Failures:
+    - CheckListTest.test:146 No description for S3366 S3366
+  - [ERROR] Errors:
+    - CheckListTest.rules_targeting_tests_should_have_tests_tag:194 NullPointer
+- Build exit: "There are test failures." (maven-surefire plugin)
+
+Relevant stack traces / log snippets
+- Failure summary near the end of the log:
+
+[ERROR] Failures:
+  CheckListTest.test:146 No description for S3366 S3366
+[ERROR] Errors:
+  CheckListTest.rules_targeting_tests_should_have_tests_tag:194 NullPointer
+
+- Surefire / Maven failure excerpt:
+
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.20.1:test (default-test) on project java-checks: There are test failures.
+Please refer to /home/travis/build/SonarSource/sonar-java/java-checks/target/surefire-reports for the individual test results.
+
+Relevant code snippets from the diff
+- New rule HTML (added):
+  java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.html (abridged)
+  {
+  <p>In single-threaded environments, the use of <code>this</code> in constructors ...</p>
+  ...
+  <h2>Noncompliant Code Example</h2>
+  <pre>
+  public class Monument {
+    public static final List&lt;Monument&gt; ALL_MONUMENTS = new ArrayList()&lt;&gt;;
+    ...
+    public Monument(String location, ...) {
+      ALL_MONUMENTS.add(this);  // Noncompliant; passed to a method of another object
+      this.location = location;
+    }
+  }
+  </pre>
+  ...
+  }
+
+- New rule JSON (added):
+  java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.json
+  {
+    "title": "\"this\" should not be exposed from constructors",
+    "type": "CODE_SMELL",
+    "status": "ready",
+    "remediation": {
+      "func": "Constant/Issue",
+      "constantCost": "30min"
+    },
+    "tags": [
+      "multi-threading",
+      "cert",
+      "suspicious"
+    ],
+    "standards": [
+      "CERT"
+    ],
+    "defaultSeverity": "Major",
+    "ruleSpecification": "RSPEC-3366",
+    "sqKey": "S3366"
+  }
+
+- ITS test resource files added (examples — note syntax issues below):
+  its/ruling/src/test/resources/commons-beanutils/squid-S3366.json
+  {
+  'commons-beanutils:commons-beanutils:src/main/java/org/apache/commons/beanutils/LazyDynaMap.java':[
+  106,
+  ],
+  }
+
+  its/ruling/src/test/resources/guava/squid-S3366.json
+  {
+  'com.google.guava:guava:src/com/google/common/collect/FluentIterable.java':[
+  80,
+  ],
+  'com.google.guava:guava:src/com/google/common/collect/LinkedHashMultimap.java':[
+  323,
+  324,
+  ],
+  ...
+  }
+
+Observed problems in the patch (root causes and specifics)
+1) Resource naming likely does not follow the project convention
+   - The new files in java-checks use filenames suffixed with "_java":
+     - S3366_java.html
+     - S3366_java.json
+   - The test CheckListTest complains "No description for S3366" — typically the tests attempt to load description files for a rule key S3366 using a fixed naming convention. The naming mismatch (added _java suffix) causes the loader to not find the description, hence the "No description" assertion failure.
+
+2) Malformed ITS test JSON resources
+   - The ITS files under its/ruling/src/test/resources use single quotes (') and trailing commas — these are not valid JSON. If any test in the build parses these files as JSON (some tests or utilities may parse them), parsing will fail or return null, which can cascade to NullPointerException in tests (the NPE in CheckListTest suggests something expected to be present was null).
+   - Example issues in its/ruling files:
+     - Use of single quotes for keys and strings (JSON requires double quotes).
+     - Trailing commas after last entries (not allowed in strict JSON).
+   - Even if these are intended as non-standard formats, it's dangerous to add files that break parsing expected by tests or tooling.
+
+3) The rule JSON file looks syntactically valid, but its filename probably needs to match expected scheme (S3366.json or S3366.html) rather than S3366_java.*.
+
+Suggested fixes (patches / action items)
+1) Rename the rule resource files to follow existing naming conventions used by the project:
+   - Move / rename:
+     - java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.html  ->  java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366.html
+     - java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.json  ->  java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366.json
+   - Rationale: CheckListTest and other tooling expect rule description files to be named by the rule key; adding the _java suffix prevents lookup.
+
+2) Validate rule metadata JSON content
+   - Ensure the JSON contains the expected fields and the sqKey is correct ("S3366") — the provided JSON shows "sqKey" : "S3366", ok.
+   - Ensure the rule's tags include "tests" only if the rule actually targets test code. The failing NPE in CheckListTest.rules_targeting_tests_should_have_tests_tag could be triggered by a malformed metadata file or by test logic that gets a null while inspecting tags. After renaming, re-run tests and inspect whether the tests fail on missing "tests" tag. If the rule actually targets tests, add "tests" into the "tags" array.
+
+3) Fix ITS test resource JSON formatting
+   - Convert ITS JSON-like files to valid JSON:
+     - Use double quotes for keys and strings.
+     - Remove trailing commas.
+   - Example corrected template for its/ruling/src/test/resources/commons-beanutils/squid-S3366.json:
+
+{
+  "commons-beanutils:commons-beanutils:src/main/java/org/apache/commons/beanutils/LazyDynaMap.java": [
+    106
+  ]
+}
+
+   - Make the same corrections to the guava and jdk6 resources.
+
+4) After applying the file renames and JSON fixes:
+   - Re-run: mvn -pl java-checks -am test (or full mvn test)
+   - Confirm CheckListTest no longer reports "No description" and that the NullPointerException disappears.
+
+5) (Optional) If the repository uses a naming convention that includes the language suffix for rule resources (verify with other existing rules), update the tests or loader accordingly. But changing tests is not recommended — align new resources with existing convention.
+
+Why these fixes should work
+- The assertion "No description for S3366" comes from the check that the rule key must have a description resource. If the test cannot find a description file because of unexpected filename conventions, the assertion fails. Renaming to the established pattern makes resource discovery work.
+- The NullPointerException was thrown while checking rule tags/metadata. This can occur when metadata is missing or parsing returned null. Ensuring resource files are valid JSON and properly discovered will prevent null objects and allow tests to validate tags normally.
+
+Additional notes
+- The diff also introduced many ITS resource files with JSON that is not syntactically valid JSON. Even if these files are only used by a tolerant parser, it's safer to provide valid JSON to avoid unpredictable test behavior.
+- Look at existing rule files to copy exact naming convention and directory layout (for example SXXXX.json / SXXXX.html under org/sonar/l10n/java/rules/squid). Use existing files as templates.
+- After renaming, ensure there are no duplicated keys or conflicting resources.
+
+Immediate minimal patch (example)
+- Rename S3366_java.json -> S3366.json
+- Rename S3366_java.html -> S3366.html
+- Fix ITS JSON files to valid JSON (double quotes, remove trailing commas)
+- Re-run the failing test module (java-checks) locally to verify.
+
+If you want, I can:
+- Produce the exact git patch/rename commands to apply the renames and ITS JSON fixes.
+- Validate the corrected JSON and HTML contents (I can generate corrected versions of the three ITS files shown).

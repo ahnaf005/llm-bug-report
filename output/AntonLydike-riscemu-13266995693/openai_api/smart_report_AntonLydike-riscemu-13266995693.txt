@@ -1,0 +1,106 @@
+1) Title
+NameError: Optional not defined when importing riscemu.types.binary_data_memory_section (test collection fails)
+
+2) Steps to Reproduce
+- Checkout the repository at the commit/PR that caused the failure (the build log shows refs/pull/20/merge; failing SHA: 6ec6e5130e8fbaca8b151fc7c5308b5a40aad2c8).
+- Ensure Python 3.10 (same environment as CI).
+- Install requirements:
+  - pip install -r requirements.txt -r requirements-dev.txt
+- Run pytest (CI used): pytest -W error
+- Or reproduce interactively:
+  - python -c "import riscemu"
+
+3) Triggering Input / Conditions
+- Importing the riscemu package triggers module-level imports that load riscemu/types/binary_data_memory_section.py.
+- That module contains a type annotation using Optional (Optional[MemoryFlags]) but did not import Optional from typing.
+- Python evaluates annotations at class definition time (unless PEP 563 / future annotations are enabled), so Optional must be defined when the class is created.
+
+4) Expected Behavior
+- The test collection should proceed; importing riscemu should succeed.
+- No NameError should be raised for Optional; tests should continue to run.
+
+5) Observed Behavior
+- Import-time failure during test collection:
+  - NameError: name 'Optional' is not defined
+- pytest aborts with 4 errors during collection:
+  - ERROR test/test_helpers.py - NameError: name 'Optional' is not defined
+  - ERROR test/test_integers.py - NameError: name 'Optional' is not defined
+  - ERROR test/test_isa.py - NameError: name 'Optional' is not defined
+  - ERROR test/test_tokenizer.py - NameError: name 'Optional' is not defined
+- CI exit code: 2
+
+6) Relevant Code Snippets (from diff and error context)
+- Error originates from the class definition in riscemu/types/binary_data_memory_section.py where an annotation uses Optional:
+
+  File: riscemu/types/binary_data_memory_section.py
+  (excerpt from import-time stack trace)
+  ...
+  class BinaryDataMemorySection(MemorySection):
+      ...
+      flags: Optional[MemoryFlags] = None,
+  E   NameError: name 'Optional' is not defined
+
+- The code diff shows the fix that was (or should be) applied: add import of Optional from typing at the top of the file.
+
+  Patch excerpt (added line):
+  +from typing import Optional
+  from . import (
+      MemorySection,
+      InstructionContext,
+      ...
+
+- For completeness, other small diffs in the patch (unrelated to this error):
+  - README.md: added resource link
+  - riscemu/__main__.py: trailing comma added to an argparse.add_argument(..., default=False,)
+
+7) Stack Traces (relevant excerpts from the build log)
+- Top-level import chain that leads to the NameError:
+
+  test/test_tokenizer.py:3: in <module>
+      from riscemu.tokenizer import (
+  riscemu/__init__.py:11: in <module>
+      from .types.exceptions import (
+  riscemu/types/__init__.py:24: in <module>
+      from .binary_data_memory_section import BinaryDataMemorySection
+  riscemu/types/binary_data_memory_section.py:11: in <module>
+      class BinaryDataMemorySection(MemorySection):
+  riscemu/types/binary_data_memory_section.py:19: in BinaryDataMemorySection
+      flags: Optional[MemoryFlags] = None,
+  E   NameError: name 'Optional' is not defined
+
+- pytest summary:
+
+  =========================== short test summary info ============================
+  ERROR test/test_helpers.py - NameError: name 'Optional' is not defined
+  ERROR test/test_integers.py - NameError: name 'Optional' is not defined
+  ERROR test/test_isa.py - NameError: name 'Optional' is not defined
+  ERROR test/test_tokenizer.py - NameError: name 'Optional' is not defined
+  !!!!!!!!!!!!!!!!!!! Interrupted: 4 errors during collection !!!!!!!!!!!!!!!!!!!!
+  ============================== 4 errors in 0.26s ===============================
+  ##[error]Process completed with exit code 2.
+
+8) Patches / Suggested Fixes
+- The minimal fix is to import Optional from typing in riscemu/types/binary_data_memory_section.py.
+
+  Example patch (already present in the code diff):
+  --- a/riscemu/types/binary_data_memory_section.py
+  +++ b/riscemu/types/binary_data_memory_section.py
+  @@ -1,3 +1,4 @@
+  +from typing import Optional
+   from . import (
+       MemorySection,
+       InstructionContext,
+       ...
+
+- Alternative fixes:
+  - Use from __future__ import annotations (defer evaluation of annotations) at module top (Python 3.7+). That avoids needing typing names at runtime, but is a broader change that affects all annotations and may hide similar mistakes elsewhere.
+  - Fully qualify the annotation using typing.Optional (e.g., flags: "Optional[MemoryFlags]" using string annotations), or import typing as a module (import typing) and use typing.Optional.
+
+- Recommended action:
+  - Apply the shown import (from typing import Optional) at the top of riscemu/types/binary_data_memory_section.py (as in the diff).
+  - Run pytest locally to confirm the import-time error is fixed.
+  - Optionally scan other modules for missing typing imports or consider enabling PEP 563 future annotations across the package if appropriate.
+
+9) Notes / Rationale
+- This is a straightforward NameError caused by a missing import for a typing helper used in a class-level annotation. The patch included in the diff already adds the missing import and should resolve test collection errors.
+- Double-check other modules for similar missing typing imports; import-time evaluation of annotations can cause failures during test collection if annotations reference undefined names.

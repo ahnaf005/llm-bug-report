@@ -1,0 +1,146 @@
+## Software Bug Report: Build Failure in `java-checks` Module - `CheckListTest` for New Rule S3366
+
+**Bug ID:** (To be assigned)
+
+**Project:** SonarSource/sonar-java
+
+**Module:** `java-checks`
+
+**Version/Commit:**
+*   **Failing Commit:** `30c3ce14ee7fc8fdb396040c3c2ce2f019d67b6b` (from build log)
+*   **Previous Passing Commit:** `0f1a47c35a2181a928fa39fec9c1c4f651dc63e7` (from code diff)
+
+**Environment:**
+*   **Build System:** Travis CI
+*   **OS:** Ubuntu 14.04.5 LTS (trusty)
+*   **Kernel:** 4.14.12-041412-generic
+*   **Java Version:** 1.8.0_151 (Oracle Corporation)
+*   **Maven Version:** 3.5.2
+
+**Severity:** High (Build Failure)
+
+**Priority:** High (Blocks integration of new rule)
+
+---
+
+### Description
+
+The build for the `SonarSource/sonar-java` project is failing in the `java-checks` module during the test phase. Specifically, the `org.sonar.java.checks.CheckListTest` is encountering both an `AssertionError` and a `NullPointerException` related to the newly introduced rule `S3366`.
+
+The code changes indicate the introduction of a new rule, S3366, with its corresponding metadata files (`S3366_java.json` and `S3366_java.html`) in the `java-checks` module, along with test resource files in `its/ruling`. The `CheckListTest` appears to be failing because it cannot find the expected description for rule S3366 and encounters a `NullPointerException` when processing rule metadata, suggesting an issue with how this new rule's metadata is being discovered or loaded by the test framework.
+
+---
+
+### Steps to Reproduce
+
+1.  Clone the `SonarSource/sonar-java` repository.
+2.  Checkout the failing commit `30c3ce14ee7fc8fdb396040c3c2ce2f019d67b6b`.
+3.  Execute the Maven build command, specifically targeting the `java-checks` module's test phase (e.g., `mvn clean install` or `mvn test -pl java-checks`).
+    *   The Travis CI build log indicates the command `./travis.sh` was used, which likely wraps `mvn clean install`.
+
+---
+
+### Expected Behavior
+
+The `java-checks` module should build successfully, and all tests, including `CheckListTest`, should pass. The newly added rule S3366 should be correctly recognized and validated by `CheckListTest` without errors or failures.
+
+---
+
+### Actual Behavior
+
+The build fails in the `java-checks` module. The `maven-surefire-plugin` reports test failures in `org.sonar.java.checks.CheckListTest`.
+
+**Specific Test Failures:**
+
+1.  **`rules_targeting_tests_should_have_tests_tag` method:**
+    ```
+    [ERROR] rules_targeting_tests_should_have_tests_tag(org.sonar.java.checks.CheckListTest)  Time elapsed: 0.287 s  <<< ERROR!
+    java.lang.NullPointerException
+    	at org.sonar.java.checks.CheckListTest.rules_targeting_tests_should_have_tests_tag(CheckListTest.java:194)
+    ```
+2.  **`test` method:**
+    ```
+    [ERROR] test(org.sonar.java.checks.CheckListTest)  Time elapsed: 0.235 s  <<< FAILURE!
+    java.lang.AssertionError: No description for S3366 S3366
+    	at org.sonar.java.checks.CheckListTest.test(CheckListTest.java:146)
+    ```
+
+**Full Build Failure Log:**
+```
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary:
+[INFO]
+[INFO] SonarJava .......................................... SUCCESS [  4.000 s]
+[INFO] SonarQube Java :: Maven model generator ............ SUCCESS [  7.774 s]
+[INFO] SonarQube Java :: Front-end ........................ SUCCESS [01:47 min]
+[INFO] SonarQube Java :: Check Test tool kit .............. SUCCESS [  7.114 s]
+[INFO] SonarQube Java :: Checks ........................... FAILURE [ 37.288 s]
+[INFO] SonarQube Java :: Surefire ......................... SKIPPED
+[INFO] java-jacoco-previous ............................... SKIPPED
+[INFO] SonarQube Java :: JaCoCo ........................... SKIPPED
+[INFO] SonarQube Java :: Plugin ........................... SKIPPED
+[INFO] SonarQube Java :: JaCoCo Listeners ................. SKIPPED
+[INFO] SonarQube Java :: ITs .............................. SKIPPED
+[INFO] SonarQube Java :: ITs :: Performancing ............. SKIPPED
+[INFO] SonarQube Java :: ITs :: Plugin .................... SKIPPED
+[INFO] SonarQube Java :: ITs :: Plugin :: Plugins ......... SKIPPED
+[INFO] SonarQube Java :: ITS :: Plugin :: Java Extension Plugin SKIPPED
+[INFO] SonarQube Java :: ITs :: Plugin :: Tests ........... SKIPPED
+[INFO] SonarQube Java :: ITs :: Ruling .................... SKIPPED
+[INFO] SonarQube Java :: ITs :: Semantic .................. SKIPPED
+[INFO] SonarQube Java :: ITS :: Semantic :: Java Debugging Plugin SKIPPED
+[INFO] SonarQube Java :: ITs :: Semantic :: Tests ......... SKIPPED
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time: 02:48 min
+[INFO] Finished at: 2018-03-13T14:43:24Z
+[INFO] Final Memory: 68M/1122M
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.20.1:test (default-test) on project java-checks: There are test failures.
+[ERROR]
+[ERROR] Please refer to /home/travis/build/SonarSource/sonar-java/java-checks/target/surefire-reports for the individual test results.
+[ERROR] Please refer to dump files (if any exist) [date]-jvmRun[N].dump, [date].dumpstream and [date]-jvmRun[N].dumpstream.
+[ERROR] -> [Help 1]
+org.apache.maven.lifecycle.LifecycleExecutionException: Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.20.1:test (default-test) on project java-checks: There are test failures.
+... (full stack trace omitted for brevity)
+```
+
+---
+
+### Code Changes (Relevant to the bug)
+
+The provided `CODE DIFF` shows the addition of several new files, all related to a new rule identified as `S3366`:
+
+1.  **`its/ruling/src/test/resources/commons-beanutils/squid-S3366.json`** (5 lines added)
+2.  **`its/ruling/src/test/resources/guava/squid-S3366.json`** (12 lines added)
+3.  **`its/ruling/src/test/resources/jdk6/squid-S3366.json`** (78 lines added)
+    *   These three files appear to be test resource files, likely defining expected issues for rule S3366 in different libraries/JDK versions.
+4.  **`java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.html`** (33 lines added)
+    *   This file contains the HTML description for the new rule S3366.
+5.  **`java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.json`** (20 lines added)
+    *   This file contains the JSON metadata for the new rule S3366, including its title, type, status, remediation, tags, standards, default severity, and `sqKey: "S3366"`.
+
+---
+
+### Analysis / Root Cause (Hypothesis)
+
+The `CheckListTest` is designed to validate the metadata and descriptions of SonarQube rules. The `AssertionError: No description for S3366 S3366` strongly suggests that while the `S3366_java.json` file defines the rule key, the test is unable to locate or correctly parse the associated HTML description (`S3366_java.html`).
+
+Possible reasons for this failure:
+
+1.  **Incorrect Resource Path:** The `CheckListTest` might be looking for the rule description in a path that doesn't match where `S3366_java.html` was added.
+2.  **Resource Loading Issue:** There might be an issue with how the test environment or the `CheckListTest` itself loads new resources, especially those added in a new commit.
+3.  **Metadata Inconsistency:** Although the `S3366_java.json` explicitly states `"sqKey": "S3366"`, there might be a subtle mismatch or a missing field that the `CheckListTest` expects when trying to link the rule key to its description.
+4.  **`NullPointerException` in `rules_targeting_tests_should_have_tests_tag`:** This error likely stems from the same root cause. If the rule metadata for S3366 (or another rule) is not fully or correctly loaded, attempting to access properties like "tags" (which is present in `S3366_java.json`) could result in a `NullPointerException`. This could be a cascading effect of the primary issue with rule description loading.
+
+The fact that this is a new rule being introduced makes it highly probable that the test infrastructure or the `CheckListTest` itself needs to be updated or configured to correctly recognize and process the metadata for `S3366`.
+
+---
+
+### Proposed Solution
+
+1.  **Verify Resource Paths:** Double-check that the `CheckListTest`'s logic for discovering rule metadata and descriptions correctly accounts for the new `S3366_java.json` and `S3366_java.html` files in their respective `src/main/resources` locations.
+2.  **Inspect `CheckListTest`:** Review `CheckListTest.java` at lines 146 and 194 to understand precisely what data it expects and how it attempts to retrieve it. This will clarify why the description is not found and why a `NullPointerException` occurs.
+3.  **Clear Caches (if applicable):** Although Travis CI typically starts with a clean environment for the build, local development might benefit from ensuring Maven and Sonar caches are cleared. The `rm -rf $HOME/.m2/repository/org/sonarsource/java` command in `before_cache` is a good practice, but the issue seems to be within the test logic itself rather than a stale cache.
+4.  **Ensure Complete Metadata:** Confirm that `S3366_java.json` contains all mandatory fields expected by `CheckListTest` for a rule definition, and that `S3366_java.html` is accessible and correctly formatted.

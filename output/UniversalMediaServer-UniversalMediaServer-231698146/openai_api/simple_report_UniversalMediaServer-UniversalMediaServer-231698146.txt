@@ -1,0 +1,104 @@
+Title: Failing unit tests due to missing validation in AudioProperties setters (fix available)
+
+Summary
+- Build failed during test phase: 4 unit tests in net.pms.formats.v2.AudioPropertiesTest expected IllegalArgumentException but did not receive it.
+- Root cause: Several setter methods in src/main/java/net/pms/formats/v2/AudioProperties.java did not validate invalid (<= 0) input values and therefore did not throw IllegalArgumentException.
+- Fix (included in code diff): added checks to four setter methods to throw IllegalArgumentException when supplied values < 1. After applying these checks the previously failing tests should pass.
+
+Build / environment (from BUILD LOG)
+- Project: Universal Media Server 6.6.1-SNAPSHOT
+- CI: Travis
+- OS: Ubuntu 12.04.5 LTS (precise) / build environment details in log
+- Java: Oracle JDK 7 (1.7.0_76)
+- Maven: 3.2.5
+- Command that failed: mvn install -Dmaven.javadoc.skip=true -B -V
+- Failure location: test phase (maven-surefire-plugin:2.19.1:test)
+- Failing tests (names and symptom):
+  - net.pms.formats.v2.AudioPropertiesTest.testSetNumberOfChannels_withIllegalArgument — java.lang.AssertionError: Expected exception: java.lang.IllegalArgumentException
+  - net.pms.formats.v2.AudioPropertiesTest.testSampleFrequency_withIllegalArgument — Expected exception
+  - net.pms.formats.v2.AudioPropertiesTest.testBitsperSample_withIllegalArgument — Expected exception
+  - net.pms.formats.v2.AudioPropertiesTest.testSetBitRate_withIllegalArgument — Expected exception
+- Tests run total: 302, Failures: 4, Errors: 0
+
+Reproduction steps
+1. Checkout the repository at the failing commit: (build log used commit 0579589d…)
+2. Run: mvn clean install -Dmaven.javadoc.skip=true
+3. Observe test failures in target/surefire-reports for the four tests listed above.
+
+Observed behavior
+- The AudioProperties setter methods accepted invalid values (e.g., zero or negative) and did not throw IllegalArgumentException.
+- Tests expecting IllegalArgumentException therefore failed with an assertion indicating an expected exception was not thrown.
+
+Expected behavior
+- Input validation in AudioProperties setters should reject non-positive values by throwing IllegalArgumentException, so the tests that assert this behavior should pass.
+
+Root cause
+- Missing parameter validation checks in the following setter methods of src/main/java/net/pms/formats/v2/AudioProperties.java:
+  - setBitRate(int bitRate)
+  - setNumberOfChannels(int numberOfChannels)
+  - setBitsperSample(int bitsperSample)
+  - setSampleFrequency(int sampleFrequency)
+- Because these setters did not throw for invalid inputs, tests that check for exceptions failed.
+
+Code patch (from CODE DIFF)
+- File modified: src/main/java/net/pms/formats/v2/AudioProperties.java
+- For each setter above, added a guard that throws IllegalArgumentException when the provided value is less than 1.
+
+Example (conceptual excerpt applied by patch):
+- setBitRate:
+  if (bitRate < 1) {
+      throw new IllegalArgumentException("Bitrate can't be less than 1.");
+  }
+  this.bitRate = bitRate;
+
+- setNumberOfChannels:
+  if (numberOfChannels < 1) {
+      throw new IllegalArgumentException("Channel number can't be less than 1.");
+  }
+  this.numberOfChannels = numberOfChannels;
+
+- setBitsperSample:
+  if (bitsperSample < 1) {
+      throw new IllegalArgumentException("Bits per sample can't be less than 1.");
+  }
+  this.bitsperSample = bitsperSample;
+
+- setSampleFrequency:
+  if (sampleFrequency < 1) {
+      throw new IllegalArgumentException("Sample frequency can't be less than 1 Hz.");
+  }
+  this.sampleFrequency = sampleFrequency;
+
+Effect of patch
+- The added checks directly address the failing tests by causing the expected IllegalArgumentException to be raised for invalid inputs.
+- This is a minimal, low-risk fix localized to input validation in the AudioProperties class.
+
+Verification / test plan
+- Run unit tests locally:
+  mvn test
+  or full build:
+  mvn install -Dmaven.javadoc.skip=true
+- Confirm that the four previously failing tests now pass:
+  - AudioPropertiesTest.testSetNumberOfChannels_withIllegalArgument
+  - AudioPropertiesTest.testSampleFrequency_withIllegalArgument
+  - AudioPropertiesTest.testBitsperSample_withIllegalArgument
+  - AudioPropertiesTest.testSetBitRate_withIllegalArgument
+- Inspect target/surefire-reports to ensure no new test regressions.
+
+Recommendations and additional notes
+1. Validation threshold:
+   - Current checks use value < 1 (i.e., reject 0 and negatives). This matches the tests' expectation. Confirm there are no legitimate cases where 0 is meaningful for these fields. If domain requires, use <= 0 consistently.
+2. Consistency:
+   - Ensure all setters that must enforce domain constraints follow the same pattern and consistent exception messages or consider using a utility validatePositive(name, value).
+3. Tests:
+   - Add or extend tests to include boundary checks (e.g., 0 and -1) and valid minimal allowed value (1) to prevent regressions.
+4. User-visible messages:
+   - Exception messages are fine for debugging, but if these messages are presented to end-users they should be localized / polished. For internal validation throwing an IllegalArgumentException is appropriate.
+5. Documentation:
+   - Update JavaDoc for the setters to document that IllegalArgumentException is thrown for non-positive values.
+6. Review other audio-related classes:
+   - Search the codebase for other properties classes that accept numeric values and ensure they perform similar validations.
+
+Conclusion
+- The failing tests were caused by missing validation in AudioProperties setter methods.
+- The provided patch adds the necessary IllegalArgumentException checks and should resolve the four test failures. After applying the patch and running the test suite, the build should move from failing to passing barring other unrelated issues.

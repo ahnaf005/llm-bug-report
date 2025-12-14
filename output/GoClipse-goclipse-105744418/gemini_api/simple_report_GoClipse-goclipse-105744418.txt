@@ -1,0 +1,101 @@
+## Software Bug Report: Compilation Failure in `com.googlecode.goclipse.ui` due to Superclass API Change
+
+**Bug ID:** GOCLIPSE-BUILD-20160129-001
+
+**Title:** Compilation Failure: Method `performBackgroundComputation()` undefined in `AbstractUIOperation` after superclass API change.
+
+**Project/Module:** `com.googlecode.goclipse.ui`
+
+**Component:** `com.googlecode.goclipse.ui.actions.StartGocodeServerOperation`
+
+**Severity:** High (Build Blocker)
+
+**Status:** New
+
+**Reproducibility:** Always
+
+---
+
+### 1. Description
+
+The build for the `GoClipse` project failed during the compilation phase of the `com.googlecode.goclipse.ui` module. The errors indicate that the `StartGocodeServerOperation` class is attempting to override and call a method (`performBackgroundComputation()`) that no longer exists in its superclass, `AbstractUIOperation`. This suggests an API change in `AbstractUIOperation` that `StartGocodeServerOperation` has not yet fully adapted to.
+
+The provided code diff shows the necessary changes to `StartGocodeServerOperation.java` to resolve these compilation errors, indicating that the `failed_sha` represents a state where these changes were not yet correctly applied or integrated.
+
+---
+
+### 2. Environment
+
+*   **Build System:** Travis CI (Container-based infrastructure)
+*   **Operating System:** Ubuntu 12.04.5 LTS (Precise)
+*   **Linux Kernel:** 3.13.0-29-generic
+*   **Java Version:** Oracle JDK 1.8.0_31 (Java HotSpot(TM) 64-Bit Server VM, build 25.31-b07)
+*   **Maven Version:** Apache Maven 3.2.5
+*   **Tycho Version:** 0.24.0
+*   **Git SHA (Failed Build):** `f737d664794570bb2a319d7bff9111f2c0ca9e0a`
+*   **Git SHA (Last Passed Build):** `1f7bf7775a8cd5e33a0507a2f41abb712ae4917f`
+
+---
+
+### 3. Steps to Reproduce
+
+1.  Clone the `GoClipse/goclipse` repository.
+2.  Checkout the problematic commit: `git checkout f737d664794570bb2a319d7bff9111f2c0ca9e0a`
+3.  Execute the Maven build command: `mvn clean integration-test`
+
+---
+
+### 4. Expected Behavior
+
+The `mvn clean integration-test` command should complete successfully, indicating that all modules, including `com.googlecode.goclipse.ui`, compile without errors and all tests pass.
+
+---
+
+### 5. Actual Behavior
+
+The build fails during the `compile` phase of the `com.googlecode.goclipse.ui` module with the following compilation errors:
+
+```
+[ERROR] Failed to execute goal org.eclipse.tycho:tycho-compiler-plugin:0.24.0:compile (default-compile) on project com.googlecode.goclipse.ui: Compilation failure: Compilation failure:
+[ERROR] /home/travis/build/GoClipse/goclipse/plugin_ide.ui/src/com/googlecode/goclipse/ui/actions/StartGocodeServerOperation.java:[35]
+[ERROR] protected void performBackgroundComputation() throws CommonException, OperationCancellation, CoreException {
+[ERROR] ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[ERROR] The method performBackgroundComputation() of type StartGocodeServerOperation must override or implement a supertype method
+[ERROR] /home/travis/build/GoClipse/goclipse/plugin_ide.ui/src/com/googlecode/goclipse/ui/actions/StartGocodeServerOperation.java:[43]
+[ERROR] super.performBackgroundComputation();
+[ERROR] ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[ERROR] The method performBackgroundComputation() is undefined for the type AbstractUIOperation
+[ERROR] 2 problems (2 errors)
+```
+
+---
+
+### 6. Root Cause Analysis
+
+The compilation errors indicate an incompatibility between the `StartGocodeServerOperation` class and its superclass, `AbstractUIOperation`.
+
+1.  **Error 1: `The method performBackgroundComputation() of type StartGocodeServerOperation must override or implement a supertype method` (Line 35)**
+    *   This error occurs because `StartGocodeServerOperation` defines a method `performBackgroundComputation()` which is either explicitly or implicitly marked as an override, but no such method exists in its supertype (`AbstractUIOperation`) to be overridden. This implies `performBackgroundComputation()` was removed or its signature changed in `AbstractUIOperation`.
+
+2.  **Error 2: `The method performBackgroundComputation() is undefined for the type AbstractUIOperation` (Line 43)**
+    *   This error confirms the first. Inside `StartGocodeServerOperation`, there is a call to `super.performBackgroundComputation()`. Since `AbstractUIOperation` no longer defines this method, the call is invalid.
+
+The provided `CODE DIFF` clearly illustrates the necessary changes to `StartGocodeServerOperation.java` to address these issues. It shows that:
+*   The `performBackgroundComputation()` method (lines 35-42 in the old file) is removed.
+*   A new method `isBackgroundComputationNecessary()` (lines 35-40 in the new file) is introduced, which encapsulates the logic previously found at the beginning of `performBackgroundComputation()`.
+*   The call to `super.performBackgroundComputation()` (line 43 in the old file) is removed, as its functionality is now handled by the new `isBackgroundComputationNecessary()` method and the existing `doBackgroundComputation()` method.
+*   The `throws` clause of `doBackgroundComputation()` is updated to remove `CommonException`, aligning it with the presumed new API of `AbstractUIOperation`.
+
+Therefore, the bug is that the code at `f737d664794570bb2a319d7bff9111f2c0ca9e0a` (the `failed_sha`) has not been updated to reflect the API changes in its superclass `AbstractUIOperation`. The `CODE DIFF` represents the correct fix that needs to be applied.
+
+---
+
+### 7. Proposed Solution
+
+Apply the changes outlined in the provided `CODE DIFF` to the `plugin_ide.ui/src/com/googlecode/goclipse/ui/actions/StartGocodeServerOperation.java` file. This involves:
+
+1.  Removing the `performBackgroundComputation()` method.
+2.  Adding the `isBackgroundComputationNecessary()` method with the logic to determine if the background computation is needed.
+3.  Updating the `doBackgroundComputation()` method's `throws` clause to remove `CommonException`.
+
+These changes will bring `StartGocodeServerOperation` in line with the updated `AbstractUIOperation` API, resolving the compilation errors.

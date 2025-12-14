@@ -1,0 +1,132 @@
+Title
+- Test failure: SwaggerSchemaServiceTest.modelConvertersRefsAreResolved fails because nested class FQN uses "$" while schema names are produced with "."
+
+Summary
+- CI build failed with one test failure: SwaggerSchemaServiceTest.modelConvertersRefsAreResolved.
+- Root cause: nested (inner) Java class names are being normalized to use '.' instead of '$' in schema naming, but the test (and code elsewhere) expected the raw class name with '$'. The diff includes a fix that normalizes nested class names to use '.' and updates the test accordingly.
+
+Steps to Reproduce
+1. Checkout the failing commit (fb2c40266568152137c8ee7b9d0e5f6087c3f3cc) or run on current HEAD if you reproduce the original failure:
+   - ./gradlew -p springwolf-core test
+   - Or run only the failing test:
+     - ./gradlew -p springwolf-core test --tests "io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest.modelConvertersRefsAreResolved"
+2. Observe the test failure (assertion about map keys not containing the expected string with '$').
+
+Triggering Input / Conditions
+- A nested / inner class (Java non-top-level class) is used as the target type for the ModelConverter. Example (from test): io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest$ModelConverterNativeClass.
+- The ModelConverter pipeline produces a Schema whose name is derived from rawClass.getName(), but somewhere in the production code this name gets normalized with dots instead of '$' (i.e., "...SwaggerSchemaServiceTest.ModelConverterNativeClass").
+
+Expected Behavior
+- The test expected the schema references map to use the raw class name including the '$' for nested classes, so that:
+  - referencedSchemas contains a key "io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest$ModelConverterNativeClass"
+
+Or, if the intended behavior is to normalize nested class names to dotted format, tests and any consumers should consistently expect and use the normalized form (i.e., replace $ with .), but both sides must match.
+
+Observed Behavior (CI output)
+- The schema map actually contained the nested class name with '.' replaced for '$', for example:
+  - Key present: "io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest.ModelConverterNativeClass"
+- The test asserted that the key with '$' should exist and failed.
+
+Relevant failing assertion (from build log)
+- Build log excerpt (assertion failure):
+  - java.lang.AssertionError:
+    Expecting actual:
+      {"io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest.ModelConverterNativeClass"=SchemaObject(...)}
+    to contain key:
+      "io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest$ModelConverterNativeClass"
+  - at io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest.modelConvertersRefsAreResolved(SwaggerSchemaServiceTest.java:120)
+
+Test summary from CI
+- 452 tests completed, 1 failed (the above).
+- Failure located in springwolf-core/src/test/java/io/github/springwolf/core/asyncapi/schemas/SwaggerSchemaServiceTest.java
+
+Relevant Stack Trace
+- Assertion failure location:
+  - at io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest.modelConvertersRefsAreResolved(SwaggerSchemaServiceTest.java:120)
+
+- CI top-level excerpt around the failure:
+  - SwaggerSchemaServiceTest > modelConvertersRefsAreResolved() FAILED
+  - java.lang.AssertionError: (see the assertion snippet above)
+  - at io.github.springwolf.core.asyncapi.schemas.SwaggerSchemaServiceTest.modelConvertersRefsAreResolved(SwaggerSchemaServiceTest.java:120)
+
+Relevant Code Snippets (from code diff)
+1) SimpleClassModelConverter change (production code):
+- Before:
+  - schema.name(rawClass.getName());
+- After:
+  - schema.name(rawClass.getName().replace("$", "."));
+
+Patch snippet:
+--- a/.../SimpleClassModelConverter.java
++++ b/.../SimpleClassModelConverter.java
+@@
+-            schema.name(rawClass.getName());
++            schema.name(rawClass.getName().replace("$", "."));
+
+2) Test changes in SwaggerSchemaServiceTest (test code):
+- The test was updated to expect dotted nested class name instead of dollar-signed name.
+
+Key changed assertions (before vs after):
+- Before (failing):
+  - assertThat(schema.rootSchema().getReference().getRef()).contains(ModelConverterNativeClass.class.getName());
+  - assertThat(schema.referencedSchemas()).hasSize(1).containsKey(ModelConverterNativeClass.class.getName());
+  - assertThat(schema.referencedSchemas().get(ModelConverterNativeClass.class.getName()))...
+- After (updated in diff):
+  - assertThat(schema.rootSchema().getReference().getRef())
+          .contains(ModelConverterNativeClass.class.getName().replace("$", "."));
+  - assertThat(schema.referencedSchemas())
+          .hasSize(1)
+          .containsKey(ModelConverterNativeClass.class.getName().replace("$", "."));
+  - assertThat(schema.referencedSchemas()
+          .get(ModelConverterNativeClass.class.getName().replace("$", ".")))
+            .satisfies((el) -> assertThat(el.getType()).isEqualTo(SchemaType.OBJECT))
+            .satisfies((el) -> assertThat(el.getProperties()).containsOnlyKeys("actual"));
+
+Full test patch snippet (relevant portion):
+--- a/.../SwaggerSchemaServiceTest.java
++++ b/.../SwaggerSchemaServiceTest.java
+@@
+-        assertThat(schema.rootSchema().getReference().getRef()).contains(ModelConverterNativeClass.class.getName());
+-        assertThat(schema.referencedSchemas()).hasSize(1).containsKey(ModelConverterNativeClass.class.getName());
+-        assertThat(schema.referencedSchemas().get(ModelConverterNativeClass.class.getName()))
++        assertThat(schema.rootSchema().getReference().getRef())
++                .contains(ModelConverterNativeClass.class.getName().replace("$", "."));
++        assertThat(schema.referencedSchemas())
++                .hasSize(1)
++                .containsKey(ModelConverterNativeClass.class.getName().replace("$", "."));
++        assertThat(schema.referencedSchemas()
++                        .get(ModelConverterNativeClass.class.getName().replace("$", ".")))
+                 .satisfies((el) -> assertThat(el.getType()).isEqualTo(SchemaType.OBJECT))
+                 .satisfies((el) -> assertThat(el.getProperties()).containsOnlyKeys("actual"));
+
+Patches / Suggested Fixes (included in diff)
+- The submitted patch already includes a fix:
+  - Normalize nested class names in SimpleClassModelConverter when calling schema.name(...) by replacing '$' with '.'.
+  - Update the unit test to expect the normalized dotted form.
+
+Recommended alternative improvements
+- Use Class.getCanonicalName() or Class.getTypeName() instead of manual replace:
+  - canonicalName = rawClass.getCanonicalName(); // returns dotted names for nested classes (may be null for anonymous classes)
+  - typeName = rawClass.getTypeName(); // returns a human-readable form
+- Rationale: rawClass.getName() returns internal name with '$' for nested classes; getCanonicalName() returns dotted name (or null for anonymous/local). Using getCanonicalName() or getTypeName() would be clearer and less error-prone than manual replace, but be aware canonicalName can be null for certain classes (anonymous local classes).
+- Example alternative:
+  - String name = rawClass.getCanonicalName();
+  - if (name == null) { name = rawClass.getName().replace("$", "."); }
+  - schema.name(name);
+
+Action Taken / Patch in PR
+- The PR changes both:
+  1. Production code: replaces "$" with "." when setting schema name to produce dotted fully-qualified names for nested classes.
+  2. Test: updated to assert the dotted name (replace("$", ".") on getName()).
+
+CI Metadata
+- failing_sha: fb2c40266568152137c8ee7b9d0e5f6087c3f3cc
+- passed_sha (previous good): c3419d1d3b42999258136d8b4cc5b3e23c99d5f6
+- The diff/patch is included in the PR and addresses the mismatch between produced schema names and test expectations.
+
+Summary / Next Steps
+- The immediate cause of the CI failure is a mismatch between expected nested class naming format in the test (with '$') and the actual schema naming (with '.').
+- The attached patch (replace "$" with ".") resolves the mismatch by:
+  - ensuring schema names use dotted nested class FQNs and
+  - updating test expectations accordingly.
+- Consider adopting a canonical approach (getCanonicalName/getTypeName) for robustness and document the choice in code comments so future contributors know the reason for the normalization.

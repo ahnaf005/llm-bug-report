@@ -1,0 +1,102 @@
+Title
+- Compilation failure: cannot find symbol ResultSetMapper (missing interface) causing 33 compile errors
+
+Summary
+- The Maven build fails with numerous "cannot find symbol: class ResultSetMapper" compilation errors. The problem is that a new interface ResultSetMapper is required by many classes but was not available to the compiler in the failing commit. A patch (ResultSetMapper.java) exists in the code diff and should fix it, but the failing build used a commit that did not contain the file.
+
+Steps to Reproduce
+1. Clone the repository at the failing SHA (used by CI):
+   git clone --branch master git://github.com/davidmoten/rxjava-jdbc.git
+   git checkout 12fa13a1276031b32c4f56ee211f35ed464add7d
+2. Ensure you have JDK8 and Maven available (CI used Oracle JDK8).
+3. Run Maven compile / install:
+   mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+4. Observe compilation failure with many "cannot find symbol" errors for ResultSetMapper.
+
+Triggering Input / Conditions
+- Building commit 12fa13a1... (failed_sha in diff) where multiple classes reference ResultSetMapper but the source file implementing that interface is not present in the commit that CI built.
+- Maven compile (maven-compiler-plugin:3.1) on Java 1.8.
+
+Expected Behavior
+- The project should compile successfully. The ResultSetMapper interface should be present and visible to the compiler so that classes referencing it compile without errors.
+
+Observed Behavior (from CI build log)
+- Compilation fails with 33 errors like:
+  [ERROR] /home/travis/build/davidmoten/rxjava-jdbc/src/main/java/com/github/davidmoten/rx/jdbc/QuerySelectOperator.java:[28,19] cannot find symbol
+    symbol:   class ResultSetMapper
+    location: class com.github.davidmoten.rx.jdbc.QuerySelectOperator<T,R>
+  ...
+  Repeated across QuerySelect.java, Util.java, QuerySelectOperation.java, QuerySelectProducer.java, tuple/Tuples.java, etc.
+
+- Maven retried the build 3 times; all attempts failed with the same compilation errors. The build then stopped.
+
+Relevant Build Log Extracts / Stack Traces
+- Full repetition of the error is in the log. Representative lines:
+
+[ERROR] /home/travis/build/davidmoten/rxjava-jdbc/src/main/java/com/github/davidmoten/rx/jdbc/QuerySelectOperator.java:[28,19] cannot find symbol
+  symbol:   class ResultSetMapper
+  location: class com.github.davidmoten.rx.jdbc.QuerySelectOperator<T,R>
+
+[ERROR] /home/travis/build/davidmoten/rxjava-jdbc/src/main/java/com/github/davidmoten/rx/jdbc/QuerySelect.java:[83,38] cannot find symbol
+  symbol:   class ResultSetMapper
+  location: class com.github.davidmoten.rx.jdbc.QuerySelect
+
+...
+[INFO] 33 errors 
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.1:compile (default-compile) on project rxjava-jdbc: Compilation failure
+
+Relevant Code Snippets (from the diff)
+- The patch adds the ResultSetMapper interface which resolves the missing symbol. This is the content that should be present in src/main/java/com/github/davidmoten/rx/jdbc/ResultSetMapper.java:
+
+package com.github.davidmoten.rx.jdbc;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+public interface ResultSetMapper<T> {
+
+    T call(ResultSet rs) throws SQLException;
+}
+
+Patches / Suggested Fixes
+1. Ensure the new file is committed in the same branch/PR as the code that references ResultSetMapper.
+   - The code diff shows the correct file to add. Confirm the commit that CI builds contains this file.
+
+2. Add / commit the interface (if missing):
+   - Create src/main/java/com/github/davidmoten/rx/jdbc/ResultSetMapper.java with the contents above.
+   - Verify package declaration matches other code referencing ResultSetMapper (package com.github.davidmoten.rx.jdbc).
+
+3. Verify method name and signature match usage:
+   - The interface defines T call(ResultSet) throws SQLException. If the callers expect a different method name or signature, adjust either the callers or the interface. (From the errors, they only fail to find the type; there were no method mismatch errors reported — once the type is present any method signature mismatch would appear as a separate compilation error.)
+
+4. After adding the file, run:
+   mvn clean compile
+   or
+   mvn install -DskipTests=true -Dmaven.javadoc.skip=true
+
+5. CI/Repository workflow suggestion:
+   - The root cause appears to be that the commit built by CI (failed_sha) did not contain the new file. Make sure the commit containing both the references and the new interface is pushed and CI is building that commit.
+   - If this was introduced by a rebase or partially-applied patch, rebase or merge again so all required source files are present.
+
+6. Optional improvements:
+   - Annotate the interface as @FunctionalInterface to make usage as lambda-friendly explicit:
+     @FunctionalInterface
+     public interface ResultSetMapper<T> {
+         T call(ResultSet rs) throws SQLException;
+     }
+   - Add a small compile-time unit test that instantiates a trivial ResultSetMapper to catch regressions.
+
+Root Cause Hypothesis
+- Compilation errors indicate that a type (ResultSetMapper) referenced in many classes did not exist in the source tree at the time of the CI build. The code diff includes the new file, so the fix is to include/merge that file into the built commit. Likely causes:
+  - The file was added in a later commit that wasn’t included in the CI build.
+  - The file was accidentally omitted from the commit/PR.
+  - Build used a stale git reference or wrong SHA.
+
+Action Items
+- Add/merge ResultSetMapper.java into the branch being built.
+- Re-run the CI build (or run mvn compile locally) and confirm compilation succeeds.
+- If further compilation errors occur after adding the file, capture those new errors and follow up.
+
+If you want, I can:
+- Generate a patch file you can apply (already present in the diff).
+- Inspect the repository to confirm which commit added the file and whether CI used a commit missing it.

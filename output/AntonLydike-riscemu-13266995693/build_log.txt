@@ -1,0 +1,751 @@
+2023-05-05T15:31:54.6967352Z Requested labels: ubuntu-latest
+2023-05-05T15:31:54.6967601Z Job defined at: AntonLydike/riscemu/.github/workflows/ci-pytest.yml@refs/pull/20/merge
+2023-05-05T15:31:54.6967746Z Waiting for a runner to pick up this job...
+2023-05-05T15:31:55.3526510Z Job is waiting for a hosted runner to come online.
+2023-05-05T15:31:58.7163382Z Job is about to start running on the hosted runner: GitHub Actions 2 (hosted)
+2023-05-05T15:32:01.3120466Z Current runner version: '2.304.0'
+2023-05-05T15:32:01.3148120Z ##[group]Operating System
+2023-05-05T15:32:01.3148692Z Ubuntu
+2023-05-05T15:32:01.3148966Z 22.04.2
+2023-05-05T15:32:01.3149315Z LTS
+2023-05-05T15:32:01.3149574Z ##[endgroup]
+2023-05-05T15:32:01.3149991Z ##[group]Runner Image
+2023-05-05T15:32:01.3150372Z Image: ubuntu-22.04
+2023-05-05T15:32:01.3150703Z Version: 20230426.1
+2023-05-05T15:32:01.3151169Z Included Software: https://github.com/actions/runner-images/blob/ubuntu22/20230426.1/images/linux/Ubuntu2204-Readme.md
+2023-05-05T15:32:01.3151845Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu22%2F20230426.1
+2023-05-05T15:32:01.3152306Z ##[endgroup]
+2023-05-05T15:32:01.3152614Z ##[group]Runner Image Provisioner
+2023-05-05T15:32:01.3152971Z 2.0.171.1
+2023-05-05T15:32:01.3153277Z ##[endgroup]
+2023-05-05T15:32:01.3154240Z ##[group]GITHUB_TOKEN Permissions
+2023-05-05T15:32:01.3155006Z Actions: read
+2023-05-05T15:32:01.3155281Z Checks: read
+2023-05-05T15:32:01.3155855Z Contents: read
+2023-05-05T15:32:01.3156272Z Deployments: read
+2023-05-05T15:32:01.3156612Z Discussions: read
+2023-05-05T15:32:01.3156891Z Issues: read
+2023-05-05T15:32:01.3157246Z Metadata: read
+2023-05-05T15:32:01.3157570Z Packages: read
+2023-05-05T15:32:01.3157841Z Pages: read
+2023-05-05T15:32:01.3158162Z PullRequests: read
+2023-05-05T15:32:01.3158564Z RepositoryProjects: read
+2023-05-05T15:32:01.3158880Z SecurityEvents: read
+2023-05-05T15:32:01.3159213Z Statuses: read
+2023-05-05T15:32:01.3159535Z ##[endgroup]
+2023-05-05T15:32:01.3163011Z Secret source: None
+2023-05-05T15:32:01.3163684Z Prepare workflow directory
+2023-05-05T15:32:01.3887893Z Prepare all required actions
+2023-05-05T15:32:01.4070676Z Getting action download info
+2023-05-05T15:32:01.6828608Z Download action repository 'actions/checkout@v3' (SHA:8e5e7e5ab8b370d6c329ec480221332ada57f0ab)
+2023-05-05T15:32:02.0222586Z Download action repository 'actions/setup-python@v4' (SHA:57ded4d7d5e986d7296eab16560982c6dd7c923b)
+2023-05-05T15:32:02.3664230Z Complete job name: build (3.10)
+2023-05-05T15:32:02.4742280Z ##[group]Run actions/checkout@v3
+2023-05-05T15:32:02.4742640Z with:
+2023-05-05T15:32:02.4742912Z   repository: AntonLydike/riscemu
+2023-05-05T15:32:02.4743454Z   token: ***
+2023-05-05T15:32:02.4743698Z   ssh-strict: true
+2023-05-05T15:32:02.4743985Z   persist-credentials: true
+2023-05-05T15:32:02.4744238Z   clean: true
+2023-05-05T15:32:02.4744479Z   fetch-depth: 1
+2023-05-05T15:32:02.4744715Z   lfs: false
+2023-05-05T15:32:02.4744936Z   submodules: false
+2023-05-05T15:32:02.4745209Z   set-safe-directory: true
+2023-05-05T15:32:02.4745475Z ##[endgroup]
+2023-05-05T15:32:02.7108800Z Syncing repository: AntonLydike/riscemu
+2023-05-05T15:32:02.7110575Z ##[group]Getting Git version info
+2023-05-05T15:32:02.7111128Z Working directory is '/home/runner/work/riscemu/riscemu'
+2023-05-05T15:32:02.7112983Z [command]/usr/bin/git version
+2023-05-05T15:32:02.7176314Z git version 2.40.1
+2023-05-05T15:32:02.7201600Z ##[endgroup]
+2023-05-05T15:32:02.7251260Z Temporarily overriding HOME='/home/runner/work/_temp/a6ee7819-9f9f-4f70-a3f6-ec808d111f05' before making global git config changes
+2023-05-05T15:32:02.7251878Z Adding repository directory to the temporary git global config as a safe directory
+2023-05-05T15:32:02.7252474Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/riscemu/riscemu
+2023-05-05T15:32:02.7300927Z Deleting the contents of '/home/runner/work/riscemu/riscemu'
+2023-05-05T15:32:02.7306100Z ##[group]Initializing the repository
+2023-05-05T15:32:02.7309610Z [command]/usr/bin/git init /home/runner/work/riscemu/riscemu
+2023-05-05T15:32:02.7381888Z hint: Using 'master' as the name for the initial branch. This default branch name
+2023-05-05T15:32:02.7382549Z hint: is subject to change. To configure the initial branch name to use in all
+2023-05-05T15:32:02.7383155Z hint: of your new repositories, which will suppress this warning, call:
+2023-05-05T15:32:02.7383746Z hint: 
+2023-05-05T15:32:02.7384235Z hint: 	git config --global init.defaultBranch <name>
+2023-05-05T15:32:02.7384993Z hint: 
+2023-05-05T15:32:02.7385499Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2023-05-05T15:32:02.7386129Z hint: 'development'. The just-created branch can be renamed via this command:
+2023-05-05T15:32:02.7386534Z hint: 
+2023-05-05T15:32:02.7386912Z hint: 	git branch -m <name>
+2023-05-05T15:32:02.7392925Z Initialized empty Git repository in /home/runner/work/riscemu/riscemu/.git/
+2023-05-05T15:32:02.7402918Z [command]/usr/bin/git remote add origin https://github.com/AntonLydike/riscemu
+2023-05-05T15:32:02.7447511Z ##[endgroup]
+2023-05-05T15:32:02.7448147Z ##[group]Disabling automatic garbage collection
+2023-05-05T15:32:02.7451533Z [command]/usr/bin/git config --local gc.auto 0
+2023-05-05T15:32:02.7482121Z ##[endgroup]
+2023-05-05T15:32:02.7482712Z ##[group]Setting up auth
+2023-05-05T15:32:02.7488504Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2023-05-05T15:32:02.7521673Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2023-05-05T15:32:02.7884991Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2023-05-05T15:32:02.7915556Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2023-05-05T15:32:02.8134979Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2023-05-05T15:32:02.8172098Z ##[endgroup]
+2023-05-05T15:32:02.8172805Z ##[group]Fetching the repository
+2023-05-05T15:32:02.8180882Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --progress --no-recurse-submodules --depth=1 origin +92b93ebfcc753030479e1305fd138cc9dea405ce:refs/remotes/pull/20/merge
+2023-05-05T15:32:03.0732446Z remote: Enumerating objects: 121, done.        
+2023-05-05T15:32:03.0733509Z remote: Counting objects:   0% (1/121)        
+2023-05-05T15:32:03.0735231Z remote: Counting objects:   1% (2/121)        
+2023-05-05T15:32:03.0735844Z remote: Counting objects:   2% (3/121)        
+2023-05-05T15:32:03.0736678Z remote: Counting objects:   3% (4/121)        
+2023-05-05T15:32:03.0737246Z remote: Counting objects:   4% (5/121)        
+2023-05-05T15:32:03.0738051Z remote: Counting objects:   5% (7/121)        
+2023-05-05T15:32:03.0738616Z remote: Counting objects:   6% (8/121)        
+2023-05-05T15:32:03.0739396Z remote: Counting objects:   7% (9/121)        
+2023-05-05T15:32:03.0739970Z remote: Counting objects:   8% (10/121)        
+2023-05-05T15:32:03.0741163Z remote: Counting objects:   9% (11/121)        
+2023-05-05T15:32:03.0741745Z remote: Counting objects:  10% (13/121)        
+2023-05-05T15:32:03.0742570Z remote: Counting objects:  11% (14/121)        
+2023-05-05T15:32:03.0743155Z remote: Counting objects:  12% (15/121)        
+2023-05-05T15:32:03.0743982Z remote: Counting objects:  13% (16/121)        
+2023-05-05T15:32:03.0744530Z remote: Counting objects:  14% (17/121)        
+2023-05-05T15:32:03.0745334Z remote: Counting objects:  15% (19/121)        
+2023-05-05T15:32:03.0746014Z remote: Counting objects:  16% (20/121)        
+2023-05-05T15:32:03.0746810Z remote: Counting objects:  17% (21/121)        
+2023-05-05T15:32:03.0747359Z remote: Counting objects:  18% (22/121)        
+2023-05-05T15:32:03.0748166Z remote: Counting objects:  19% (23/121)        
+2023-05-05T15:32:03.0748722Z remote: Counting objects:  20% (25/121)        
+2023-05-05T15:32:03.0749489Z remote: Counting objects:  21% (26/121)        
+2023-05-05T15:32:03.0750048Z remote: Counting objects:  22% (27/121)        
+2023-05-05T15:32:03.0750834Z remote: Counting objects:  23% (28/121)        
+2023-05-05T15:32:03.0751463Z remote: Counting objects:  24% (30/121)        
+2023-05-05T15:32:03.0752248Z remote: Counting objects:  25% (31/121)        
+2023-05-05T15:32:03.0753749Z remote: Counting objects:  26% (32/121)        
+2023-05-05T15:32:03.0754113Z remote: Counting objects:  27% (33/121)        
+2023-05-05T15:32:03.0754493Z remote: Counting objects:  28% (34/121)        
+2023-05-05T15:32:03.0755176Z remote: Counting objects:  29% (36/121)        
+2023-05-05T15:32:03.0755532Z remote: Counting objects:  30% (37/121)        
+2023-05-05T15:32:03.0755989Z remote: Counting objects:  31% (38/121)        
+2023-05-05T15:32:03.0756780Z remote: Counting objects:  32% (39/121)        
+2023-05-05T15:32:03.0757273Z remote: Counting objects:  33% (40/121)        
+2023-05-05T15:32:03.0757730Z remote: Counting objects:  34% (42/121)        
+2023-05-05T15:32:03.0758177Z remote: Counting objects:  35% (43/121)        
+2023-05-05T15:32:03.0758668Z remote: Counting objects:  36% (44/121)        
+2023-05-05T15:32:03.0759113Z remote: Counting objects:  37% (45/121)        
+2023-05-05T15:32:03.0759570Z remote: Counting objects:  38% (46/121)        
+2023-05-05T15:32:03.0760603Z remote: Counting objects:  39% (48/121)        
+2023-05-05T15:32:03.0761066Z remote: Counting objects:  40% (49/121)        
+2023-05-05T15:32:03.0761519Z remote: Counting objects:  41% (50/121)        
+2023-05-05T15:32:03.0764248Z remote: Counting objects:  42% (51/121)        
+2023-05-05T15:32:03.0764748Z remote: Counting objects:  43% (53/121)        
+2023-05-05T15:32:03.0765219Z remote: Counting objects:  44% (54/121)        
+2023-05-05T15:32:03.0765679Z remote: Counting objects:  45% (55/121)        
+2023-05-05T15:32:03.0766131Z remote: Counting objects:  46% (56/121)        
+2023-05-05T15:32:03.0766577Z remote: Counting objects:  47% (57/121)        
+2023-05-05T15:32:03.0767008Z remote: Counting objects:  48% (59/121)        
+2023-05-05T15:32:03.0767467Z remote: Counting objects:  49% (60/121)        
+2023-05-05T15:32:03.0767920Z remote: Counting objects:  50% (61/121)        
+2023-05-05T15:32:03.0768370Z remote: Counting objects:  51% (62/121)        
+2023-05-05T15:32:03.0768804Z remote: Counting objects:  52% (63/121)        
+2023-05-05T15:32:03.0769734Z remote: Counting objects:  53% (65/121)        
+2023-05-05T15:32:03.0770218Z remote: Counting objects:  54% (66/121)        
+2023-05-05T15:32:03.0770669Z remote: Counting objects:  55% (67/121)        
+2023-05-05T15:32:03.0771102Z remote: Counting objects:  56% (68/121)        
+2023-05-05T15:32:03.0771626Z remote: Counting objects:  57% (69/121)        
+2023-05-05T15:32:03.0772027Z remote: Counting objects:  58% (71/121)        
+2023-05-05T15:32:03.0772409Z remote: Counting objects:  59% (72/121)        
+2023-05-05T15:32:03.0773309Z remote: Counting objects:  60% (73/121)        
+2023-05-05T15:32:03.0773949Z remote: Counting objects:  61% (74/121)        
+2023-05-05T15:32:03.0774693Z remote: Counting objects:  62% (76/121)        
+2023-05-05T15:32:03.0775273Z remote: Counting objects:  63% (77/121)        
+2023-05-05T15:32:03.0776417Z remote: Counting objects:  64% (78/121)        
+2023-05-05T15:32:03.0776906Z remote: Counting objects:  65% (79/121)        
+2023-05-05T15:32:03.0777691Z remote: Counting objects:  66% (80/121)        
+2023-05-05T15:32:03.0778203Z remote: Counting objects:  67% (82/121)        
+2023-05-05T15:32:03.0778891Z remote: Counting objects:  68% (83/121)        
+2023-05-05T15:32:03.0779377Z remote: Counting objects:  69% (84/121)        
+2023-05-05T15:32:03.0780066Z remote: Counting objects:  70% (85/121)        
+2023-05-05T15:32:03.0780653Z remote: Counting objects:  71% (86/121)        
+2023-05-05T15:32:03.0781341Z remote: Counting objects:  72% (88/121)        
+2023-05-05T15:32:03.0781822Z remote: Counting objects:  73% (89/121)        
+2023-05-05T15:32:03.0782518Z remote: Counting objects:  74% (90/121)        
+2023-05-05T15:32:03.0783010Z remote: Counting objects:  75% (91/121)        
+2023-05-05T15:32:03.0783821Z remote: Counting objects:  76% (92/121)        
+2023-05-05T15:32:03.0784337Z remote: Counting objects:  77% (94/121)        
+2023-05-05T15:32:03.0785094Z remote: Counting objects:  78% (95/121)        
+2023-05-05T15:32:03.0785642Z remote: Counting objects:  79% (96/121)        
+2023-05-05T15:32:03.0786639Z remote: Counting objects:  80% (97/121)        
+2023-05-05T15:32:03.0787140Z remote: Counting objects:  81% (99/121)        
+2023-05-05T15:32:03.0787840Z remote: Counting objects:  82% (100/121)        
+2023-05-05T15:32:03.0788338Z remote: Counting objects:  83% (101/121)        
+2023-05-05T15:32:03.0789019Z remote: Counting objects:  84% (102/121)        
+2023-05-05T15:32:03.0789516Z remote: Counting objects:  85% (103/121)        
+2023-05-05T15:32:03.0790244Z remote: Counting objects:  86% (105/121)        
+2023-05-05T15:32:03.0790766Z remote: Counting objects:  87% (106/121)        
+2023-05-05T15:32:03.0791615Z remote: Counting objects:  88% (107/121)        
+2023-05-05T15:32:03.0792136Z remote: Counting objects:  89% (108/121)        
+2023-05-05T15:32:03.0792835Z remote: Counting objects:  90% (109/121)        
+2023-05-05T15:32:03.0793318Z remote: Counting objects:  91% (111/121)        
+2023-05-05T15:32:03.0794024Z remote: Counting objects:  92% (112/121)        
+2023-05-05T15:32:03.0794530Z remote: Counting objects:  93% (113/121)        
+2023-05-05T15:32:03.0795344Z remote: Counting objects:  94% (114/121)        
+2023-05-05T15:32:03.0795818Z remote: Counting objects:  95% (115/121)        
+2023-05-05T15:32:03.0796506Z remote: Counting objects:  96% (117/121)        
+2023-05-05T15:32:03.0797004Z remote: Counting objects:  97% (118/121)        
+2023-05-05T15:32:03.0797691Z remote: Counting objects:  98% (119/121)        
+2023-05-05T15:32:03.0798169Z remote: Counting objects:  99% (120/121)        
+2023-05-05T15:32:03.0798867Z remote: Counting objects: 100% (121/121)        
+2023-05-05T15:32:03.0799378Z remote: Counting objects: 100% (121/121), done.        
+2023-05-05T15:32:03.0800084Z remote: Compressing objects:   0% (1/115)        
+2023-05-05T15:32:03.0800606Z remote: Compressing objects:   1% (2/115)        
+2023-05-05T15:32:03.0801319Z remote: Compressing objects:   2% (3/115)        
+2023-05-05T15:32:03.0802003Z remote: Compressing objects:   3% (4/115)        
+2023-05-05T15:32:03.0802782Z remote: Compressing objects:   4% (5/115)        
+2023-05-05T15:32:03.0803299Z remote: Compressing objects:   5% (6/115)        
+2023-05-05T15:32:03.0804022Z remote: Compressing objects:   6% (7/115)        
+2023-05-05T15:32:03.0804536Z remote: Compressing objects:   7% (9/115)        
+2023-05-05T15:32:03.0805226Z remote: Compressing objects:   8% (10/115)        
+2023-05-05T15:32:03.0805748Z remote: Compressing objects:   9% (11/115)        
+2023-05-05T15:32:03.0806457Z remote: Compressing objects:  10% (12/115)        
+2023-05-05T15:32:03.0806969Z remote: Compressing objects:  11% (13/115)        
+2023-05-05T15:32:03.0807661Z remote: Compressing objects:  12% (14/115)        
+2023-05-05T15:32:03.0808322Z remote: Compressing objects:  13% (15/115)        
+2023-05-05T15:32:03.0809228Z remote: Compressing objects:  14% (17/115)        
+2023-05-05T15:32:03.0810207Z remote: Compressing objects:  15% (18/115)        
+2023-05-05T15:32:03.0810952Z remote: Compressing objects:  16% (19/115)        
+2023-05-05T15:32:03.0811471Z remote: Compressing objects:  17% (20/115)        
+2023-05-05T15:32:03.0812183Z remote: Compressing objects:  18% (21/115)        
+2023-05-05T15:32:03.0812689Z remote: Compressing objects:  19% (22/115)        
+2023-05-05T15:32:03.0813403Z remote: Compressing objects:  20% (23/115)        
+2023-05-05T15:32:03.0814787Z remote: Compressing objects:  21% (25/115)        
+2023-05-05T15:32:03.0815572Z remote: Compressing objects:  22% (26/115)        
+2023-05-05T15:32:03.0816075Z remote: Compressing objects:  23% (27/115)        
+2023-05-05T15:32:03.0816888Z remote: Compressing objects:  24% (28/115)        
+2023-05-05T15:32:03.0817396Z remote: Compressing objects:  25% (29/115)        
+2023-05-05T15:32:03.0818658Z remote: Compressing objects:  26% (30/115)        
+2023-05-05T15:32:03.0819260Z remote: Compressing objects:  27% (32/115)        
+2023-05-05T15:32:03.0819990Z remote: Compressing objects:  28% (33/115)        
+2023-05-05T15:32:03.0820772Z remote: Compressing objects:  29% (34/115)        
+2023-05-05T15:32:03.0822024Z remote: Compressing objects:  30% (35/115)        
+2023-05-05T15:32:03.0822646Z remote: Compressing objects:  31% (36/115)        
+2023-05-05T15:32:03.0823429Z remote: Compressing objects:  32% (37/115)        
+2023-05-05T15:32:03.0823989Z remote: Compressing objects:  33% (38/115)        
+2023-05-05T15:32:03.0824722Z remote: Compressing objects:  34% (40/115)        
+2023-05-05T15:32:03.0825277Z remote: Compressing objects:  35% (41/115)        
+2023-05-05T15:32:03.0826036Z remote: Compressing objects:  36% (42/115)        
+2023-05-05T15:32:03.0826580Z remote: Compressing objects:  37% (43/115)        
+2023-05-05T15:32:03.0827458Z remote: Compressing objects:  38% (44/115)        
+2023-05-05T15:32:03.0828011Z remote: Compressing objects:  39% (45/115)        
+2023-05-05T15:32:03.0828758Z remote: Compressing objects:  40% (46/115)        
+2023-05-05T15:32:03.0829311Z remote: Compressing objects:  41% (48/115)        
+2023-05-05T15:32:03.0831040Z remote: Compressing objects:  42% (49/115)        
+2023-05-05T15:32:03.0831734Z remote: Compressing objects:  43% (50/115)        
+2023-05-05T15:32:03.0832583Z remote: Compressing objects:  44% (51/115)        
+2023-05-05T15:32:03.0833127Z remote: Compressing objects:  45% (52/115)        
+2023-05-05T15:32:03.0834363Z remote: Compressing objects:  46% (53/115)        
+2023-05-05T15:32:03.0835488Z remote: Compressing objects:  47% (55/115)        
+2023-05-05T15:32:03.0835991Z remote: Compressing objects:  48% (56/115)        
+2023-05-05T15:32:03.0836629Z remote: Compressing objects:  49% (57/115)        
+2023-05-05T15:32:03.0837382Z remote: Compressing objects:  50% (58/115)        
+2023-05-05T15:32:03.0838222Z remote: Compressing objects:  51% (59/115)        
+2023-05-05T15:32:03.0838774Z remote: Compressing objects:  52% (60/115)        
+2023-05-05T15:32:03.0839491Z remote: Compressing objects:  53% (61/115)        
+2023-05-05T15:32:03.0840251Z remote: Compressing objects:  54% (63/115)        
+2023-05-05T15:32:03.0840877Z remote: Compressing objects:  55% (64/115)        
+2023-05-05T15:32:03.0841316Z remote: Compressing objects:  56% (65/115)        
+2023-05-05T15:32:03.0842124Z remote: Compressing objects:  57% (66/115)        
+2023-05-05T15:32:03.0842877Z remote: Compressing objects:  58% (67/115)        
+2023-05-05T15:32:03.0843690Z remote: Compressing objects:  59% (68/115)        
+2023-05-05T15:32:03.0844234Z remote: Compressing objects:  60% (69/115)        
+2023-05-05T15:32:03.0844985Z remote: Compressing objects:  61% (71/115)        
+2023-05-05T15:32:03.0845594Z remote: Compressing objects:  62% (72/115)        
+2023-05-05T15:32:03.0846224Z remote: Compressing objects:  63% (73/115)        
+2023-05-05T15:32:03.0846984Z remote: Compressing objects:  64% (74/115)        
+2023-05-05T15:32:03.0847705Z remote: Compressing objects:  65% (75/115)        
+2023-05-05T15:32:03.0848247Z remote: Compressing objects:  66% (76/115)        
+2023-05-05T15:32:03.0848869Z remote: Compressing objects:  67% (78/115)        
+2023-05-05T15:32:03.0849589Z remote: Compressing objects:  68% (79/115)        
+2023-05-05T15:32:03.0850315Z remote: Compressing objects:  69% (80/115)        
+2023-05-05T15:32:03.0850928Z remote: Compressing objects:  70% (81/115)        
+2023-05-05T15:32:03.0851561Z remote: Compressing objects:  71% (82/115)        
+2023-05-05T15:32:03.0852167Z remote: Compressing objects:  72% (83/115)        
+2023-05-05T15:32:03.0852971Z remote: Compressing objects:  73% (84/115)        
+2023-05-05T15:32:03.0854451Z remote: Compressing objects:  74% (86/115)        
+2023-05-05T15:32:03.0854884Z remote: Compressing objects:  75% (87/115)        
+2023-05-05T15:32:03.0855297Z remote: Compressing objects:  76% (88/115)        
+2023-05-05T15:32:03.0858747Z remote: Compressing objects:  77% (89/115)        
+2023-05-05T15:32:03.0859186Z remote: Compressing objects:  78% (90/115)        
+2023-05-05T15:32:03.0859822Z remote: Compressing objects:  79% (91/115)        
+2023-05-05T15:32:03.0860436Z remote: Compressing objects:  80% (92/115)        
+2023-05-05T15:32:03.0861076Z remote: Compressing objects:  81% (94/115)        
+2023-05-05T15:32:03.0861757Z remote: Compressing objects:  82% (95/115)        
+2023-05-05T15:32:03.0862323Z remote: Compressing objects:  83% (96/115)        
+2023-05-05T15:32:03.0862915Z remote: Compressing objects:  84% (97/115)        
+2023-05-05T15:32:03.0863479Z remote: Compressing objects:  85% (98/115)        
+2023-05-05T15:32:03.0864034Z remote: Compressing objects:  86% (99/115)        
+2023-05-05T15:32:03.0864549Z remote: Compressing objects:  87% (101/115)        
+2023-05-05T15:32:03.0866708Z remote: Compressing objects:  88% (102/115)        
+2023-05-05T15:32:03.0867143Z remote: Compressing objects:  89% (103/115)        
+2023-05-05T15:32:03.0868941Z remote: Compressing objects:  90% (104/115)        
+2023-05-05T15:32:03.0869583Z remote: Compressing objects:  91% (105/115)        
+2023-05-05T15:32:03.0869962Z remote: Compressing objects:  92% (106/115)        
+2023-05-05T15:32:03.0870401Z remote: Compressing objects:  93% (107/115)        
+2023-05-05T15:32:03.0871046Z remote: Compressing objects:  94% (109/115)        
+2023-05-05T15:32:03.0871407Z remote: Compressing objects:  95% (110/115)        
+2023-05-05T15:32:03.0871767Z remote: Compressing objects:  96% (111/115)        
+2023-05-05T15:32:03.0872107Z remote: Compressing objects:  97% (112/115)        
+2023-05-05T15:32:03.0872463Z remote: Compressing objects:  98% (113/115)        
+2023-05-05T15:32:03.0872874Z remote: Compressing objects:  99% (114/115)        
+2023-05-05T15:32:03.0873267Z remote: Compressing objects: 100% (115/115)        
+2023-05-05T15:32:03.0873680Z remote: Compressing objects: 100% (115/115), done.        
+2023-05-05T15:32:03.0901412Z Receiving objects:   0% (1/121)
+2023-05-05T15:32:03.0901861Z Receiving objects:   1% (2/121)
+2023-05-05T15:32:03.0902614Z Receiving objects:   2% (3/121)
+2023-05-05T15:32:03.0903145Z Receiving objects:   3% (4/121)
+2023-05-05T15:32:03.0903891Z Receiving objects:   4% (5/121)
+2023-05-05T15:32:03.0904751Z Receiving objects:   5% (7/121)
+2023-05-05T15:32:03.0905141Z Receiving objects:   6% (8/121)
+2023-05-05T15:32:03.0906097Z Receiving objects:   7% (9/121)
+2023-05-05T15:32:03.0906733Z Receiving objects:   8% (10/121)
+2023-05-05T15:32:03.0907994Z Receiving objects:   9% (11/121)
+2023-05-05T15:32:03.0908564Z Receiving objects:  10% (13/121)
+2023-05-05T15:32:03.0909165Z Receiving objects:  11% (14/121)
+2023-05-05T15:32:03.0909747Z Receiving objects:  12% (15/121)
+2023-05-05T15:32:03.0910321Z Receiving objects:  13% (16/121)
+2023-05-05T15:32:03.0910966Z Receiving objects:  14% (17/121)
+2023-05-05T15:32:03.0911517Z Receiving objects:  15% (19/121)
+2023-05-05T15:32:03.0912089Z Receiving objects:  16% (20/121)
+2023-05-05T15:32:03.0912679Z Receiving objects:  17% (21/121)
+2023-05-05T15:32:03.0913259Z Receiving objects:  18% (22/121)
+2023-05-05T15:32:03.0913827Z Receiving objects:  19% (23/121)
+2023-05-05T15:32:03.0947598Z Receiving objects:  20% (25/121)
+2023-05-05T15:32:03.0948377Z Receiving objects:  21% (26/121)
+2023-05-05T15:32:03.0948987Z Receiving objects:  22% (27/121)
+2023-05-05T15:32:03.0949649Z Receiving objects:  23% (28/121)
+2023-05-05T15:32:03.0950210Z Receiving objects:  24% (30/121)
+2023-05-05T15:32:03.0950806Z Receiving objects:  25% (31/121)
+2023-05-05T15:32:03.0951339Z Receiving objects:  26% (32/121)
+2023-05-05T15:32:03.0952004Z Receiving objects:  27% (33/121)
+2023-05-05T15:32:03.0952909Z Receiving objects:  28% (34/121)
+2023-05-05T15:32:03.0953477Z Receiving objects:  29% (36/121)
+2023-05-05T15:32:03.0954048Z Receiving objects:  30% (37/121)
+2023-05-05T15:32:03.0954661Z Receiving objects:  31% (38/121)
+2023-05-05T15:32:03.0955213Z Receiving objects:  32% (39/121)
+2023-05-05T15:32:03.0955842Z Receiving objects:  33% (40/121)
+2023-05-05T15:32:03.0956408Z Receiving objects:  34% (42/121)
+2023-05-05T15:32:03.0956976Z Receiving objects:  35% (43/121)
+2023-05-05T15:32:03.0957964Z Receiving objects:  36% (44/121)
+2023-05-05T15:32:03.0965580Z Receiving objects:  37% (45/121)
+2023-05-05T15:32:03.0966514Z Receiving objects:  38% (46/121)
+2023-05-05T15:32:03.0966837Z Receiving objects:  39% (48/121)
+2023-05-05T15:32:03.0967414Z Receiving objects:  40% (49/121)
+2023-05-05T15:32:03.0968007Z Receiving objects:  41% (50/121)
+2023-05-05T15:32:03.0968948Z remote: Total 121 (delta 3), reused 33 (delta 0), pack-reused 0        
+2023-05-05T15:32:03.0969530Z Receiving objects:  42% (51/121)
+2023-05-05T15:32:03.0970258Z Receiving objects:  43% (53/121)
+2023-05-05T15:32:03.0970827Z Receiving objects:  44% (54/121)
+2023-05-05T15:32:03.0971458Z Receiving objects:  45% (55/121)
+2023-05-05T15:32:03.0972718Z Receiving objects:  46% (56/121)
+2023-05-05T15:32:03.0973291Z Receiving objects:  47% (57/121)
+2023-05-05T15:32:03.0973859Z Receiving objects:  48% (59/121)
+2023-05-05T15:32:03.0974415Z Receiving objects:  49% (60/121)
+2023-05-05T15:32:03.0975054Z Receiving objects:  50% (61/121)
+2023-05-05T15:32:03.0975758Z Receiving objects:  51% (62/121)
+2023-05-05T15:32:03.0976631Z Receiving objects:  52% (63/121)
+2023-05-05T15:32:03.1003434Z Receiving objects:  53% (65/121)
+2023-05-05T15:32:03.1003868Z Receiving objects:  54% (66/121)
+2023-05-05T15:32:03.1006656Z Receiving objects:  55% (67/121)
+2023-05-05T15:32:03.1007220Z Receiving objects:  56% (68/121)
+2023-05-05T15:32:03.1007941Z Receiving objects:  57% (69/121)
+2023-05-05T15:32:03.1008531Z Receiving objects:  58% (71/121)
+2023-05-05T15:32:03.1009605Z Receiving objects:  59% (72/121)
+2023-05-05T15:32:03.1010079Z Receiving objects:  60% (73/121)
+2023-05-05T15:32:03.1011088Z Receiving objects:  61% (74/121)
+2023-05-05T15:32:03.1011529Z Receiving objects:  62% (76/121)
+2023-05-05T15:32:03.1019728Z Receiving objects:  63% (77/121)
+2023-05-05T15:32:03.1020112Z Receiving objects:  64% (78/121)
+2023-05-05T15:32:03.1020771Z Receiving objects:  65% (79/121)
+2023-05-05T15:32:03.1021579Z Receiving objects:  66% (80/121)
+2023-05-05T15:32:03.1022232Z Receiving objects:  67% (82/121)
+2023-05-05T15:32:03.1022942Z Receiving objects:  68% (83/121)
+2023-05-05T15:32:03.1045676Z Receiving objects:  69% (84/121)
+2023-05-05T15:32:03.1046412Z Receiving objects:  70% (85/121)
+2023-05-05T15:32:03.1047220Z Receiving objects:  71% (86/121)
+2023-05-05T15:32:03.1047765Z Receiving objects:  72% (88/121)
+2023-05-05T15:32:03.1048588Z Receiving objects:  73% (89/121)
+2023-05-05T15:32:03.1051563Z Receiving objects:  74% (90/121)
+2023-05-05T15:32:03.1052116Z Receiving objects:  75% (91/121)
+2023-05-05T15:32:03.1052985Z Receiving objects:  76% (92/121)
+2023-05-05T15:32:03.1053433Z Receiving objects:  77% (94/121)
+2023-05-05T15:32:03.1054196Z Receiving objects:  78% (95/121)
+2023-05-05T15:32:03.1054777Z Receiving objects:  79% (96/121)
+2023-05-05T15:32:03.1056278Z Receiving objects:  80% (97/121)
+2023-05-05T15:32:03.1057228Z Receiving objects:  81% (99/121)
+2023-05-05T15:32:03.1057792Z Receiving objects:  82% (100/121)
+2023-05-05T15:32:03.1058434Z Receiving objects:  83% (101/121)
+2023-05-05T15:32:03.1061787Z Receiving objects:  84% (102/121)
+2023-05-05T15:32:03.1064630Z Receiving objects:  85% (103/121)
+2023-05-05T15:32:03.1065229Z Receiving objects:  86% (105/121)
+2023-05-05T15:32:03.1065800Z Receiving objects:  87% (106/121)
+2023-05-05T15:32:03.1066385Z Receiving objects:  88% (107/121)
+2023-05-05T15:32:03.1066950Z Receiving objects:  89% (108/121)
+2023-05-05T15:32:03.1067641Z Receiving objects:  90% (109/121)
+2023-05-05T15:32:03.1068221Z Receiving objects:  91% (111/121)
+2023-05-05T15:32:03.1068793Z Receiving objects:  92% (112/121)
+2023-05-05T15:32:03.1069377Z Receiving objects:  93% (113/121)
+2023-05-05T15:32:03.1069961Z Receiving objects:  94% (114/121)
+2023-05-05T15:32:03.1070544Z Receiving objects:  95% (115/121)
+2023-05-05T15:32:03.1071071Z Receiving objects:  96% (117/121)
+2023-05-05T15:32:03.1071667Z Receiving objects:  97% (118/121)
+2023-05-05T15:32:03.1072235Z Receiving objects:  98% (119/121)
+2023-05-05T15:32:03.1072911Z Receiving objects:  99% (120/121)
+2023-05-05T15:32:03.1073456Z Receiving objects: 100% (121/121)
+2023-05-05T15:32:03.1074133Z Receiving objects: 100% (121/121), 251.71 KiB | 25.17 MiB/s, done.
+2023-05-05T15:32:03.1075236Z Resolving deltas:   0% (0/3)
+2023-05-05T15:32:03.1075787Z Resolving deltas:  33% (1/3)
+2023-05-05T15:32:03.1076350Z Resolving deltas:  66% (2/3)
+2023-05-05T15:32:03.1076905Z Resolving deltas: 100% (3/3)
+2023-05-05T15:32:03.1077530Z Resolving deltas: 100% (3/3), done.
+2023-05-05T15:32:03.1107455Z From https://github.com/AntonLydike/riscemu
+2023-05-05T15:32:03.1108286Z  * [new ref]         92b93ebfcc753030479e1305fd138cc9dea405ce -> pull/20/merge
+2023-05-05T15:32:03.1149488Z ##[endgroup]
+2023-05-05T15:32:03.1151140Z ##[group]Determining the checkout info
+2023-05-05T15:32:03.1152759Z ##[endgroup]
+2023-05-05T15:32:03.1159357Z ##[group]Checking out the ref
+2023-05-05T15:32:03.1161144Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/20/merge
+2023-05-05T15:32:03.1246583Z Note: switching to 'refs/remotes/pull/20/merge'.
+2023-05-05T15:32:03.1248051Z 
+2023-05-05T15:32:03.1249765Z You are in 'detached HEAD' state. You can look around, make experimental
+2023-05-05T15:32:03.1251383Z changes and commit them, and you can discard any commits you make in this
+2023-05-05T15:32:03.1252942Z state without impacting any branches by switching back to a branch.
+2023-05-05T15:32:03.1258861Z 
+2023-05-05T15:32:03.1260310Z If you want to create a new branch to retain commits you create, you may
+2023-05-05T15:32:03.1262028Z do so (now or later) by using -c with the switch command. Example:
+2023-05-05T15:32:03.1263386Z 
+2023-05-05T15:32:03.1264698Z   git switch -c <new-branch-name>
+2023-05-05T15:32:03.1282208Z 
+2023-05-05T15:32:03.1283637Z Or undo this operation with:
+2023-05-05T15:32:03.1284972Z 
+2023-05-05T15:32:03.1286202Z   git switch -
+2023-05-05T15:32:03.1287476Z 
+2023-05-05T15:32:03.1288812Z Turn off this advice by setting config variable advice.detachedHead to false
+2023-05-05T15:32:03.1290959Z 
+2023-05-05T15:32:03.1291464Z HEAD is now at 92b93eb Merge 6ec6e5130e8fbaca8b151fc7c5308b5a40aad2c8 into 1ea5bb2edcd97fc2a1180034f398415a55e51f50
+2023-05-05T15:32:03.1297888Z ##[endgroup]
+2023-05-05T15:32:03.1299895Z [command]/usr/bin/git log -1 --format='%H'
+2023-05-05T15:32:03.1318171Z '92b93ebfcc753030479e1305fd138cc9dea405ce'
+2023-05-05T15:32:03.1631620Z ##[group]Run actions/setup-python@v4
+2023-05-05T15:32:03.1631959Z with:
+2023-05-05T15:32:03.1632316Z   python-version: 3.10
+2023-05-05T15:32:03.1632657Z   check-latest: false
+2023-05-05T15:32:03.1633136Z   token: ***
+2023-05-05T15:32:03.1633484Z   update-environment: true
+2023-05-05T15:32:03.1633852Z   allow-prereleases: false
+2023-05-05T15:32:03.1634169Z ##[endgroup]
+2023-05-05T15:32:03.3282801Z ##[group]Installed versions
+2023-05-05T15:32:03.3307156Z Successfully set up CPython (3.10.11)
+2023-05-05T15:32:03.3307906Z ##[endgroup]
+2023-05-05T15:32:03.3434303Z ##[group]Run pip install --upgrade pip
+2023-05-05T15:32:03.3434831Z [36;1mpip install --upgrade pip[0m
+2023-05-05T15:32:03.3493872Z shell: /usr/bin/bash -e {0}
+2023-05-05T15:32:03.3494232Z env:
+2023-05-05T15:32:03.3494641Z   pythonLocation: /opt/hostedtoolcache/Python/3.10.11/x64
+2023-05-05T15:32:03.3495105Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.10.11/x64/lib/pkgconfig
+2023-05-05T15:32:03.3495677Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.10.11/x64
+2023-05-05T15:32:03.3496127Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.10.11/x64
+2023-05-05T15:32:03.3496593Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.10.11/x64
+2023-05-05T15:32:03.3496999Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.10.11/x64/lib
+2023-05-05T15:32:03.3497404Z ##[endgroup]
+2023-05-05T15:32:04.1349019Z Requirement already satisfied: pip in /opt/hostedtoolcache/Python/3.10.11/x64/lib/python3.10/site-packages (23.0.1)
+2023-05-05T15:32:04.3030130Z Collecting pip
+2023-05-05T15:32:04.3844576Z   Downloading pip-23.1.2-py3-none-any.whl (2.1 MB)
+2023-05-05T15:32:04.4587204Z      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 28.8 MB/s eta 0:00:00
+2023-05-05T15:32:04.5227031Z Installing collected packages: pip
+2023-05-05T15:32:04.5227719Z   Attempting uninstall: pip
+2023-05-05T15:32:04.5235717Z     Found existing installation: pip 23.0.1
+2023-05-05T15:32:04.5799192Z     Uninstalling pip-23.0.1:
+2023-05-05T15:32:04.6241106Z       Successfully uninstalled pip-23.0.1
+2023-05-05T15:32:05.7316644Z Successfully installed pip-23.1.2
+2023-05-05T15:32:05.9923688Z ##[group]Run pip install -r requirements.txt -r requirements-dev.txt
+2023-05-05T15:32:05.9924096Z [36;1mpip install -r requirements.txt -r requirements-dev.txt[0m
+2023-05-05T15:32:05.9977711Z shell: /usr/bin/bash -e {0}
+2023-05-05T15:32:05.9977936Z env:
+2023-05-05T15:32:05.9978201Z   pythonLocation: /opt/hostedtoolcache/Python/3.10.11/x64
+2023-05-05T15:32:05.9978555Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.10.11/x64/lib/pkgconfig
+2023-05-05T15:32:05.9978903Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.10.11/x64
+2023-05-05T15:32:05.9979207Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.10.11/x64
+2023-05-05T15:32:05.9979523Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.10.11/x64
+2023-05-05T15:32:05.9979848Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.10.11/x64/lib
+2023-05-05T15:32:05.9980114Z ##[endgroup]
+2023-05-05T15:32:06.5611004Z Collecting pyelftools~=0.27 (from -r requirements.txt (line 1))
+2023-05-05T15:32:06.6398017Z   Downloading pyelftools-0.29-py2.py3-none-any.whl (174 kB)
+2023-05-05T15:32:06.7062368Z      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 174.3/174.3 kB 2.6 MB/s eta 0:00:00
+2023-05-05T15:32:06.7889224Z Collecting black==23.3.0 (from -r requirements-dev.txt (line 1))
+2023-05-05T15:32:06.7922170Z   Downloading black-23.3.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (1.7 MB)
+2023-05-05T15:32:06.8266265Z      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 51.9 MB/s eta 0:00:00
+2023-05-05T15:32:06.9150315Z Collecting pre-commit==3.2.2 (from -r requirements-dev.txt (line 2))
+2023-05-05T15:32:06.9270039Z   Downloading pre_commit-3.2.2-py2.py3-none-any.whl (202 kB)
+2023-05-05T15:32:06.9344765Z      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 202.7/202.7 kB 45.9 MB/s eta 0:00:00
+2023-05-05T15:32:07.0200327Z Collecting pytest==7.3.1 (from -r requirements-dev.txt (line 3))
+2023-05-05T15:32:07.0243161Z   Downloading pytest-7.3.1-py3-none-any.whl (320 kB)
+2023-05-05T15:32:07.0317261Z      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 320.5/320.5 kB 66.8 MB/s eta 0:00:00
+2023-05-05T15:32:07.0600758Z Collecting filecheck==0.0.23 (from -r requirements-dev.txt (line 4))
+2023-05-05T15:32:07.0681700Z   Downloading filecheck-0.0.23-py3-none-any.whl (13 kB)
+2023-05-05T15:32:07.0909183Z Collecting lit==16.0.2 (from -r requirements-dev.txt (line 5))
+2023-05-05T15:32:07.0956837Z   Downloading lit-16.0.2.tar.gz (137 kB)
+2023-05-05T15:32:07.1017412Z      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 137.9/137.9 kB 37.9 MB/s eta 0:00:00
+2023-05-05T15:32:07.1874212Z   Installing build dependencies: started
+2023-05-05T15:32:09.0014730Z   Installing build dependencies: finished with status 'done'
+2023-05-05T15:32:09.0023400Z   Getting requirements to build wheel: started
+2023-05-05T15:32:09.2209430Z   Getting requirements to build wheel: finished with status 'done'
+2023-05-05T15:32:09.2239068Z   Preparing metadata (pyproject.toml): started
+2023-05-05T15:32:09.4315724Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2023-05-05T15:32:09.4824437Z Collecting click>=8.0.0 (from black==23.3.0->-r requirements-dev.txt (line 1))
+2023-05-05T15:32:09.4861932Z   Downloading click-8.1.3-py3-none-any.whl (96 kB)
+2023-05-05T15:32:09.4913557Z      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 96.6/96.6 kB 32.8 MB/s eta 0:00:00
+2023-05-05T15:32:09.5074934Z Collecting mypy-extensions>=0.4.3 (from black==23.3.0->-r requirements-dev.txt (line 1))
+2023-05-05T15:32:09.5109780Z   Downloading mypy_extensions-1.0.0-py3-none-any.whl (4.7 kB)
+2023-05-05T15:32:09.5473048Z Collecting packaging>=22.0 (from black==23.3.0->-r requirements-dev.txt (line 1))
+2023-05-05T15:32:09.5503569Z   Downloading packaging-23.1-py3-none-any.whl (48 kB)
+2023-05-05T15:32:09.5553778Z      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 48.9/48.9 kB 15.8 MB/s eta 0:00:00
+2023-05-05T15:32:09.5748838Z Collecting pathspec>=0.9.0 (from black==23.3.0->-r requirements-dev.txt (line 1))
+2023-05-05T15:32:09.5778341Z   Downloading pathspec-0.11.1-py3-none-any.whl (29 kB)
+2023-05-05T15:32:09.6081112Z Collecting platformdirs>=2 (from black==23.3.0->-r requirements-dev.txt (line 1))
+2023-05-05T15:32:09.6113394Z   Downloading platformdirs-3.5.0-py3-none-any.whl (15 kB)
+2023-05-05T15:32:09.6374799Z Collecting tomli>=1.1.0 (from black==23.3.0->-r requirements-dev.txt (line 1))
+2023-05-05T15:32:09.6414509Z   Downloading tomli-2.0.1-py3-none-any.whl (12 kB)
+2023-05-05T15:32:09.6713218Z Collecting cfgv>=2.0.0 (from pre-commit==3.2.2->-r requirements-dev.txt (line 2))
+2023-05-05T15:32:09.6753853Z   Downloading cfgv-3.3.1-py2.py3-none-any.whl (7.3 kB)
+2023-05-05T15:32:09.7776399Z Collecting identify>=1.0.0 (from pre-commit==3.2.2->-r requirements-dev.txt (line 2))
+2023-05-05T15:32:09.7813506Z   Downloading identify-2.5.24-py2.py3-none-any.whl (98 kB)
+2023-05-05T15:32:09.7876239Z      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 98.8/98.8 kB 24.5 MB/s eta 0:00:00
+2023-05-05T15:32:09.8112269Z Collecting nodeenv>=0.11.1 (from pre-commit==3.2.2->-r requirements-dev.txt (line 2))
+2023-05-05T15:32:09.8147882Z   Downloading nodeenv-1.7.0-py2.py3-none-any.whl (21 kB)
+2023-05-05T15:32:09.8814653Z Collecting pyyaml>=5.1 (from pre-commit==3.2.2->-r requirements-dev.txt (line 2))
+2023-05-05T15:32:09.8851112Z   Downloading PyYAML-6.0-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl (682 kB)
+2023-05-05T15:32:09.8956255Z      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 682.2/682.2 kB 85.8 MB/s eta 0:00:00
+2023-05-05T15:32:10.0115375Z Collecting virtualenv>=20.10.0 (from pre-commit==3.2.2->-r requirements-dev.txt (line 2))
+2023-05-05T15:32:10.0490178Z   Downloading virtualenv-20.23.0-py3-none-any.whl (3.3 MB)
+2023-05-05T15:32:10.1060665Z      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.3/3.3 MB 60.2 MB/s eta 0:00:00
+2023-05-05T15:32:10.1472339Z Collecting iniconfig (from pytest==7.3.1->-r requirements-dev.txt (line 3))
+2023-05-05T15:32:10.1663577Z   Downloading iniconfig-2.0.0-py3-none-any.whl (5.9 kB)
+2023-05-05T15:32:10.1924497Z Collecting pluggy<2.0,>=0.12 (from pytest==7.3.1->-r requirements-dev.txt (line 3))
+2023-05-05T15:32:10.1958666Z   Downloading pluggy-1.0.0-py2.py3-none-any.whl (13 kB)
+2023-05-05T15:32:10.2209534Z Collecting exceptiongroup>=1.0.0rc8 (from pytest==7.3.1->-r requirements-dev.txt (line 3))
+2023-05-05T15:32:10.2248255Z   Downloading exceptiongroup-1.1.1-py3-none-any.whl (14 kB)
+2023-05-05T15:32:10.2521808Z Requirement already satisfied: setuptools in /opt/hostedtoolcache/Python/3.10.11/x64/lib/python3.10/site-packages (from nodeenv>=0.11.1->pre-commit==3.2.2->-r requirements-dev.txt (line 2)) (65.5.0)
+2023-05-05T15:32:10.3270583Z Collecting distlib<1,>=0.3.6 (from virtualenv>=20.10.0->pre-commit==3.2.2->-r requirements-dev.txt (line 2))
+2023-05-05T15:32:10.3298717Z   Downloading distlib-0.3.6-py2.py3-none-any.whl (468 kB)
+2023-05-05T15:32:10.3380054Z      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 468.5/468.5 kB 82.3 MB/s eta 0:00:00
+2023-05-05T15:32:10.3733729Z Collecting filelock<4,>=3.11 (from virtualenv>=20.10.0->pre-commit==3.2.2->-r requirements-dev.txt (line 2))
+2023-05-05T15:32:10.3769804Z   Downloading filelock-3.12.0-py3-none-any.whl (10 kB)
+2023-05-05T15:32:10.4682697Z Building wheels for collected packages: lit
+2023-05-05T15:32:10.4690732Z   Building wheel for lit (pyproject.toml): started
+2023-05-05T15:32:10.7202927Z   Building wheel for lit (pyproject.toml): finished with status 'done'
+2023-05-05T15:32:10.7217108Z   Created wheel for lit: filename=lit-16.0.2-py3-none-any.whl size=88173 sha256=4dd068f84d5b88bb3df843c6a5978ada35234b418840c26bb8158bc1cdb266ed
+2023-05-05T15:32:10.7221302Z   Stored in directory: /home/runner/.cache/pip/wheels/4d/31/6f/140862d5c69ddd665b3ed9485f4c93aa9c84cb34b359cba3ce
+2023-05-05T15:32:10.7242300Z Successfully built lit
+2023-05-05T15:32:10.8146044Z Installing collected packages: pyelftools, lit, distlib, tomli, pyyaml, pluggy, platformdirs, pathspec, packaging, nodeenv, mypy-extensions, iniconfig, identify, filelock, filecheck, exceptiongroup, click, cfgv, virtualenv, pytest, black, pre-commit
+2023-05-05T15:32:11.8606201Z Successfully installed black-23.3.0 cfgv-3.3.1 click-8.1.3 distlib-0.3.6 exceptiongroup-1.1.1 filecheck-0.0.23 filelock-3.12.0 identify-2.5.24 iniconfig-2.0.0 lit-16.0.2 mypy-extensions-1.0.0 nodeenv-1.7.0 packaging-23.1 pathspec-0.11.1 platformdirs-3.5.0 pluggy-1.0.0 pre-commit-3.2.2 pyelftools-0.29 pytest-7.3.1 pyyaml-6.0 tomli-2.0.1 virtualenv-20.23.0
+2023-05-05T15:32:12.0284373Z ##[group]Run pytest -W error
+2023-05-05T15:32:12.0284671Z [36;1mpytest -W error[0m
+2023-05-05T15:32:12.0343319Z shell: /usr/bin/bash -e {0}
+2023-05-05T15:32:12.0343536Z env:
+2023-05-05T15:32:12.0343816Z   pythonLocation: /opt/hostedtoolcache/Python/3.10.11/x64
+2023-05-05T15:32:12.0344170Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.10.11/x64/lib/pkgconfig
+2023-05-05T15:32:12.0344498Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.10.11/x64
+2023-05-05T15:32:12.0344834Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.10.11/x64
+2023-05-05T15:32:12.0345150Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.10.11/x64
+2023-05-05T15:32:12.0345471Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.10.11/x64/lib
+2023-05-05T15:32:12.0345727Z ##[endgroup]
+2023-05-05T15:32:12.5524951Z ============================= test session starts ==============================
+2023-05-05T15:32:12.5526013Z platform linux -- Python 3.10.11, pytest-7.3.1, pluggy-1.0.0
+2023-05-05T15:32:12.5577553Z rootdir: /home/runner/work/riscemu/riscemu
+2023-05-05T15:32:12.5577864Z collected 0 items / 4 errors
+2023-05-05T15:32:12.5578033Z 
+2023-05-05T15:32:12.5578182Z ==================================== ERRORS ====================================
+2023-05-05T15:32:12.5578542Z ____________________ ERROR collecting test/test_helpers.py _____________________
+2023-05-05T15:32:12.5578982Z /opt/hostedtoolcache/Python/3.10.11/x64/lib/python3.10/importlib/__init__.py:126: in import_module
+2023-05-05T15:32:12.5579415Z     return _bootstrap._gcd_import(name[level:], package, level)
+2023-05-05T15:32:12.5579770Z <frozen importlib._bootstrap>:1050: in _gcd_import
+2023-05-05T15:32:12.5580040Z     ???
+2023-05-05T15:32:12.5580299Z <frozen importlib._bootstrap>:1027: in _find_and_load
+2023-05-05T15:32:12.5580567Z     ???
+2023-05-05T15:32:12.5580850Z <frozen importlib._bootstrap>:992: in _find_and_load_unlocked
+2023-05-05T15:32:12.5581115Z     ???
+2023-05-05T15:32:12.5581408Z <frozen importlib._bootstrap>:241: in _call_with_frames_removed
+2023-05-05T15:32:12.5581686Z     ???
+2023-05-05T15:32:12.5581936Z <frozen importlib._bootstrap>:1050: in _gcd_import
+2023-05-05T15:32:12.5582198Z     ???
+2023-05-05T15:32:12.5582463Z <frozen importlib._bootstrap>:1027: in _find_and_load
+2023-05-05T15:32:12.5582716Z     ???
+2023-05-05T15:32:12.5582999Z <frozen importlib._bootstrap>:1006: in _find_and_load_unlocked
+2023-05-05T15:32:12.5583273Z     ???
+2023-05-05T15:32:12.5583528Z <frozen importlib._bootstrap>:688: in _load_unlocked
+2023-05-05T15:32:12.5583799Z     ???
+2023-05-05T15:32:12.5584077Z <frozen importlib._bootstrap_external>:883: in exec_module
+2023-05-05T15:32:12.5584352Z     ???
+2023-05-05T15:32:12.5584622Z <frozen importlib._bootstrap>:241: in _call_with_frames_removed
+2023-05-05T15:32:12.5584896Z     ???
+2023-05-05T15:32:12.5585123Z test/__init__.py:1: in <module>
+2023-05-05T15:32:12.5585386Z     from .test_tokenizer import *
+2023-05-05T15:32:12.5585700Z <frozen importlib._bootstrap>:1027: in _find_and_load
+2023-05-05T15:32:12.5585974Z     ???
+2023-05-05T15:32:12.5586242Z <frozen importlib._bootstrap>:1006: in _find_and_load_unlocked
+2023-05-05T15:32:12.5586517Z     ???
+2023-05-05T15:32:12.5586785Z <frozen importlib._bootstrap>:688: in _load_unlocked
+2023-05-05T15:32:12.5587035Z     ???
+2023-05-05T15:32:12.5587674Z /opt/hostedtoolcache/Python/3.10.11/x64/lib/python3.10/site-packages/_pytest/assertion/rewrite.py:172: in exec_module
+2023-05-05T15:32:12.5588069Z     exec(co, module.__dict__)
+2023-05-05T15:32:12.5588638Z test/test_tokenizer.py:3: in <module>
+2023-05-05T15:32:12.5588939Z     from riscemu.tokenizer import (
+2023-05-05T15:32:12.5589229Z riscemu/__init__.py:11: in <module>
+2023-05-05T15:32:12.5589516Z     from .types.exceptions import (
+2023-05-05T15:32:12.5589799Z riscemu/types/__init__.py:24: in <module>
+2023-05-05T15:32:12.5590160Z     from .binary_data_memory_section import BinaryDataMemorySection
+2023-05-05T15:32:12.5590605Z riscemu/types/binary_data_memory_section.py:11: in <module>
+2023-05-05T15:32:12.5591167Z     class BinaryDataMemorySection(MemorySection):
+2023-05-05T15:32:12.5591587Z riscemu/types/binary_data_memory_section.py:19: in BinaryDataMemorySection
+2023-05-05T15:32:12.5591960Z     flags: Optional[MemoryFlags] = None,
+2023-05-05T15:32:12.5592345Z E   NameError: name 'Optional' is not defined
+2023-05-05T15:32:12.5592704Z ____________________ ERROR collecting test/test_integers.py ____________________
+2023-05-05T15:32:12.5593142Z /opt/hostedtoolcache/Python/3.10.11/x64/lib/python3.10/importlib/__init__.py:126: in import_module
+2023-05-05T15:32:12.5593577Z     return _bootstrap._gcd_import(name[level:], package, level)
+2023-05-05T15:32:12.5593920Z <frozen importlib._bootstrap>:1050: in _gcd_import
+2023-05-05T15:32:12.5594187Z     ???
+2023-05-05T15:32:12.5594461Z <frozen importlib._bootstrap>:1027: in _find_and_load
+2023-05-05T15:32:12.5594716Z     ???
+2023-05-05T15:32:12.5595000Z <frozen importlib._bootstrap>:992: in _find_and_load_unlocked
+2023-05-05T15:32:12.5595279Z     ???
+2023-05-05T15:32:12.5595558Z <frozen importlib._bootstrap>:241: in _call_with_frames_removed
+2023-05-05T15:32:12.5595839Z     ???
+2023-05-05T15:32:12.5596104Z <frozen importlib._bootstrap>:1050: in _gcd_import
+2023-05-05T15:32:12.5596356Z     ???
+2023-05-05T15:32:12.5596623Z <frozen importlib._bootstrap>:1027: in _find_and_load
+2023-05-05T15:32:12.5596891Z     ???
+2023-05-05T15:32:12.5597165Z <frozen importlib._bootstrap>:1006: in _find_and_load_unlocked
+2023-05-05T15:32:12.5597444Z     ???
+2023-05-05T15:32:12.5597719Z <frozen importlib._bootstrap>:688: in _load_unlocked
+2023-05-05T15:32:12.5597985Z     ???
+2023-05-05T15:32:12.5598254Z <frozen importlib._bootstrap_external>:883: in exec_module
+2023-05-05T15:32:12.5598532Z     ???
+2023-05-05T15:32:12.5598816Z <frozen importlib._bootstrap>:241: in _call_with_frames_removed
+2023-05-05T15:32:12.5599081Z     ???
+2023-05-05T15:32:12.5599307Z test/__init__.py:1: in <module>
+2023-05-05T15:32:12.5599584Z     from .test_tokenizer import *
+2023-05-05T15:32:12.5599889Z <frozen importlib._bootstrap>:1027: in _find_and_load
+2023-05-05T15:32:12.5600155Z     ???
+2023-05-05T15:32:12.5600436Z <frozen importlib._bootstrap>:1006: in _find_and_load_unlocked
+2023-05-05T15:32:12.5600699Z     ???
+2023-05-05T15:32:12.5600966Z <frozen importlib._bootstrap>:688: in _load_unlocked
+2023-05-05T15:32:12.5601233Z     ???
+2023-05-05T15:32:12.5601741Z /opt/hostedtoolcache/Python/3.10.11/x64/lib/python3.10/site-packages/_pytest/assertion/rewrite.py:172: in exec_module
+2023-05-05T15:32:12.5602143Z     exec(co, module.__dict__)
+2023-05-05T15:32:12.5602421Z test/test_tokenizer.py:3: in <module>
+2023-05-05T15:32:12.5602704Z     from riscemu.tokenizer import (
+2023-05-05T15:32:12.5602989Z riscemu/__init__.py:23: in <module>
+2023-05-05T15:32:12.5603265Z     from .instructions import *
+2023-05-05T15:32:12.5603566Z riscemu/instructions/__init__.py:9: in <module>
+2023-05-05T15:32:12.5603909Z     from .instruction_set import InstructionSet, Instruction
+2023-05-05T15:32:12.5604276Z riscemu/instructions/instruction_set.py:10: in <module>
+2023-05-05T15:32:12.5604586Z     from ..CPU import CPU
+2023-05-05T15:32:12.5604836Z riscemu/CPU.py:14: in <module>
+2023-05-05T15:32:12.5605098Z     from .MMU import MMU
+2023-05-05T15:32:12.5605356Z riscemu/MMU.py:11: in <module>
+2023-05-05T15:32:12.5605601Z     from .types import (
+2023-05-05T15:32:12.5605878Z riscemu/types/__init__.py:24: in <module>
+2023-05-05T15:32:12.5606236Z     from .binary_data_memory_section import BinaryDataMemorySection
+2023-05-05T15:32:12.5606745Z riscemu/types/binary_data_memory_section.py:11: in <module>
+2023-05-05T15:32:12.5607112Z     class BinaryDataMemorySection(MemorySection):
+2023-05-05T15:32:12.5607519Z riscemu/types/binary_data_memory_section.py:19: in BinaryDataMemorySection
+2023-05-05T15:32:12.5607894Z     flags: Optional[MemoryFlags] = None,
+2023-05-05T15:32:12.5608269Z E   NameError: name 'Optional' is not defined
+2023-05-05T15:32:12.5608617Z ______________________ ERROR collecting test/test_isa.py _______________________
+2023-05-05T15:32:12.5609409Z /opt/hostedtoolcache/Python/3.10.11/x64/lib/python3.10/importlib/__init__.py:126: in import_module
+2023-05-05T15:32:12.5609840Z     return _bootstrap._gcd_import(name[level:], package, level)
+2023-05-05T15:32:12.5610198Z <frozen importlib._bootstrap>:1050: in _gcd_import
+2023-05-05T15:32:12.5610472Z     ???
+2023-05-05T15:32:12.5610733Z <frozen importlib._bootstrap>:1027: in _find_and_load
+2023-05-05T15:32:12.5611002Z     ???
+2023-05-05T15:32:12.5611287Z <frozen importlib._bootstrap>:992: in _find_and_load_unlocked
+2023-05-05T15:32:12.5611561Z     ???
+2023-05-05T15:32:12.5611846Z <frozen importlib._bootstrap>:241: in _call_with_frames_removed
+2023-05-05T15:32:12.5612125Z     ???
+2023-05-05T15:32:12.5612388Z <frozen importlib._bootstrap>:1050: in _gcd_import
+2023-05-05T15:32:12.5612639Z     ???
+2023-05-05T15:32:12.5612906Z <frozen importlib._bootstrap>:1027: in _find_and_load
+2023-05-05T15:32:12.5613171Z     ???
+2023-05-05T15:32:12.5613439Z <frozen importlib._bootstrap>:1006: in _find_and_load_unlocked
+2023-05-05T15:32:12.5613714Z     ???
+2023-05-05T15:32:12.5613985Z <frozen importlib._bootstrap>:688: in _load_unlocked
+2023-05-05T15:32:12.5614237Z     ???
+2023-05-05T15:32:12.5614513Z <frozen importlib._bootstrap_external>:883: in exec_module
+2023-05-05T15:32:12.5614788Z     ???
+2023-05-05T15:32:12.5615134Z <frozen importlib._bootstrap>:241: in _call_with_frames_removed
+2023-05-05T15:32:12.5615376Z     ???
+2023-05-05T15:32:12.5615577Z test/__init__.py:1: in <module>
+2023-05-05T15:32:12.5615806Z     from .test_tokenizer import *
+2023-05-05T15:32:12.5616088Z <frozen importlib._bootstrap>:1027: in _find_and_load
+2023-05-05T15:32:12.5616318Z     ???
+2023-05-05T15:32:12.5616551Z <frozen importlib._bootstrap>:1006: in _find_and_load_unlocked
+2023-05-05T15:32:12.5616792Z     ???
+2023-05-05T15:32:12.5617024Z <frozen importlib._bootstrap>:688: in _load_unlocked
+2023-05-05T15:32:12.5617242Z     ???
+2023-05-05T15:32:12.5617716Z /opt/hostedtoolcache/Python/3.10.11/x64/lib/python3.10/site-packages/_pytest/assertion/rewrite.py:172: in exec_module
+2023-05-05T15:32:12.5618062Z     exec(co, module.__dict__)
+2023-05-05T15:32:12.5618306Z test/test_tokenizer.py:3: in <module>
+2023-05-05T15:32:12.5618552Z     from riscemu.tokenizer import (
+2023-05-05T15:32:12.5618803Z riscemu/__init__.py:23: in <module>
+2023-05-05T15:32:12.5619046Z     from .instructions import *
+2023-05-05T15:32:12.5619299Z riscemu/instructions/__init__.py:9: in <module>
+2023-05-05T15:32:12.5619608Z     from .instruction_set import InstructionSet, Instruction
+2023-05-05T15:32:12.5619938Z riscemu/instructions/instruction_set.py:10: in <module>
+2023-05-05T15:32:12.5620189Z     from ..CPU import CPU
+2023-05-05T15:32:12.5620418Z riscemu/CPU.py:14: in <module>
+2023-05-05T15:32:12.5620644Z     from .MMU import MMU
+2023-05-05T15:32:12.5620858Z riscemu/MMU.py:11: in <module>
+2023-05-05T15:32:12.5621082Z     from .types import (
+2023-05-05T15:32:12.5621322Z riscemu/types/__init__.py:24: in <module>
+2023-05-05T15:32:12.5621633Z     from .binary_data_memory_section import BinaryDataMemorySection
+2023-05-05T15:32:12.5621964Z riscemu/types/binary_data_memory_section.py:11: in <module>
+2023-05-05T15:32:12.5622284Z     class BinaryDataMemorySection(MemorySection):
+2023-05-05T15:32:12.5622636Z riscemu/types/binary_data_memory_section.py:19: in BinaryDataMemorySection
+2023-05-05T15:32:12.5622943Z     flags: Optional[MemoryFlags] = None,
+2023-05-05T15:32:12.5623275Z E   NameError: name 'Optional' is not defined
+2023-05-05T15:32:12.5623586Z ___________________ ERROR collecting test/test_tokenizer.py ____________________
+2023-05-05T15:32:12.5624001Z test/test_tokenizer.py:3: in <module>
+2023-05-05T15:32:12.5624263Z     from riscemu.tokenizer import (
+2023-05-05T15:32:12.5624515Z riscemu/__init__.py:23: in <module>
+2023-05-05T15:32:12.5624745Z     from .instructions import *
+2023-05-05T15:32:12.5625012Z riscemu/instructions/__init__.py:9: in <module>
+2023-05-05T15:32:12.5625323Z     from .instruction_set import InstructionSet, Instruction
+2023-05-05T15:32:12.5625642Z riscemu/instructions/instruction_set.py:10: in <module>
+2023-05-05T15:32:12.5625988Z     from ..CPU import CPU
+2023-05-05T15:32:12.5626226Z riscemu/CPU.py:14: in <module>
+2023-05-05T15:32:12.5626456Z     from .MMU import MMU
+2023-05-05T15:32:12.5626668Z riscemu/MMU.py:11: in <module>
+2023-05-05T15:32:12.5626891Z     from .types import (
+2023-05-05T15:32:12.5627136Z riscemu/types/__init__.py:24: in <module>
+2023-05-05T15:32:12.5627437Z     from .binary_data_memory_section import BinaryDataMemorySection
+2023-05-05T15:32:12.5627786Z riscemu/types/binary_data_memory_section.py:11: in <module>
+2023-05-05T15:32:12.5628105Z     class BinaryDataMemorySection(MemorySection):
+2023-05-05T15:32:12.5628444Z riscemu/types/binary_data_memory_section.py:19: in BinaryDataMemorySection
+2023-05-05T15:32:12.5628768Z     flags: Optional[MemoryFlags] = None,
+2023-05-05T15:32:12.5629102Z E   NameError: name 'Optional' is not defined
+2023-05-05T15:32:12.5629398Z =========================== short test summary info ============================
+2023-05-05T15:32:12.5629795Z ERROR test/test_helpers.py - NameError: name 'Optional' is not defined
+2023-05-05T15:32:12.5630224Z ERROR test/test_integers.py - NameError: name 'Optional' is not defined
+2023-05-05T15:32:12.5630646Z ERROR test/test_isa.py - NameError: name 'Optional' is not defined
+2023-05-05T15:32:12.5631052Z ERROR test/test_tokenizer.py - NameError: name 'Optional' is not defined
+2023-05-05T15:32:12.5631396Z !!!!!!!!!!!!!!!!!!! Interrupted: 4 errors during collection !!!!!!!!!!!!!!!!!!!!
+2023-05-05T15:32:12.5631705Z ============================== 4 errors in 0.26s ===============================
+2023-05-05T15:32:12.5813807Z ##[error]Process completed with exit code 2.
+2023-05-05T15:32:12.5875400Z Post job cleanup.
+2023-05-05T15:32:12.6869378Z [command]/usr/bin/git version
+2023-05-05T15:32:12.6918963Z git version 2.40.1
+2023-05-05T15:32:12.6973532Z Temporarily overriding HOME='/home/runner/work/_temp/140377f9-9852-4a4e-835a-6561142f07c5' before making global git config changes
+2023-05-05T15:32:12.6977020Z Adding repository directory to the temporary git global config as a safe directory
+2023-05-05T15:32:12.6984248Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/riscemu/riscemu
+2023-05-05T15:32:12.7030596Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2023-05-05T15:32:12.7071428Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2023-05-05T15:32:12.7329624Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2023-05-05T15:32:12.7361795Z http.https://github.com/.extraheader
+2023-05-05T15:32:12.7375931Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2023-05-05T15:32:12.7417490Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2023-05-05T15:32:12.7842377Z Cleaning up orphan processes

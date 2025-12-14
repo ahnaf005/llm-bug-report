@@ -1,0 +1,113 @@
+## Bug Report: New Rule S3366 Metadata Not Found by CheckListTest
+
+**1. Title:** Test Failure: New Rule S3366 Metadata (Description and Tags) Not Loaded by CheckListTest
+
+**2. Steps to Reproduce:**
+1.  Clone the `SonarSource/sonar-java` repository.
+2.  Apply the provided code changes, which introduce a new rule `S3366` along with its metadata (`S3366_java.json`) and HTML description (`S3366_java.html`) files.
+3.  Execute the Maven build, specifically the `test` phase for the `java-checks` module. This can be triggered by running `./travis.sh` as seen in the build log, or directly via `mvn test -pl java-checks`.
+
+**3. Triggering Input:**
+The bug is triggered by the introduction of the new rule `S3366` and its associated resource files:
+*   `its/ruling/src/test/resources/commons-beanutils/squid-S3366.json`
+*   `its/ruling/src/test/resources/guava/squid-S3366.json`
+*   `its/ruling/src/test/resources/jdk6/squid-S3366.json`
+*   `java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.html`
+*   `java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.json`
+
+**4. Expected Behavior:**
+The build should complete successfully. The `CheckListTest` should correctly identify and load the metadata for the new rule `S3366`, including its description and tags, allowing all tests to pass.
+
+**5. Observed Behavior:**
+The Maven build fails during the `test` phase of the `java-checks` module. Two tests within `org.sonar.java.checks.CheckListTest` report failures:
+*   The test `rules_targeting_tests_should_have_tests_tag` throws a `NullPointerException`. This indicates an attempt to access a property (likely related to rule tags or other metadata) of a rule object that is unexpectedly null or not fully initialized.
+*   The test `test` fails with an `AssertionError` stating "No description for S3366 S3366". This explicitly indicates that despite the `S3366_java.html` file being added with content, the test framework perceives the description for rule `S3366` as missing.
+
+**6. Relevant Code Snippets:**
+The following files are added by the patch, defining the new rule `S3366` and its description:
+
+**`b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.html`:**
+```html
+<p>In single-threaded environments, the use of <code>this</code> in constructors is normal, and expected. But in multi-threaded environments, it could
+expose partially-constructed objects to other threads, and should be used with caution.</p>
+<p>The classic example is a class with a <code>static</code> list of its instances. If the constructor stores <code>this</code> in the list, another
+thread could access the object before it's fully-formed. Even when the storage of <code>this</code> is the last instruction in the constructor,
+there's still a danger if the class is not <code>final</code>. In that case, the initialization of subclasses won't be complete before
+<code>this</code> is exposed.</p>
+<p>This rule raises an issue when <code>this</code> is assigned to any globally-visible object in a constructor, and when it is passed to the method
+of another object in a constructor</p>
+<h2>Noncompliant Code Example</h2>
+<pre>
+public class Monument {
+
+  public static final List&lt;Monument&gt; ALL_MONUMENTS = new ArrayList()&lt;&gt;;
+  // ...
+
+  public Monument(String location, ...) {
+    ALL_MONUMENTS.add(this);  // Noncompliant; passed to a method of another object
+
+    this.location = location;
+    // ...
+  }
+}
+</pre>
+<h2>Exceptions</h2>
+<p>This rule ignores instances of assigning <code>this</code> directly to a <code>static</code> field of the same class because that case is covered
+by S3010.</p>
+<h2>See</h2>
+<ul>
+  <li> <a href="https://www.securecoding.cert.org/confluence/x/aAD1AQ">CERT, TSM01-J.</a> - Do not let the this reference escape during object
+  construction </li>
+  <li> <a href="https://www.securecoding.cert.org/confluence/x/7ABQAg">CERT, TSM03-J.</a> - Do not publish partially initialized objects </li>
+</ul>
+```
+
+**`b/java-checks/src/main/resources/org/sonar/l10n/java/rules/squid/S3366_java.json`:**
+```json
+{
+  "title": "\"this\" should not be exposed from constructors",
+  "type": "CODE_SMELL",
+  "status": "ready",
+  "remediation": {
+    "func": "Constant\/Issue",
+    "constantCost": "30min"
+  },
+  "tags": [
+    "multi-threading",
+    "cert",
+    "suspicious"
+  ],
+  "standards": [
+    "CERT"
+  ],
+  "defaultSeverity": "Major",
+  "ruleSpecification": "RSPEC-3366",
+  "sqKey": "S3366"
+}
+```
+
+**7. Stack Traces:**
+```
+[ERROR] Tests run: 6, Failures: 1, Errors: 1, Skipped: 0, Time elapsed: 0.746 s <<< FAILURE! - in org.sonar.java.checks.CheckListTest
+[ERROR] rules_targeting_tests_should_have_tests_tag(org.sonar.java.checks.CheckListTest)  Time elapsed: 0.287 s  <<< ERROR!
+java.lang.NullPointerException
+	at org.sonar.java.checks.CheckListTest.rules_targeting_tests_should_have_tests_tag(CheckListTest.java:194)
+
+[ERROR] test(org.sonar.java.checks.CheckListTest)  Time elapsed: 0.235 s  <<< FAILURE!
+java.lang.AssertionError: No description for S3366 S3366
+	at org.sonar.java.checks.CheckListTest.test(CheckListTest.java:146)
+```
+
+**8. Patches / Suggested Fixes:**
+The provided code diff *is* the patch that introduces the new rule and triggers the bug. There are no suggested fixes within the diff itself.
+
+**Suggested Fixes (General):**
+The issue appears to stem from `CheckListTest` failing to correctly load or process the metadata (specifically the description and potentially tags) for the newly introduced rule `S3366`. This could be due to:
+1.  **Bug in `CheckListTest`'s rule loading logic**: The test might not be correctly refreshing its list of available rules or their associated metadata, especially when new rule definition files are added.
+2.  **Resource path/packaging issue**: Although the files are placed in a standard `l10n` path, there might be a subtle issue with how these resources are packaged or accessed by the test environment.
+3.  **Incompatibility with new rule definition**: The `CheckListTest` might have assumptions about rule metadata that are not met by the `S3366` definition, or it's trying to access a field that is `null` for this specific rule.
+
+To resolve this, the following actions are recommended:
+*   **Inspect `CheckListTest.java`**: Analyze the source code of `org.sonar.java.checks.CheckListTest`, particularly around lines 146 and 194, to understand how it retrieves rule descriptions and tags.
+*   **Debug the test**: Run `CheckListTest` in a debugger to observe the state of the `S3366` rule object and its properties (description, tags) when the failing assertions and NullPointerException occur.
+*   **Verify rule registration mechanism**: Ensure that the SonarQube rule registration mechanism correctly picks up the new `S3366_java.json` and `S3366_java.html` files and makes their content available to the `CheckListTest`.

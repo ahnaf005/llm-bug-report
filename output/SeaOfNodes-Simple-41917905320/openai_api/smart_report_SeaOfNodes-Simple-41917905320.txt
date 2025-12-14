@@ -1,0 +1,180 @@
+Title
+- Immediate operand is being printed in the wrong slot / with wrong formatting (failures in Chapter19 tests after changes to x86_64 backend and MemMergeNode)
+
+Summary (one-line)
+- After changes in chapter22 (MulIX86, SetX86, MemMergeNode and related tests), two unit tests fail because the generated IR/printout contains an immediate operand in a different/incorrect position or format (examples: "muli,arg[,6]" vs expected "muli,arg,6").
+
+Steps to reproduce
+1. Checkout the failing commit (239d5298... — same SHA as the build log).
+2. Build and run tests for chapter22 (or the whole project):
+   - mvn --batch-mode --update-snapshots verify
+   - or run the two failing tests:
+     - com.seaofnodes.simple.Chapter19Test.testBasic8
+     - com.seaofnodes.simple.Chapter19Test.testFcn1
+3. Observe test failures reported by Surefire / JUnit.
+
+Triggering input / conditions
+- The repository changes in this diff (chapter22) modified:
+  - chapter22/src/main/java/com/seaofnodes/simple/node/MemMergeNode.java
+  - chapter22/src/main/java/com/seaofnodes/simple/node/cpus/x86_64_v2/MulIX86.java
+  - chapter22/src/main/java/com/seaofnodes/simple/node/cpus/x86_64_v2/SetX86.java
+  - several tests in chapter22 (Chapter19Test, Chapter20Test, Chapter21Test, Chapter22Test) were updated in the same commit.
+- The failing tests produce string representations of generated code (code._stop.toString() / code.print()) and compare them against expected strings.
+- The actual printed output contains immediates inside square-bracket style input lists / in the wrong place (see Observed Behavior).
+
+Expected behavior
+- The generated IR / printed representation should match the test expectations.
+  - For testBasic8: expected "return (muli,arg,6);" (or whatever is the canonical formatting adopted in tests).
+  - For testFcn1: expected the (muli) subexpression without the immediate in an incorrect bracketed position.
+- In short, immediates must be represented consistently and in the same position/format as the test assertions expect.
+
+Observed behavior (from build log)
+- Tests fail with JUnit ComparisonFailure showing mismatched strings. Two concrete examples from the build log:
+  1) com.seaofnodes.simple.Chapter19Test.testFcn1
+     - expected: ..."(muli,#2[])" (no immediate printed inside)
+     - actual:   ..."(muli,#2[,10])" (immediate 10 appears inside the bracketed input list)
+  2) com.seaofnodes.simple.Chapter19Test.testBasic8
+     - expected: "return (muli,arg[]);" (no immediate)
+     - actual:   "return (muli,arg[,6]);" (immediate 6 appears inside square brackets / wrong formatting)
+- Build log excerpt (relevant part):
+  - [ERROR] com.seaofnodes.simple.Chapter19Test.testFcn1 -- ... ComparisonFailure: expected:<...urn (add,#2,(muli,#2[])); ]> but was:<...urn (add,#2,(muli,#2[,10])); ]>
+  - [ERROR] com.seaofnodes.simple.Chapter19Test.testBasic8 -- ... expected:<return (muli,arg[]);> but was:<return (muli,arg[,6]);>
+
+Relevant stack traces (from build log)
+- testFcn1 failure stack:
+  at org.junit.Assert.assertEquals(Assert.java:117)
+  at org.junit.Assert.assertEquals(Assert.java:146)
+  at com.seaofnodes.simple.Chapter19Test.testFcn1(Chapter19Test.java:319)
+  ... (JUnit internal/maven surefire frames)
+- testBasic8 failure stack:
+  at org.junit.Assert.assertEquals(Assert.java:117)
+  at org.junit.Assert.assertEquals(Assert.java:146)
+  at com.seaofnodes.simple.Chapter19Test.testBasic8(Chapter19Test.java:84)
+  ... (JUnit internal/maven surefire frames)
+
+Relevant code snippets (from diff)
+- MemMergeNode change (iteration start):
+  --- a/.../MemMergeNode.java
+  +++ b/.../MemMergeNode.java
+  @@
+      void _merge( MemMergeNode that, RegionNode r) {
+          int len = Math.max(nIns(),that.nIns());
+  -        for( int i = 2; i < len; i++)
+  +        for( int i = 1; i < len; i++)
+              if( alias(i) != that.alias(i) ) { // No need for redundant Phis
+                  ...
+- MulIX86 changes (modrm order, asm string):
+  --- a/.../MulIX86.java
+  +++ b/.../MulIX86.java
+  @@
+-        enc.add1( x86_64_v2.modrm(x86_64_v2.MOD.DIRECT, src, dst) );
++        enc.add1( x86_64_v2.modrm(x86_64_v2.MOD.DIRECT, dst, src) );
+  ...
+-        // old
+-        sb.p(code.reg(this)).p(\" \").p(glabel()).p(\"= #\").p(_imm);
+-        // new
++        sb.p(code.reg(this)).p(\" = \").p(code.reg(in(1))).p(\" * #\").p(_imm);
+- SetX86 change (rex threshold):
+  --- a/.../SetX86.java
+  +++ b/.../SetX86.java
+  @@
+-        if( dst >= 8 ) enc.add1(x86_64_v2.rex(dst, dst, 0, false));
++        if( dst >= 4 ) enc.add1(x86_64_v2.rex(dst, dst, 0, false));
+- Tests updated / expected strings changed (examples):
+  --- a/.../Chapter19Test.java
+  +++ b/.../Chapter19Test.java
+  @@
+-        assertEquals(\"return (muli,arg);\", code._stop.toString());
++        assertEquals(\"return (muli,arg,6);\", code._stop.toString());
+  ...
+- Another test changed to expect the immediate in printed code:
+  --- old:
+-        assertEquals(\"Stop[ return (shli,Parm_x($fun2,int)); return (mul,Parm_x($fun1,int),x); return (add,#2,(muli,#2)); ]\", code.print());
+  + new:
++        assertEquals(\"Stop[ return (shli,Parm_x($fun2,int)); return (mul,Parm_x($fun1,int),x); return (add,#2,(muli,#2,10)); ]\", code.print());
+
+Diagnosis / probable root causes
+Multiple changes in the commit interact and cause a discrepancy in how immediates are represented in node inputs / printed IR:
+
+1. MemMergeNode.for-loop index change (i from 2 -> 1)
+   - Originally starting at 2 likely skipped certain special inputs (e.g., $ctrl / parameter slots) that shouldn't be merged or considered for Phi/alias comparisons.
+   - Changing to start at 1 can cause one additional input slot to be merged/compared and may change how inputs are aligned/assigned in merged nodes (including immediate inputs being assigned into the location that's printed inside square-bracket lists).
+   - This can cause the immediate operand to appear in the printed input list (inside the bracket) or to be shifted into a different input index.
+
+2. MulIX86.modrm argument swap
+   - The modrm() call originally used (src, dst); it was changed to (dst, src). That may be incorrect for the intended encoding and/or for the register ordering conventions used by the generator. It also may affect how in-order registers are considered by higher-level code (and affect printed order or which input ends up in position 1 vs 2).
+   - The asm() textual representation was changed to include the immediate and to show the multiplication as "dst = reg(in(1)) * #imm", which changes machine/IR-level string rendering. If the general code printing pipeline expects a particular ordering or format for the "muli" node, this change might produce a different text.
+
+3. SetX86 rex threshold change
+   - Changing the threshold for emitting a REX prefix from dst>=8 to dst>=4 is suspicious (there are only 8 low registers 0..7; REX needed only when using registers >=8 or extended registers). This looks like a bug and could affect generated encoding, but it's less likely to affect the textual IR printed in these tests — unless the change triggered some code path that alters register allocation indices.
+
+The net effect is that:
+- immediates are being printed inside input brackets in the wrong format and/or at the wrong index (shown by "[,6]" or "[,10]" being appended inside a bracket) — tests expect a comma-separated operand list without the bracket artifact in that place.
+
+Suggested fixes / patches
+Below are recommended corrective actions. They target the most likely root causes and are conservative (prefer reverting suspicious local changes that alter indexing or ordering).
+
+1) Revert MemMergeNode loop start to original value (2)
+- Rationale: the original code started at 2 for a reason (skip control slot and perhaps the first parameter). Restoring it will likely re-align inputs and avoid merging the immediate into the wrong alias slot.
+- Patch (revert):
+  In chapter22/src/main/java/com/seaofnodes/simple/node/MemMergeNode.java:
+  for( int i = 1; i < len; i++)
+  -> revert to:
+  for( int i = 2; i < len; i++)
+
+2) Restore MulIX86.modrm argument order (if original was correct)
+- Rationale: The modrm operand order used to be (src, dst). Changing the order may break conventions and printouts.
+- Patch:
+  In chapter22/src/main/java/com/seaofnodes/simple/node/cpus/x86_64_v2/MulIX86.java:
+  enc.add1( x86_64_v2.modrm(x86_64_v2.MOD.DIRECT, dst, src) );
+  -> revert to:
+  enc.add1( x86_64_v2.modrm(x86_64_v2.MOD.DIRECT, src, dst) );
+
+3) Verify MulIX86.asm formatting
+- Rationale: The textual representation should match the generic IR printing conventions used elsewhere (tests expect "return (muli,arg,6);" — ensure printer produces that exact format).
+- Options:
+  - If multiplicative machine node should print as a three-operand "muli,src,imm", implement asm()/print consistently with other nodes so outer code.print() produces "(muli,arg,6)".
+  - Or, if the intent is to keep the new string "dst = reg(in(1)) * #imm", then update higher-level printing routines or tests consistently (but changing printers is more invasive; prefer keeping conventions).
+
+4) Restore SetX86 REX check to >=8
+- Rationale: REX extension is required for registers >=8. The changed threshold dst>=4 is incorrect.
+- Patch:
+  In chapter22/src/main/java/com/seaofnodes/simple/node/cpus/x86_64_v2/SetX86.java:
+  if( dst >= 4 ) enc.add1(x86_64_v2.rex(dst, dst, 0, false));
+  -> revert to:
+  if( dst >= 8 ) enc.add1(x86_64_v2.rex(dst, dst, 0, false));
+
+5) If the intention was to include immediates in printed node operands, ensure the printing function formats them consistently
+- Investigate the Node/CodeGen printing implementation that produces the bracketed formatting. The occurrences like "(muli,arg[,6])" indicate a printing routine is printing an input list with a bracket where an immediate was appended at an index reserved for something else. Fix the node's input list construction or printing so immediates appear as normal extra operands: "(muli,arg,6)" (no stray bracket or comma inside a bracketed list).
+- Example possible fix: when adding immediate as an explicit input, ensure it is stored at a valid index (not as a special-case appended to an internal array that prints using separate bracketed formatting). Or update the printing code to merge immediate printing with the normal argument list rather than as a bracketed suffix.
+
+6) Re-run the tests after each fix to isolate which change resolves the mismatch.
+
+Reasoning which change is highest priority
+- The MemMergeNode index change is the highest-probability root cause because it affects alias mapping / input indexing globally, and the errors show immediate operands being inserted into the wrong bracketed input lists — an indexing/alias merge mistake is the most straightforward way to cause that.
+- The MulIX86.modrm swap is suspicious and should be double-checked: if the assembly encoding or operand ordering assumptions differ between codegen and code printing, that can cause mis-ordered operand lists.
+- The SetX86 threshold change is almost certainly incorrect for REX and should be reverted.
+
+Suggested minimal patch to try first
+- Revert MemMergeNode loop start from i = 1 back to i = 2. Re-run the failing tests. If that fixes both failing tests, no further action may be needed. If not, apply the MulIX86 and SetX86 reverts next.
+
+Example "revert" patch (conceptual)
+- MemMergeNode:
+  for (int i = 1; i < len; i++)  -> for (int i = 2; i < len; i++)
+
+- MulIX86:
+  enc.add1( x86_64_v2.modrm(x86_64_v2.MOD.DIRECT, dst, src) );
+  -> enc.add1( x86_64_v2.modrm(x86_64_v2.MOD.DIRECT, src, dst) );
+
+- SetX86:
+  if( dst >= 4 ) enc.add1(x86_64_v2.rex(dst, dst, 0, false));
+  -> if( dst >= 8 ) enc.add1(x86_64_v2.rex(dst, dst, 0, false));
+
+Notes and pointers for debugging
+- Add temporary debug logging in the code printing routines to show the inputs list and their indices/aliases for the failing nodes, e.g. print Node.in(i) contents with indices for a failing case "return arg * 6".
+- Run the failing unit tests in an IDE and inspect the in-memory structure of the (muli) node: what are its inputs and where is the immediate stored?
+- Search for where immediates are added to nodes (is an immediate treated as an input at index N, or as a separate immediate field?). The mismatch between bracketed printing and the test expectation suggests inconsistency in that contract.
+- If tests were intentionally updated in the commit to expect immediates included (see diff), make sure the generator actually places immediates into the right canonical slot that the test expects.
+
+Conclusion
+- The immediate printing mismatch likely stems from the MemMergeNode loop-index change (i=1) and/or the MulIX86 operand-order change. Reverting MemMergeNode to the original index (i=2) is the most likely fast fix. Additionally, the MulIX86.modrm argument swap and SetX86 REX threshold are suspicious changes that should be reviewed and likely reverted to match existing ABI/encoding conventions. After reverting, re-run tests and iterate on asm/printing formatting if necessary.

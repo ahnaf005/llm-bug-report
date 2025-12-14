@@ -1,0 +1,292 @@
+## Bug Report: `OpenEjbManagedDatasourceAccessorTest` Fails with `NoClassDefFoundError` and `IllegalArgumentException` on JDK 21
+
+### 1. Title
+`OpenEjbManagedDatasourceAccessorTest` fails with `javax.transaction` `NoClassDefFoundError` and `IllegalArgumentException` during build on JDK 21.
+
+### 2. Steps to Reproduce
+1.  Checkout the code at commit `ef519dacb9b65cc7a66b8c9f2a71869e0fcd0b51`.
+2.  Ensure Java Development Kit (JDK) version 21 is installed and configured.
+3.  Execute the Maven test command: `./mvnw test -B -V --no-transfer-progress -D"license.skip=true"`
+
+### 3. Triggering Input
+The bug is triggered during the execution of unit tests for the `psi-probe-core` module, specifically within the `psiprobe.beans.accessors.OpenEjbManagedDatasourceAccessorTest` class. The underlying issue appears to be a classloading problem related to `javax.transaction` API when running on JDK 21 with the current dependency configuration.
+
+### 4. Expected Behavior
+All unit tests, including `psiprobe.beans.accessors.OpenEjbManagedDatasourceAccessorTest`, should pass successfully, and the Maven build should complete without errors. The `OpenEjbManagedDatasourceAccessorTest` should be able to resolve and interact with transaction-related classes without `NoClassDefFoundError` or `IllegalArgumentException`.
+
+### 5. Observed Behavior
+The Maven build fails during the `test` phase of the `psi-probe-core` module. The `OpenEjbManagedDatasourceAccessorTest` reports multiple errors:
+*   `java.lang.NoClassDefFoundError: javax/transaction/SystemException`
+*   `java.lang.IllegalArgumentException: No class with name "javax.transaction.Transaction" found`
+*   `java.lang.InternalError: class redefinition failed: invalid class`
+
+These errors indicate that the `javax.transaction` API classes, which are part of Java EE, are not found or cannot be loaded correctly during the test execution. This is likely due to a conflict or missing dependency when running on a modern JDK (21) which typically uses Jakarta EE (`jakarta.transaction`) instead of Java EE (`javax.transaction`). The `InternalError` suggests a deeper issue with class retransformation (possibly by JMockit) when core dependencies are missing.
+
+### 6. Relevant Code Snippets
+
+**`pom.xml` (root project)**
+The root `pom.xml` shows updates to various dependency versions and a shift in `openejb` related dependencies.
+```diff
+--- a/pom.xml
++++ b/pom.xml
+@@ -160,7 +160,7 @@
+         <activation.version>1.2.2</activation.version>
+         <assertj.version>3.24.2</assertj.version>
+         <beanutils.version>1.9.4</beanutils.version>
+-        <bind-api.version>2.3.3</bind-api.version>
++        <byte-buddy.version>1.14.9</byte-buddy.version>
+         <c3p0.version>0.9.5.5</c3p0.version>
+         <checker.version>3.40.0</checker.version>
+         <collections.version>3.2.2</collections.version>
+@@ -176,7 +176,7 @@
+         <io.version>2.15.0</io.version>
+         <j2objc.version>2.8</j2objc.version>
+         <jackson.version>2.16.0</jackson.version>
+-        <javabean-tester.version>2.6.0</javabean-tester.version>
++        <javabean-tester.version>2.6.1</javabean-tester.version>
+         <jfreechart.version>1.5.4</jfreechart.version>
+         <jhighlight.version>1.1.0</jhighlight.version>
+         <jmockit.version>1.51.0</jmockit.version>
+@@ -191,8 +191,6 @@
+         <mchange.version>0.2.20</mchange.version>
+         <ojdbc.version>19.21.0.0</ojdbc.version>
+         <oshi.version>6.4.7</oshi.version>
+-        <openejb.version>8.0.16</openejb.version>
+-        <persistence.version>2.2.3</persistence.version>
+         <quartz.version>2.4.0-rc2</quartz.version>
+         <servlet-api.version>4.0.4</servlet-api.version>\
+         <sitemesh.version>2.5.1</sitemesh.version>\
+@@ -202,6 +200,7 @@
+         <spring-security.version>5.8.8</spring-security.version>
+         <text.version>1.11.0</text.version>
+         <tomcat.version>9.0.83</tomcat.version>
++        <tomee.version>8.0.16</tomee.version>
+         <transaction-api.version>2.0.1</transaction-api.version>
+         <ucp.version>21.11.0.0</ucp.version>
+         <wrapper.version>3.2.3</wrapper.version>
+@@ -292,6 +290,11 @@
+                 <artifactId>assertj-core</artifactId>
+                 <version>${assertj.version}</version>
+             </dependency>
++            <dependency>
++                <groupId>net.bytebuddy</groupId>
++                <artifactId>byte-buddy</artifactId>
++                <version>${byte-buddy.version}</version>
++            </dependency>
+             <dependency>
+                 <groupId>com.github.hazendaz.jmockit</groupId>
+                 <artifactId>jmockit</artifactId>
+@@ -361,11 +364,6 @@
+                 <artifactId>jakarta.transaction-api</artifactId>
+                 <version>${transaction-api.version}</version>
+             </dependency>
+-            <dependency>
+-                <groupId>org.eclipse.persistence</groupId>
+-                <artifactId>jakarta.persistence</artifactId>
+-                <version>${persistence.version}</version>
+-            </dependency>
+ 
+             <!-- JDBC / Connection Pools -->
+             <dependency>
+@@ -411,51 +409,36 @@
+             </dependency>
+             <dependency>
+                 <groupId>org.apache.tomee</groupId>
+-                <artifactId>openejb-core</artifactId>
+-                <version>${openejb.version}</version>
++                <artifactId>openejb-api</artifactId>
++                <version>${tomee.version}</version>
+                 <exclusions>\
+-                    <exclusion>\
+-                        <groupId>commons-logging</groupId>\
+-                        <artifactId>commons-logging</artifactId>\
+-                    </exclusion>\
+-                    <exclusion>\
+-                        <groupId>org.apache.geronimo.components</groupId>\
+-                        <artifactId>geronimo-connector</artifactId>\
+-                    </exclusion>\
+-                    <exclusion>\
+-                        <groupId>org.apache.geronimo.specs</groupId>\
+-                        <artifactId>geronimo-j2ee-connector_1.6_spec</artifactId>\
+-                    </exclusion>\
+-                    <exclusion>\
+-                        <groupId>org.apache.geronimo.javamail</groupId>\
+-                        <artifactId>geronimo-javamail_1.6_mail</artifactId>\
+-                    </exclusion>\
+-                    <exclusion>\
+-                        <groupId>org.apache.geronimo.components</groupId>\
+-                        <artifactId>geronimo-transaction</artifactId>\
+-                    </exclusion>\
+-                    <exclusion>\
+-                        <groupId>org.apache.openejb.shade</groupId>\
+-                        <artifactId>quartz-openejb-shade</artifactId>\
+-                    </exclusion>\
+                     <exclusion>\
+                         <groupId>org.apache.tomee</groupId>\
+-                        <artifactId>javaee-api</artifactId>\
+-                    </exclusion>\
+-                    <exclusion>\
+-                        <groupId>org.hsqldb</groupId>\
+-                        <artifactId>hsqldb</artifactId>\
+-                    </exclusion>\
+-                    <exclusion>\
+-                        <groupId>org.objectweb.howl</groupId>\
+-                        <artifactId>howl</artifactId>\
++                        <artifactId>mbean-annotation-api</artifactId>\
+                     </exclusion>\
++                </exclusions>\
++            </dependency>\
++            <dependency>\
++                <groupId>org.apache.tomee</groupId>\
++                <artifactId>openejb-core</artifactId>\
++                <version>${tomee.version}</version>\
++                <exclusions>\
+                     <exclusion>\
+-                        <groupId>org.slf4j</groupId>\
+-                        <artifactId>slf4j-jdk14</artifactId>\
++                        <groupId>*</groupId>\
++                        <artifactId>*</artifactId>\
+                     </exclusion>\
+                 </exclusions>\
+             </dependency>\
++            <dependency>\
++                <groupId>org.apache.tomee</groupId>\
++                <artifactId>openejb-loader</artifactId>\
++                <version>${tomee.version}</version>\
++            </dependency>\
++            <dependency>\
++                <groupId>org.apache.tomee</groupId>\
++                <artifactId>tomee-jdbc</artifactId>\
++                <version>${tomee.version}</version>\
++            </dependency>
+             <dependency>\
+                 <groupId>org.vibur</groupId>\
+                 <artifactId>vibur-dbcp</artifactId>\
+```
+
+**`psi-probe-core/pom.xml`**
+Additional `tomee` dependencies are added with `provided` scope.
+```diff
+--- a/psi-probe-core/pom.xml
++++ b/psi-probe-core/pom.xml
+@@ -111,11 +111,26 @@
+             <artifactId>tomcat-jdbc</artifactId>
+             <scope>provided</scope>
+         </dependency>
++        <dependency>
++            <groupId>org.apache.tomee</groupId>
++            <artifactId>openejb-api</artifactId>
++            <scope>provided</scope>
++        </dependency>
+         <dependency>
+             <groupId>org.apache.tomee</groupId>
+             <artifactId>openejb-core</artifactId>
+             <scope>provided</scope>
+         </dependency>
++        <dependency>
++            <groupId>org.apache.tomee</groupId>
++            <artifactId>openejb-loader</artifactId>
++            <scope>provided</scope>
++        </dependency>
++        <dependency>
++            <groupId>org.apache.tomee</groupId>
++            <artifactId>tomee-jdbc</artifactId>
++            <scope>provided</scope>
++        </dependency>
+         <dependency>
+             <groupId>org.vibur</groupId>
+             <artifactId>vibur-dbcp</artifactId>
+```
+
+**`psi-probe-core/src/test/java/psiprobe/beans/accessors/OpenEjbManagedDatasourceAccessorTest.java`**
+The test class itself is unchanged in the diff, but the build log indicates it's the source of the errors. The `badSource` mock type is changed in other accessor tests, suggesting a general update to test mocks.
+
+### 7. Stack Traces
+
+```
+[ERROR] Tests run: 3, Failures: 0, Errors: 3, Skipped: 0, Time elapsed: 0.018 s <<< FAILURE! -- in psiprobe.beans.accessors.OpenEjbManagedDatasourceAccessorTest
+[ERROR] psiprobe.beans.accessors.OpenEjbManagedDatasourceAccessorTest.getInfoTest -- Time elapsed: 0.002 s <<< ERROR!
+java.lang.InternalError: class redefinition failed: invalid class
+	at java.instrument/sun.instrument.InstrumentationImpl.retransformClasses0(Native Method)
+	at java.instrument/sun.instrument.InstrumentationImpl.retransformClasses(InstrumentationImpl.java:225)
+	at mockit.internal.startup.Startup.retransformClass(Startup.java:78)
+	at mockit.internal.state.CachedClassfiles.getClassfile(CachedClassfiles.java:130)
+	at mockit.internal.ClassFile.createReaderOrGetFromCache(ClassFile.java:98)
+	at mockit.internal.expectations.mocking.BaseTypeRedefinition.redefineClassAndItsSuperClasses(BaseTypeRedefinition.java:198)
+	at mockit.internal.expectations.mocking.BaseTypeRedefinition.redefineMethodsAndConstructorsInTargetType(BaseTypeRedefinition.java:193)
+	at mockit.internal.expectations.mocking.BaseTypeRedefinition.redefineTargetClassAndCreateInstanceFactory(BaseTypeRedefinition.java:265)
+	at mockit.internal.expectations.mocking.BaseTypeRedefinition.redefineType(BaseTypeRedefinition.java:86)
+	at mockit.internal.expectations.mocking.TypeRedefinition.redefineType(TypeRedefinition.java:31)
+	at mockit.internal.expectations.mocking.FieldTypeRedefinitions.redefineFieldType(FieldTypeRedefinitions.java:83)
+	at mockit.internal.expectations.mocking.FieldTypeRedefinitions.redefineFieldType(FieldTypeRedefinitions.java:70)
+	at mockit.internal.expectations.mocking.FieldTypeRedefinitions.redefineFieldTypes(FieldTypeRedefinitions.java:58)
+	at mockit.internal.expectations.mocking.FieldTypeRedefinitions.<init>(FieldTypeRedefinitions.java:39)
+	at mockit.integration.TestRunnerDecorator.handleMockFieldsForWholeTestClass(TestRunnerDecorator.java:161)
+	at mockit.integration.junit5.JMockitExtension.postProcessTestInstance(JMockitExtension.java:98)
+	... (truncated)
+
+[ERROR] psiprobe.beans.accessors.OpenEjbManagedDatasourceAccessorTest.canMapTest -- Time elapsed: 0.001 s <<< ERROR!
+java.lang.IllegalArgumentException: No class with name "javax.transaction.Transaction" found
+	at mockit.internal.util.ClassLoad.loadClassFromAClassLoader(ClassLoad.java:70)
+	at mockit.internal.util.ClassLoad.loadClass(ClassLoad.java:41)
+	at mockit.internal.util.ClassLoad.loadByInternalName(ClassLoad.java:31)
+	at mockit.internal.util.ClassLoad.getSuperClass(ClassLoad.java:148)
+	at mockit.internal.util.ClassLoad.actualSuperClass(ClassLoad.java:176)
+	at mockit.internal.util.ClassLoad.whichIsSuperClass(ClassLoad.java:162)
+	at mockit.asm.constantPool.ConstantPoolGeneration.getCommonSuperClass(ConstantPoolGeneration.java:616)
+	at mockit.asm.constantPool.ConstantPoolGeneration.getMergedType(ConstantPoolGeneration.java:581)
+	at mockit.asm.controlFlow.Frame.merge(Frame.java:1313)
+	at mockit.asm.controlFlow.Frame.merge(Frame.java:1201)
+	at mockit.asm.controlFlow.CFGAnalysis.updateSuccessorsOfCurrentBasicBlock(CFGAnalysis.java:470)
+	at mockit.asm.controlFlow.CFGAnalysis.computeMaxStackSizeFromComputedFrames(CFGAnalysis.java:457)
+	at mockit.asm.methods.MethodWriter.visitMaxStack(MethodWriter.java:415)
+	at mockit.asm.methods.WrappingMethodVisitor.visitMaxStack(WrappingMethodVisitor.java:133)
+	at mockit.asm.methods.MethodReader.readCode(MethodReader.java:248)
+	... (truncated)
+
+[ERROR] psiprobe.beans.accessors.OpenEjbManagedDatasourceAccessorTest.cannotMapTest -- Time elapsed: 0.001 s <<< ERROR!
+java.lang.IllegalArgumentException: No class with name "javax.transaction.Transaction" found
+	at mockit.internal.util.ClassLoad.loadClassFromAClassLoader(ClassLoad.java:70)
+	at mockit.internal.util.ClassLoad.loadClass(ClassLoad.java:41)
+	at mockit.internal.util.ClassLoad.loadByInternalName(ClassLoad.java:31)
+	at mockit.internal.util.ClassLoad.getSuperClass(ClassLoad.java:148)
+	at mockit.internal.util.ClassLoad.actualSuperClass(ClassLoad.java:176)
+	at mockit.internal.util.ClassLoad.whichIsSuperClass(ClassLoad.java:162)
+	at mockit.asm.constantPool.ConstantPoolGeneration.getCommonSuperClass(ConstantPoolGeneration.java:616)
+	at mockit.asm.constantPool.ConstantPoolGeneration.getMergedType(ConstantPoolGeneration.java:581)
+	at mockit.asm.controlFlow.Frame.merge(Frame.java:1313)
+	at mockit.asm.controlFlow.Frame.merge(Frame.java:1201)
+	at mockit.asm.controlFlow.CFGAnalysis.updateSuccessorsOfCurrentBasicBlock(CFGAnalysis.java:470)
+	at mockit.asm.controlFlow.CFGAnalysis.computeMaxStackSizeFromComputedFrames(CFGAnalysis.java:457)
+	at mockit.asm.methods.MethodWriter.visitMaxStack(MethodWriter.java:415)
+	at mockit.asm.methods.WrappingMethodVisitor.visitMaxStack(WrappingMethodVisitor.java:133)
+	at mockit.asm.methods.MethodReader.readCode(MethodReader.java:248)
+	... (truncated)
+```
+
+### 8. Patches / Suggested Fixes
+
+The provided code diff indicates a migration effort, including updating dependencies and potentially moving from Java EE to Jakarta EE APIs. The core issue seems to be that `OpenEjbManagedDatasourceAccessorTest` (and potentially the `OpenEjbManagedDatasourceAccessor` class it tests) still expects `javax.transaction` classes, while the project's dependencies now primarily provide `jakarta.transaction` (as seen by `jakarta.transaction-api` dependency in the root `pom.xml`).
+
+The `openejb-core` dependency in the root `pom.xml` had very aggressive exclusions (`<groupId>*</artifactId>*</artifactId>`) which might have inadvertently removed a transitive dependency that provided the `javax.transaction` classes. The new `tomee` dependencies might also not provide these classes under the `javax` namespace.
+
+**Suggested Fixes:**
+
+1.  **Explicitly add `javax.transaction-api` for test scope:** If `OpenEjbManagedDatasourceAccessorTest` *must* use `javax.transaction` APIs, and `tomee` dependencies do not bridge them, add a specific dependency for `javax.transaction-api` (or a compatible implementation) with `test` scope to `psi-probe-core/pom.xml`. This would ensure the classes are available during testing.
+    ```xml
+    <dependency>
+        <groupId>javax.transaction</groupId>
+        <artifactId>javax.transaction-api</artifactId>
+        <version>1.3</version> <!-- Or a compatible version -->
+        <scope>test</scope>
+    </dependency>
+    ```
+    *Note: The `jakarta.transaction-api` is already present, so adding `javax.transaction-api` might lead to classpath conflicts if not handled carefully. It might be better to ensure the `tomee` dependencies correctly provide the `javax` aliases or migrate the code.*
+
+2.  **Migrate `OpenEjbManagedDatasourceAccessor` and its tests to Jakarta EE:** If the intention is to fully migrate to Jakarta EE, then `OpenEjbManagedDatasourceAccessor` and `OpenEjbManagedDatasourceAccessorTest` should be updated to use `jakarta.transaction` classes (e.g., `jakarta.transaction.SystemException`, `jakarta.transaction.Transaction`) instead of `javax.transaction` equivalents. This would involve code changes in the accessor and its tests.
+
+3.  **Review `openejb-core` exclusions:** The broad exclusion `<groupId>*</artifactId>*</artifactId>` for `openejb-core` in the root `pom.xml` is very aggressive. It might be removing necessary transitive dependencies. If `openejb-core` is still needed, its exclusions should be more precise. However, the diff also adds `openejb-api`, `openejb-loader`, and `tomee-jdbc` which might replace the need for `openejb-core` directly. The `tomee.version` is `8.0.16`, which is a Java EE 8 compatible version, so it should ideally provide `javax.transaction` classes. The issue might be how JMockit interacts with these classes or the classloader setup.
+
+4.  **JMockit compatibility:** The `InternalError: class redefinition failed: invalid class` often points to JMockit having issues with the JVM's instrumentation API, especially on newer JDKs or when trying to mock/retransform classes that are already problematic (like the missing `javax.transaction` ones). Updating `javabean-tester` to `2.6.1` is a good step, but further investigation into JMockit's behavior with JDK 21 and `javax`/`jakarta` APIs might be needed.
+
+Given the context of migrating to newer Java versions and `tomee` dependencies, the most robust long-term solution would be to **migrate `OpenEjbManagedDatasourceAccessor` and its tests to use `jakarta.transaction` APIs** (Fix #2). If that's not immediately feasible, ensuring `javax.transaction` is available for tests (Fix #1) could be a temporary workaround, but it might mask deeper compatibility issues.

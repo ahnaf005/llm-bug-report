@@ -1,0 +1,147 @@
+## Software Bug Report
+
+**Bug ID:** #20250509-001
+**Status:** Failed
+**Priority:** High
+**Severity:** Critical (Build Failure)
+**Component/Module:** `chapter22` (specifically `Chapter19Test` within `chapter22`'s test suite, but the underlying changes are in `chapter22`'s core code and CPU backend)
+**Affected Version/Commit:** `239d52984594c2011ea3093e90a3aa68faad6fbd`
+**Reproducible:** Yes
+
+---
+
+### 1. Description
+
+The build process for the `Simple` programming language project failed during the `verify` phase of the `chapter22` module. The failure is caused by two `ComparisonFailure` exceptions in `com.seaofnodes.simple.Chapter19Test`, specifically `testBasic8` and `testFcn1`. These failures indicate a mismatch between the expected and actual string representations of the generated intermediate representation (IR) graph, particularly concerning multiplication nodes with immediate values.
+
+Additionally, several other test classes across various chapters (08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22) show warnings about skipped tests, which might indicate further underlying issues or incomplete test updates.
+
+---
+
+### 2. Environment
+
+*   **Runner OS:** Ubuntu 24.04.2 LTS
+*   **Runner Image Version:** 20250504.1.0
+*   **Java Version:** Temurin 21.0.7+6
+*   **Maven Version:** 3.1.2
+*   **Git Version:** 2.49.0
+*   **Repository:** `SeaOfNodes/Simple`
+*   **Commit SHA:** `239d52984594c2011ea3093e90a3aa68faad6fbd`
+*   **Previous Successful Commit SHA:** `05c529f379c9c82387916aba7f83f7a215829e37`
+
+---
+
+### 3. Steps to Reproduce
+
+1.  Checkout the repository at commit `239d52984594c2011ea3093e90a3aa68faad6fbd`.
+2.  Navigate to the root directory of the project.
+3.  Execute the Maven command: `mvn --batch-mode --update-snapshots verify`
+
+---
+
+### 4. Expected Behavior
+
+The Maven build should complete successfully, with all tests passing. The generated IR graph representations should match the expectations defined in the test cases.
+
+---
+
+### 5. Actual Behavior
+
+The Maven build fails with a `MojoFailureException` in the `chapter22` module. Two tests in `Chapter19Test` fail due to `ComparisonFailure`, indicating discrepancies in the string representation of the generated IR.
+
+**Error Messages from Build Log:**
+
+```
+[ERROR] Tests run: 37, Failures: 2, Errors: 0, Skipped: 0, Time elapsed: 0.171 s <<< FAILURE! -- in com.seaofnodes.simple.Chapter19Test
+[ERROR] com.seaofnodes.simple.Chapter19Test.testFcn1 -- Time elapsed: 0.029 s <<< FAILURE!
+org.junit.ComparisonFailure: expected:<...urn (add,#2,(muli,#2[])); ]> but was:<...urn (add,#2,(muli,#2[,10])); ]>
+	at org.junit.Assert.assertEquals(Assert.java:117)
+	at org.junit.Assert.assertEquals(Assert.java:146)
+	at com.seaofnodes.simple.Chapter19Test.testFcn1(Chapter19Test.java:319)
+    ... (full stack trace omitted for brevity)
+
+[ERROR] com.seaofnodes.simple.Chapter19Test.testBasic8 -- Time elapsed: 0 s <<< FAILURE!
+org.junit.ComparisonFailure: expected:<return (muli,arg[]);> but was:<return (muli,arg[,6]);>
+	at org.junit.Assert.assertEquals(Assert.java:117)
+	at org.junit.Assert.assertEquals(Assert.java:146)
+	at com.seaofnodes.simple.Chapter19Test.testBasic8(Chapter19Test.java:84)
+    ... (full stack trace omitted for brevity)
+
+[ERROR] Tests run: 375, Failures: 2, Errors: 0, Skipped: 8
+[INFO] Chapter 22 ......................................... FAILURE [  4.531 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.1.2:test (default-test) on project chapter22: There are test failures.
+```
+
+**Summary of Skipped Tests (Warnings):**
+
+The build log also shows warnings for skipped tests across multiple modules, indicating potential issues beyond the direct failures:
+*   `Chapter08Test`: 1 skipped
+*   `Chapter09Test`: 1 skipped
+*   `SchedulerTest`: 1 skipped
+*   `Chapter18Test`: 2 skipped
+*   `Chapter21Test`: 1 skipped
+*   `Chapter22Test`: 2 skipped
+(Total 8 skipped tests, matching the final summary)
+
+---
+
+### 6. Analysis of Changes (Code Diff)
+
+The provided code diff highlights several changes in the `chapter22` module, including modifications to core node logic, CPU backend code generation, and test expectations.
+
+1.  **`chapter22/src/main/java/com/seaofnodes/simple/node/MemMergeNode.java`**:
+    *   **Change:** The loop in the `_merge` method was changed from `for( int i = 2; i < len; i++)` to `for( int i = 1; i < len; i++)`.
+    *   **Impact:** This alters the range of inputs considered during a memory merge. While not directly linked to the `muli` failures, a change in fundamental graph manipulation logic could indirectly affect the `toString()` representation of nodes or the overall graph structure, leading to unexpected test outputs.
+
+2.  **`chapter22/src/main/java/com/seaofnodes/simple/node/cpus/x86_64_v2/MulIX86.java`**:
+    *   **Change 1:** The `modrm` instruction encoding was changed from `x86_64_v2.modrm(x86_64_v2.MOD.DIRECT, src, dst)` to `x86_64_v2.modrm(x86_64_v2.MOD.DIRECT, dst, src)`. This swaps the `src` and `dst` registers in the ModR/M byte generation.
+    *   **Change 2:** The `asm` method's output string for multiplication was changed from `sb.p(code.reg(this)).p(" ").p(glabel()).p("= #").p(_imm);` to `sb.p(code.reg(this)).p(" = ").p(code.reg(in(1))).p(" * #").p(_imm);`.
+    *   **Impact:** These changes are highly relevant to the `Chapter19Test` failures. The `modrm` swap could lead to incorrect assembly generation, and the `asm` string change directly affects how the multiplication instruction is represented. The test failures show a difference in the `muli` node's string representation, specifically the inclusion of the immediate value (e.g., `arg[]` vs `arg[,6]`, `muli,#2` vs `muli,#2,10`). This suggests that the `toString()` method (or a related method used for test assertions) is now reflecting the immediate value as a distinct operand, which was not the case in the previous expected output.
+
+3.  **`chapter22/src/main/java/com/seaofnodes/simple/node/cpus/x86_64_v2/SetX86.java`**:
+    *   **Change:** The condition for zero-extension was changed from `if( dst >= 8 )` to `if( dst >= 4 )`.
+    *   **Impact:** This is an x86-specific optimization or correction related to register handling. While not directly implicated in the `muli` failures, it could subtly alter the generated code or intermediate representation, potentially contributing to unexpected graph outputs in other scenarios.
+
+4.  **`chapter22/src/test/java/com/seaofnodes/simple/Chapter19Test.java`**:
+    *   **Change 1 (line 28):** The expected string for `testString` was reordered.
+    *   **Change 2 (line 84):** The expected string for `testBasic8` was changed from `return (muli,arg[]);` to `return (muli,arg,6);`.
+    *   **Change 3 (line 319):** The expected string for `testFcn1` was changed from `...urn (add,#2,(muli,#2)); ]` to `...urn (add,#2,(muli,#2,10)); ]`.
+    *   **Impact:** These are *updates to test expectations*. The fact that `testBasic8` and `testFcn1` still fail *after* these updates indicates that the actual output from the compiler (likely influenced by the `MulIX86.java` changes) still does not match the *new* expected strings. The difference in `testBasic8` (`arg[]` vs `arg[,6]`) strongly suggests that the `muli` node's string representation now explicitly includes the immediate operand, which was previously omitted or represented differently. The updated test expectation `(muli,arg,6)` seems to be an attempt to reflect this, but the actual output `(muli,arg[,6])` still differs, possibly due to an extra comma or bracket.
+
+5.  **`chapter22/src/test/java/com/seaofnodes/simple/Chapter20Test.java` and `Chapter21Test.java`**:
+    *   **Change:** The expected value for ARM CPU tests was changed from `6` to `3`.
+    *   **Impact:** This indicates a change in the ARM backend's code generation or evaluation logic, leading to different results for certain programs.
+
+6.  **`chapter22/src/test/java/com/seaofnodes/simple/Chapter22Test.java`**:
+    *   **Change:** The source file for `testJig` was changed from `jig.smp` to `BubbleSort.smp`. The test is `@Ignore`, so it doesn't directly cause the build failure.
+    *   **Impact:** This is a change in the test input, possibly to test a new example or to work around an issue with `jig.smp`.
+
+---
+
+### 7. Root Cause Hypothesis
+
+The primary cause of the build failure is likely a combination of changes in the `MulIX86.java` class (specifically the `modrm` argument swap and the `asm` method's output format) and potentially other graph representation changes introduced by the `MemMergeNode.java` and `SetX86.java` modifications.
+
+The `Chapter19Test` failures (`testBasic8` and `testFcn1`) occur because the `toString()` representation of `muli` nodes (or how they are printed for comparison) has changed. While the test expectations were updated in the diff, the actual output still does not precisely match the *new* expected strings. The difference `arg[]` vs `arg[,6]` and `muli,#2` vs `muli,#2,10` suggests that the immediate operand is now being explicitly included in the `muli` node's string representation, but the exact format in the test expectation is incorrect.
+
+The `modrm` argument swap in `MulIX86.java` is a critical change that could affect the correctness of the generated machine code, and thus the behavior of the compiler's IR representation.
+
+---
+
+### 8. Suggested Fix
+
+1.  **Review `MulIX86.java` changes:**
+    *   Thoroughly verify the correctness of the `modrm` argument swap (`src` and `dst`). Ensure it aligns with the x88_64_v2 instruction set architecture for multiplication.
+    *   Confirm the intended `asm` string format for `MulIX86` nodes.
+
+2.  **Correct `Chapter19Test` expectations:**
+    *   Based on the *intended* `toString()` output of the `muli` node after the `MulIX86.java` changes, update the `assertEquals` statements in `Chapter19Test.testBasic8` (line 84) and `Chapter19Test.testFcn1` (line 319) to precisely match the actual, correct string representation. For example, if `(muli,arg[,6])` is the new correct format, the test should reflect that.
+
+3.  **Investigate other changes:**
+    *   Examine the `MemMergeNode.java` loop index change (`i=2` to `i=1`) and `SetX86.java` condition change (`dst >= 8` to `dst >= 4`) for any unintended side effects on graph representation or correctness.
+    *   Address the warnings about skipped tests. Either fix the underlying issues causing them to be skipped, or explicitly mark them as ignored with a clear reason if they are intentionally not run.
+
+4.  **Re-run tests:** After applying the fixes, run the full test suite to ensure no new regressions are introduced and all existing tests pass.

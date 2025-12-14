@@ -1,0 +1,120 @@
+Title
+- FindBugs failure: DMI_RANDOM_USED_ONLY_ONCE in TypeResolver$Active.resolve() causes build failure
+
+Summary
+- The Maven verify build fails during the FindBugs (findbugs-maven-plugin) check because the analyzer reports DMI_RANDOM_USED_ONLY_ONCE in net.bytebuddy.dynamic.TypeResolver$Active.resolve(). The provided code change attempts to suppress the warning by adding @SuppressFBWarnings to the resolve() method.
+
+Steps to Reproduce
+1. Clone the repository and check out the failing commit:
+   - git clone https://github.com/raphw/byte-buddy.git
+   - git checkout d3caa93230830ab3ace48ef089ec1f21e64eb107
+2. Run the Maven verification with the integration profile (same as CI):
+   - mvn verify -Pintegration
+3. Observe FindBugs phase / plugin output and build failure.
+
+Triggering Input / Conditions
+- Running FindBugs (findbugs-maven-plugin:3.0.3) as part of mvn verify on the byte-buddy-dep module.
+- Code pattern: creating a new java.util.Random instance and using it only once inside TypeResolver$Active.resolve().
+
+Expected Behavior
+- Either:
+  - FindBugs should not report a bug (if the random creation is acceptable), OR
+  - The project should address the FindBugs warning by using a recommended approach (e.g., reuse Random, use ThreadLocalRandom) so the FindBugs plugin passes.
+- Overall, the Maven build should complete successfully (BUILD SUCCESS) when the FindBugs check is satisfied or justified.
+
+Observed Behavior
+- FindBugs reports one bug and the build fails:
+  - FindBugs: "Random object created and used only once in net.bytebuddy.dynamic.TypeResolver$Active.resolve() ... DMI_RANDOM_USED_ONLY_ONCE"
+  - Maven fails with: "Failed to execute goal org.codehaus.mojo:findbugs-maven-plugin:3.0.3:check (default) on project byte-buddy-dep: failed with 1 bugs and 0 errors"
+  - CI returns exit code 1.
+
+Relevant Build Output (excerpts)
+- FindBugs warning and summary (from build log):
+  - [INFO] BugInstance size is 1
+  - [INFO] Error size is 0
+  - [INFO] Total bugs: 1
+  - [INFO] Random object created and used only once in net.bytebuddy.dynamic.TypeResolver$Active.resolve() [net.bytebuddy.dynamic.TypeResolver$Active] At TypeResolver.java:[line 179] DMI_RANDOM_USED_ONLY_ONCE
+- Maven failure:
+  - [ERROR] Failed to execute goal org.codehaus.mojo:findbugs-maven-plugin:3.0.3:check (default) on project byte-buddy-dep: failed with 1 bugs and 0 errors -> [Help 1]
+  - The CI: "The command \"mvn verify $TARGET -Pintegration\" exited with 1."
+
+Relevant Code Snippets (from the provided diff)
+- The offending method (as present in the codebase, before/after change):
+
+Before (behavior that triggered FindBugs)
+- (method body implication from diff)
+  public TypeResolver.Resolved resolve() {
+      return new Resolved(new Random().nextInt());
+  }
+
+Patch added in diff (attempted fix = suppression)
+- Adds a FindBugs suppression annotation to the resolve() method:
+
+  @Override
+  @SuppressFBWarnings(value = "DMI_RANDOM_USED_ONLY_ONCE", justification = "Avoid thread-contention")
+  public TypeResolver.Resolved resolve() {
+      return new Resolved(new Random().nextInt());
+  }
+
+- File path: byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/TypeResolver.java
+
+Patch metadata (from diff JSON)
+- failed_sha: d3caa93230830ab3ace48ef089ec1f21e64eb107
+- passed_sha: de721ac650d1ec4ce17bd6d7d551b13cb49fad5f
+- Change: one-line addition (the @SuppressFBWarnings annotation) on resolve().
+
+Root Cause
+- FindBugs flags the code because it constructs a new java.util.Random instance and uses it only once. FindBugs considers this an anti-pattern: constructing Random only to produce a single value suggests misuse (possible predictability issues, and unnecessary object creation). The analyzer recommends using ThreadLocalRandom or reusing a Random instance.
+
+Patches / Suggested Fixes
+The diff shows a patch that suppresses the FindBugs warning:
+
+- Applied patch (already in diff):
+  - Add @SuppressFBWarnings(value = "DMI_RANDOM_USED_ONLY_ONCE", justification = "Avoid thread-contention") to the resolve() method.
+
+Alternative (preferred) fixes (recommended)
+1. Use ThreadLocalRandom (no FindBugs warning, better performance in concurrent contexts):
+   - Replace new Random().nextInt() with:
+     import java.util.concurrent.ThreadLocalRandom;
+     ...
+     public TypeResolver.Resolved resolve() {
+         return new Resolved(ThreadLocalRandom.current().nextInt());
+     }
+   - This avoids creating a Random instance for each call and avoids thread contention issues.
+
+2. Reuse a Random instance (if cryptographic strength not needed):
+   - Add a private static final Random RANDOM = new Random();
+   - Use RANDOM.nextInt() inside resolve():
+     public TypeResolver.Resolved resolve() {
+         return new Resolved(RANDOM.nextInt());
+     }
+   - If the code may be used in a multi-threaded context and contention is a concern, prefer ThreadLocalRandom.
+
+3. If the intention is to intentionally ignore the FindBugs warning, use a proper suppression annotation with import:
+   - Add import for the FindBugs annotation (if not present):
+     import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+   - Use the same annotation added in the diff:
+     @SuppressFBWarnings(value = "DMI_RANDOM_USED_ONLY_ONCE", justification = "Avoid thread-contention")
+   - Note: suppression silences the warning but does not resolve the micro-issue of creating Random per call.
+
+Which fix to choose
+- If the code needs unpredictable, per-call randomness and low overhead in multi-threaded contexts: use ThreadLocalRandom.current().nextInt().
+- If reproducibility (seed control) is required: use a shared Random instance or provide an injectable Random.
+- Only use @SuppressFBWarnings when you have a documented rationale that the code is safe and changing it is undesirable.
+
+Recommendation
+- Replace new Random().nextInt() with ThreadLocalRandom.current().nextInt() (best balance of simplicity, performance and FindBugs acceptance).
+- Remove the suppression or keep it only if there is a documented reason to insist on per-call Random instantiation and you want to silence the analyzer.
+- After changing the code, run:
+  - mvn -DskipTests=false verify -Pintegration
+  - or just run mvn findbugs:check on the byte-buddy-dep module to confirm the FindBugs warning is gone.
+
+Additional Context & Notes
+- The build log shows the failing module is byte-buddy-dep and the FindBugs plugin version is 3.0.3.
+- The patch in the diff adds only the suppression annotation; that will make FindBugs pass but may hide potential performance/security concerns. The more robust code change is to stop creating Random per call.
+- The project CI (Travis) treats FindBugs warnings as build-failing by design (findbugs:check fails build on bug count > 0).
+
+If you want, I can:
+- Provide a one-line patch replacing new Random().nextInt() with ThreadLocalRandom.current().nextInt() (including required import), or
+- Produce a small follow-up patch that creates and reuses a static Random instance, or
+- Produce the suppression import and annotation placement exactly as required by the project style.

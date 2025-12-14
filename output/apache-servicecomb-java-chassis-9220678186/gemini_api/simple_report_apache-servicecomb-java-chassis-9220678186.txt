@@ -1,0 +1,131 @@
+## Software Bug Report
+
+**Bug ID:** SC-3446-BUILD-FAILURE (Placeholder - assign a unique ID)
+
+**Project:** Apache ServiceComb Java Chassis
+
+**Version:** 2.9.0-SNAPSHOT (as per build log)
+
+**Component/Module:** `foundations/foundation-vertx` (specifically `TestVertxTLSBuilder`) and `foundations/foundation-ssl` (where the fix is applied).
+
+**Severity:** High (Build Failure)
+
+**Status:** Resolved (Fix implemented in `passed_sha`)
+
+---
+
+### 1. Description
+
+The CI build for the `apache/servicecomb-java-chassis` repository failed during the unit test phase for the `foundation-vertx` module. The failure is caused by an `IllegalArgumentException: Unsupported protocol` originating from the `SSLManager` when attempting to retrieve enabled ciphers, specifically when the SSL protocols are not explicitly set or are empty. This issue prevents the `foundation-vertx` module, and subsequently the entire project, from building successfully.
+
+The provided code diff indicates a fix has been implemented to address this by defaulting the SSL protocol to "TLSv1.2" if no protocols are specified.
+
+---
+
+### 2. Environment
+
+*   **Operating System:** Ubuntu 20.04.5 LTS
+*   **Java Version:** Temurin JDK 17.0.4+1
+*   **Maven Version:** (Implicitly used by plugins, e.g., `maven-surefire-plugin:3.0.0-M7`)
+*   **CI/CD Platform:** GitHub Actions (Runner version `2.298.2`, Image `ubuntu-20.04:20221024.1`)
+*   **Workflow:** `.github/workflows/unit-test-jdk17.yml`
+*   **Failing Commit SHA:** `f21f483658e51b5ea2dc3a470d0c9b49f4b6eac6`
+*   **Fixing Commit SHA:** `1fc2fc6d6bbe91c2180657237334f9cacb83e594` (merge commit containing the fix from `f21f483658e51b5ea2dc3a470d0c9b49f4b6eac6` into `95f201593ea3e9efaed0875c4354a96c7744f64e`)
+
+---
+
+### 3. Steps to Reproduce
+
+1.  Checkout the repository at commit `f21f483658e51b5ea2dc3a470d0c9b49f4b6eac6`.
+2.  Run the Maven build with the `it` profile and skip checkstyle/spotbugs:
+    ```bash
+    mvn -B -Dcheckstyle.skip -Dspotbugs.skip=true clean install -Pit
+    ```
+3.  Observe the build failure during the `maven-surefire-plugin:test` phase for the `foundation-vertx` module.
+
+---
+
+### 4. Expected Behavior
+
+The Maven build should complete successfully, with all unit tests passing for all modules, including `foundation-vertx`.
+
+---
+
+### 5. Actual Behavior
+
+The Maven build failed during the execution of unit tests for the `foundation-vertx` module. Specifically, the test `org.apache.servicecomb.foundation.vertx.TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory` resulted in an `IllegalArgumentException: Unsupported protocol`.
+
+**Relevant Error Snippet from Build Log:**
+
+```
+2022-11-01T08:05:17.7211906Z [ERROR] Tests run: 10, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.25 s <<< FAILURE! - in org.apache.servicecomb.foundation.vertx.TestVertxTLSBuilder
+2022-11-01T08:05:17.7212734Z [ERROR] org.apache.servicecomb.foundation.vertx.TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory  Time elapsed: 0.002 s  <<< ERROR!
+2022-11-01T08:05:17.7213715Z java.lang.IllegalArgumentException: Unsupported protocol
+2022-11-01T08:05:17.7214231Z 	at org.apache.servicecomb.foundation.ssl.SSLManager.createSSLSocket(SSLManager.java:183)
+2022-11-01T08:05:17.7214847Z 	at org.apache.servicecomb.foundation.ssl.SSLManager.getEnabledCiphers(SSLManager.java:222)
+2022-11-01T08:05:17.7215492Z 	at org.apache.servicecomb.foundation.vertx.VertxTLSBuilder.buildTCPSSLOptions(VertxTLSBuilder.java:157)
+2022-11-01T08:05:17.7216215Z 	at org.apache.servicecomb.foundation.vertx.VertxTLSBuilder.buildClientOptionsBase(VertxTLSBuilder.java:98)
+2022-11-01T08:05:17.7216940Z 	at org.apache.servicecomb.foundation.vertx.VertxTLSBuilder.buildHttpClientOptions(VertxTLSBuilder.java:91)
+2022-11-01T08:05:17.7217644Z 	at org.apache.servicecomb.foundation.vertx.VertxTLSBuilder.buildHttpClientOptions(VertxTLSBuilder.java:86)
+2022-11-01T08:05:17.7218432Z 	at org.apache.servicecomb.foundation.vertx.TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory(TestVertxTLSBuilder.java:83)
+```
+
+**Reactor Summary:**
+
+```
+2022-11-01T08:05:29.7477722Z [INFO] Java Chassis::Foundations::Vertx ................... FAILURE [ 16.413 s]
+```
+
+---
+
+### 6. Root Cause Analysis
+
+The `IllegalArgumentException: Unsupported protocol` occurs within the `SSLManager.createSSLSocket` method, which is called by `SSLManager.getEnabledCiphers`. This method is responsible for configuring SSL/TLS protocols.
+
+The code diff reveals that the `SSLManager.java` file was modified to handle cases where `sslOption.getProtocols()` might return an empty or null string. Prior to the change, if `sslOption.getProtocols()` was empty or null, it would be passed directly to the underlying SSL/TLS configuration, which likely resulted in an "Unsupported protocol" error because an empty string is not a valid protocol.
+
+The test `TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory` likely triggered this scenario by creating an `SSLOption` instance without explicitly setting the protocols, or setting them to an empty value, leading to the `IllegalArgumentException` when `SSLManager.getEnabledCiphers` attempted to use this invalid protocol configuration.
+
+---
+
+### 7. Proposed Fix / Resolution
+
+The provided code diff implements a defensive programming approach by ensuring that a default protocol ("TLSv1.2") is used if `sslOption.getProtocols()` is empty or null.
+
+**Code Diff:**
+
+```diff
+--- a/foundations/foundation-ssl/src/main/java/org/apache/servicecomb/foundation/ssl/SSLManager.java
++++ b/foundations/foundation-ssl/src/main/java/org/apache/servicecomb/foundation/ssl/SSLManager.java
+@@ -34,6 +34,8 @@ import javax.net.ssl.SSLSocketFactory;
+ import javax.net.ssl.TrustManager;
+ import javax.net.ssl.X509ExtendedTrustManager;
+ 
++import org.apache.commons.lang.StringUtils;
++
+ /**
+  * 根据传递的SSLOption构造SSL上下文。请参考JSSE获取相关API的层次参考。
+  *
+@@ -216,7 +218,11 @@ public final class SSLManager {
+ 
+   public static String[] getEnabledCiphers(SSLOption sslOption) {
+     SSLOption option = new SSLOption();
+-    option.setProtocols(sslOption.getProtocols());
++    if (StringUtils.isNotEmpty(sslOption.getProtocols())) {
++      option.setProtocols(sslOption.getProtocols());
++    } else {
++      option.setProtocols("TLSv1.2");
++    }
+     option.setCiphers(sslOption.getCiphers());
+     SSLCustom custom = SSLCustom.defaultSSLCustom();
+     SSLSocket socket = createSSLSocket(option, custom);
+```
+
+This change ensures that `option.setProtocols()` always receives a valid, non-empty protocol string, preventing the `IllegalArgumentException`. The build log indicates that this change was part of the merge commit `1fc2fc6d6bbe91c2180657237334f9cacb83e594`, which successfully resolved the build failure.
+
+---
+
+### 8. Additional Notes / Warnings
+
+*   **Multiple SLF4J Bindings:** The build log shows `SLF4J: Class path contains multiple SLF4J bindings.` This is a common warning in Java projects and, while not the direct cause of this build failure, it can lead to unpredictable logging behavior and should ideally be resolved by ensuring only one SLF4J binding is present at runtime.
+*   **Deprecated API Usage:** Several warnings about `bootstrap class path not set in conjunction with -source 8` and deprecated methods like `getSubjectDN()` and `getIssuerDN()` were observed. These indicate potential areas for code modernization and dependency updates, especially when compiling with JDK 17. While not critical for this specific build failure, addressing them would improve code quality and future compatibility.

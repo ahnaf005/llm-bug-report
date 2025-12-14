@@ -1,0 +1,123 @@
+## Bug Report: Compilation Failure - Missing Apache Commons Collections4 Dependency
+
+### 1. Title
+Compilation Failure: `org.apache.commons.collections4` package not found in `MantaHttpHeadersIT.java`
+
+### 2. Steps to Reproduce
+1.  Clone the `joyent/java-manta` repository.
+2.  Checkout the specific commit `be9c5219de8f24d82bba7dcae0fd65598e268aa6`.
+3.  Ensure Java 8 (Oracle JDK 1.8.0_31) and Apache Maven 3.2.5 are installed.
+4.  Navigate to the project root directory (`joyent/java-manta`).
+5.  Execute the Maven install command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+### 3. Triggering Input
+The Maven command:
+`mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+### 4. Expected Behavior
+The project should compile successfully, and the Maven build process should complete without errors, indicating all modules are built and installed into the local Maven repository.
+
+### 5. Observed Behavior
+The build fails during the `testCompile` phase of the `java-manta-it` module. The Java compiler reports that the package `org.apache.commons.collections4` does not exist and consequently, the `CollectionUtils` symbol cannot be found within `MantaHttpHeadersIT.java`.
+
+An initial attempt also showed a `PluginResolutionException` for `commons-beanutils` due to a connection timeout to `repo.maven.apache.org`, but subsequent retries consistently failed with the compilation error.
+
+**Error Messages:**
+```
+[ERROR] COMPILATION ERROR : 
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java:[8,39] package org.apache.commons.collections4 does not exist
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java:[111,14] cannot find symbol
+  symbol:   variable CollectionUtils
+  location: class com.joyent.manta.client.MantaHttpHeadersIT
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java:[147,14] cannot find symbol
+  symbol:   variable CollectionUtils
+  location: class com.joyent.manta.client.MantaHttpHeadersIT
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java:[182,18] cannot find symbol
+  symbol:   variable CollectionUtils
+  location: class com.joyent.manta.client.MantaHttpHeadersIT
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java:[199,14] cannot find symbol
+  symbol:   variable CollectionUtils
+  location: class com.joyent.manta.client.MantaHttpHeadersIT
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.3:testCompile (default-testCompile) on project java-manta-it: Compilation failure: Compilation failure:
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java:[8,39] package org.apache.commons.collections4 does not exist
+[ERROR] symbol:   variable CollectionUtils
+[ERROR] location: class com.joyent.manta.client.MantaHttpHeadersIT
+[ERROR] -> [Help 1]
+```
+
+### 6. Relevant Code Snippets
+The issue stems from missing `commons-collections4` dependency in the `java-manta-it` module's `pom.xml`. The provided diff addresses this by adding the dependency.
+
+**`java-manta-client/pom.xml` (Deletion of property, likely moved to parent):**
+```diff
+--- a/java-manta-client/pom.xml
++++ b/java-manta-client/pom.xml
+@@ -21,7 +21,6 @@
+         <!-- Dependency versions -->
+         <dependency.apache-http-client.version>4.5.1</dependency.apache-http-client.version>
+         <dependency.bouncycastle.version>1.53</dependency.bouncycastle.version>
+-        <dependency.commons-collections.version>4.0</dependency.commons-collections.version>
+         <dependency.google-http-client.version>1.20.0</dependency.google-http-client.version>
+         <dependency.google-http-client-signature.version>1.0.0</dependency.google-http-client-signature.version>
+     </properties>
+```
+
+**`java-manta-it/pom.xml` (Addition of missing dependency):**
+```diff
+--- a/java-manta-it/pom.xml
++++ b/java-manta-it/pom.xml
+@@ -49,6 +49,12 @@
+             <version>${dependency.slfj.version}</version>
+             <scope>test</scope>
+         </dependency>
++        <dependency>
++            <groupId>org.apache.commons</groupId>
++            <artifactId>commons-collections4</artifactId>
++            <version>${dependency.commons-collections.version}</version>
++            <scope>test</scope>
++        </dependency>
+ 
+         <dependency>
+             <groupId>com.google.http-client</groupId>
+```
+
+**`pom.xml` (Addition of dependency version property to parent POM):**
+```diff
+--- a/pom.xml
++++ b/pom.xml
+@@ -109,6 +109,7 @@
+         <dependency.mockito.version>2.0.2-beta</dependency.mockito.version>
+         <dependency.slfj.version>1.7.13</dependency.slfj.version>
+         <dependency.testng.version>6.9.9</dependency.testng.version>
++        <dependency.commons-collections.version>4.0</dependency.commons-collections.version>
+     </properties>
+ 
+     <dependencies>
+```
+
+### 7. Stack Traces
+```
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.3:testCompile (default-testCompile) on project java-manta-it: Compilation failure: Compilation failure:
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java:[8,39] package org.apache.commons.collections4 does not exist
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java:[111,14] cannot find symbol
+[ERROR] symbol:   variable CollectionUtils
+[ERROR] location: class com.joyent.manta.client.MantaHttpHeadersIT
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java:[147,14] cannot find symbol
+[ERROR] symbol:   variable CollectionUtils
+[ERROR] location: class com.joyent.manta.client.MantaHttpHeadersIT
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java:[182,18] cannot find symbol
+[ERROR] symbol:   variable CollectionUtils
+[ERROR] location: class com.joyent.manta.client.MantaHttpHeadersIT
+[ERROR] /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaHttpHeadersIT.java:[199,14] cannot find symbol
+[ERROR] symbol:   variable CollectionUtils
+[ERROR] location: class com.joyent.manta.client.MantaHttpHeadersIT
+[ERROR] -> [Help 1]
+```
+
+### 8. Patches / Suggested Fixes
+The provided code diff contains the necessary patches to resolve this issue:
+1.  **`pom.xml`**: Add the `dependency.commons-collections.version` property (set to `4.0`) to the parent `pom.xml` to centralize its definition.
+2.  **`java-manta-client/pom.xml`**: Remove the `dependency.commons-collections.version` property from this module's `pom.xml` as it is now defined in the parent.
+3.  **`java-manta-it/pom.xml`**: Add `org.apache.commons:commons-collections4` as a `test` scoped dependency, using the version defined in the parent POM.
+
+These changes ensure that the `java-manta-it` module has the required `commons-collections4` library available during the test compilation phase, resolving the "package does not exist" and "cannot find symbol" errors.

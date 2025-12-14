@@ -1,0 +1,83 @@
+Title
+- Build failure: parsers module fails to compile with "cannot find symbol: class OntologyAxiomPair" after moving OntologyAxiomPair to tools module
+
+Summary
+- The Maven build fails in the parsers module with many "cannot find symbol: class OntologyAxiomPair" compilation errors. The code diff shows that the class OntologyAxiomPair was moved/renamed from parsers test sources into tools/src/main/java/org/semanticweb/owlapi/util/OntologyAxiomPair.java. The parsers module uses that class but does not declare a dependency on the tools module, so the compiler cannot locate the class.
+
+Environment / CI
+- Build system: Travis CI (Ubuntu precise image)
+- Java: Oracle JDK 8 (1.8.0_131)
+- Maven: 3.2.5
+- Reactor build order (from log): OWLAPI, Interfaces, Tools, Default Implementation, Parsers, ...
+- Command used: mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+
+Observed failure (first relevant excerpt)
+- Compilation errors (module: owlapi-parsers)
+  - Example first error:
+    /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/util/mansyntax/ManchesterOWLSyntaxParser.java:[39,35] cannot find symbol
+      symbol:   class OntologyAxiomPair
+      location: package org.semanticweb.owlapi.util
+- Total: 80 errors of the same type (many files in this module reference OntologyAxiomPair and fail to compile)
+
+Relevant parts from the CODE DIFF
+- The diff shows this item:
+  "File renamed from parsers/src/test/java/org/semanticweb/owlapi/util/OntologyAxiomPair.java to tools/src/main/java/org/semanticweb/owlapi/util/OntologyAxiomPair.java"
+- That indicates OntologyAxiomPair was moved from parsers test sources into the tools module main sources.
+
+Root cause analysis
+1. OntologyAxiomPair was previously located in parsers test source tree (parsers/src/test/...), so it was not part of any public artifact consumed by other modules. The move placed the class in tools/src/main/java, making it part of the owlapi-tools artifact.
+2. The parsers module (owlapi-parsers) contains code that imports org.semanticweb.owlapi.util.OntologyAxiomPair. After the move, the parsers module still needs that type at compile time, but parsers’ pom.xml does not declare a dependency on the tools module (owlapi-tools), therefore the compiler cannot resolve the class symbol.
+3. The project's reactor does build the tools module before parsers (Tools is earlier in the Reactor Build Order), but unless the parsers pom declares the dependency, the compiler classpath for parsers will not include tools’ classes — thus the unresolved symbol errors.
+
+Why this manifests as many errors
+- OntologyAxiomPair is referenced extensively across parsers code (classes under parsers/*). When the type is not visible, every usage produces a "cannot find symbol" error, hence ~80 errors.
+
+Fixes and recommendations
+Two possible fixes (choose one depending on architecture/design constraints):
+
+A) Add a module dependency (recommended minimal change)
+- Add owlapi-tools as a compile dependency to the parsers module (parsers/pom.xml). Example snippet:
+
+  <dependency>
+    <groupId>${project.groupId}</groupId>
+    <artifactId>owlapi-tools</artifactId>
+    <version>${project.version}</version>
+  </dependency>
+
+- Rationale: OntologyAxiomPair is now part of the tools module. Parsers depend on its types at compile time, so a declared dependency is required.
+
+B) Move the shared utility to a truly common module (architectural)
+- If OntologyAxiomPair is a general utility used by multiple modules (parsers, tools, etc.), it might be better to put it in a shared/common module that both parsers and tools already depend on (e.g., api or a new "util" module).
+- Rationale: Avoids making parsers depend on "tools", which conceptually might be an undesirable dependency / create cycles. If parsers are logically lower-level than tools, put shared classes in api (or a dedicated util module) and update imports accordingly.
+
+C) (Not recommended) Duplicate the class back into parsers
+- Duplicate or reintroduce the class into the parsers module. This creates maintenance debt and likely undesired duplication.
+
+Suggested short-term patch (apply to parsers/pom.xml)
+- Add the dependency block shown in option A. This is the smallest change to unblock the build.
+
+Suggested long-term / follow-up actions
+- Review module responsibilities and dependencies:
+  - If tools is a higher-level module, adding tools as a dependency of parsers may be incorrect design. Prefer moving shared utilities to a common module.
+- Add a CI check that verifies that any class moved from test -> main and across modules has corresponding pom dependency updates.
+- Consider adding javadoc or module docs that describe intended dependencies between modules to avoid accidental coupling.
+- Run full build locally (mvn -U clean install -DskipTests=false) after fix to verify nothing else is broken.
+
+How to reproduce locally
+1. Clone the repository at the same commit (failed_sha: 48d51cbdcce995596a61b0abb745d58cc37cfed4).
+2. Run:
+   mvn clean install -DskipTests=true -Dmaven.javadoc.skip=true
+3. Observe the same compilation errors in parsers module indicating "cannot find symbol: class OntologyAxiomPair".
+
+Additional notes from CODE DIFF
+- There are many unrelated refactorings and API signature changes (e.g., OWLOntologyDocumentSourceBase constructor signature changed to take a Streamer<InputStream>, multiple stream-source classes updated to supply a Streamer; OWLParser now references OntologyConfigurator; renames, suppression annotations added).
+- Ensure that all modules that now reference new/renamed types (e.g., OntologyConfigurator) compile with proper dependencies updated. The immediate blocker is the missing OntologyAxiomPair symbol.
+
+Conclusion
+- Root cause: OntologyAxiomPair was moved from parsers test sources into tools main sources but parsers module was not updated to declare a dependency on the tools artifact, causing many unresolved-symbol compilation errors.
+- Minimal fix: add an owlapi-tools dependency to the parsers module pom, or (better design) move OntologyAxiomPair to a shared module (api/util) that parsers can already depend on.
+
+If you want I can:
+- Produce a patch for parsers/pom.xml adding the dependency; or
+- Produce a patch to move OntologyAxiomPair to api module and update imports/usages accordingly; or
+- Suggest and draft the full module-level dependency changes and run through additional compile-sanity checks to look for other missing transitive dependencies introduced by the refactor.

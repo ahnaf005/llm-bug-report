@@ -1,0 +1,108 @@
+Title
+- ExecutionResult.taskStatus is null in AnswerTaskRunner when answer task is missing (causes test failure)
+
+Steps to Reproduce
+1. Checkout the failing commit (ref in build log: c2f1d53ae37c0ee40ce5b27e9152d329c47acb23).
+2. Run the module tests (or the failing test directly):
+   - mvn -pl rill-flow-dag/olympicene-traversal -Dtest=com.weibo.rill.flow.olympicene.traversal.runners.AnswerTaskRunnerTest test
+   - or run the whole reactor: mvn -B clean test (as in CI).
+3. Observe the test named "test doRun when answerTask is null" failing.
+
+Triggering Input / Conditions
+- The failing test scenario is "answer task is null" (AnswerTaskRunnerTest). In this scenario the AnswerTaskRunner detects the answer task expression is empty, sets a local retStatus = TaskStatus.SKIPPED and records a TaskInvokeMsg, but does not update taskInfo.taskStatus before returning.
+- The code previously returned ExecutionResult.builder().taskStatus(taskInfo.getTaskStatus()).build() — taskInfo.getTaskStatus() is null in this code path.
+
+Expected Behavior
+- When the AnswerTaskRunner detects no answer task (expression empty), it should produce an ExecutionResult whose taskStatus is TaskStatus.SKIPPED (or otherwise not null) so tests and callers can rely on ExecutionResult.taskStatus being set.
+
+Observed Behavior
+- ExecutionResult.taskStatus is null causing the Spock assertion to fail:
+  - Assertion in test: result.taskStatus == TaskStatus.SKIPPED
+  - Actual result printed: ExecutionResult ... taskStatus=null
+- CI Maven test run fails with one test failure and build failure in olympicene-traversal module.
+
+Relevant Build Log / Error Messages (excerpt)
+- Test failure summary:
+  - [ERROR] com.weibo.rill.flow.olympicene.traversal.runners.AnswerTaskRunnerTest.test doRun when answerTask is null  Time elapsed: 0.536 s  <<< FAILURE!
+  - Condition not satisfied:
+    result.taskStatus == TaskStatus.SKIPPED
+    |      |          |  |
+    |      null       |  class com.weibo.rill.flow.interfaces.model.task.TaskStatus
+    |                 false
+    <com.weibo.rill.flow.olympicene.core.model.task.ExecutionResult@545dedf4 needRetry=false retryIntervalInSeconds=0 taskStatus=null ...>
+
+- Build summary:
+  - [ERROR] Tests run: 172, Failures: 1, Errors: 0, Skipped: 0
+  - [INFO] BUILD FAILURE
+  - [ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.0.0-M6:test (default-test) on project olympicene-traversal: There are test failures.
+
+Relevant Code Snippets (from the provided diff)
+- File: rill-flow-dag/olympicene-traversal/src/main/java/com/weibo/rill/flow/olympicene/traversal/runners/AnswerTaskRunner.java
+- Context (changed lines shown):
+
+Before (old behavior — used taskInfo.getTaskStatus())
+- return ExecutionResult.builder().taskStatus(taskInfo.getTaskStatus()).build();
+
+After (patch — returns the local retStatus variable)
++                return ExecutionResult.builder().taskStatus(retStatus).build();
+...
++            return ExecutionResult.builder().taskStatus(retStatus).build();
+
+Full snippet around the change (paraphrased):
+- When answer task expression is empty:
+    TaskInvokeMsg taskInvokeMsg = TaskInvokeMsg.builder().msg("answer task expression empty").build();
+    taskInfo.updateInvokeMsg(taskInvokeMsg);
+    retStatus = TaskStatus.SKIPPED;
+- Previously returned ExecutionResult with taskStatus = taskInfo.getTaskStatus()
+- Patch returns ExecutionResult with taskStatus = retStatus instead.
+
+Stack Traces (from build log)
+- Assertion failure stack trace for the test:
+  at com.weibo.rill.flow.olympicene.traversal.runners.AnswerTaskRunnerTest.test doRun when answerTask is null(AnswerTaskRunnerTest.groovy:48)
+
+- Other relevant lines showing failure:
+  [ERROR] Tests run: 172, Failures: 1, Errors: 0, Skipped: 0
+  [ERROR]   AnswerTaskRunnerTest.test doRun when answerTask is null:48 Condition not satisfied:
+  result.taskStatus == TaskStatus.SKIPPED
+  ...
+  [INFO] BUILD FAILURE
+
+Patches / Suggested Fixes (from code diff and recommendations)
+1) Patch applied in the diff (primary fix):
+- Replace returns that use taskInfo.getTaskStatus() with returning the local variable retStatus which was set in the code path:
+  - change:
+      return ExecutionResult.builder().taskStatus(taskInfo.getTaskStatus()).build();
+    to:
+      return ExecutionResult.builder().taskStatus(retStatus).build();
+
+  This ensures ExecutionResult.taskStatus is non-null in the "answer task expression empty" branch (where retStatus has been set to TaskStatus.SKIPPED).
+
+2) Additional recommended improvement (optional but suggested)
+- For consistency and to avoid divergence between ExecutionResult and taskInfo, also set taskInfo.setTaskStatus(retStatus) before returning in branches where retStatus is set but taskInfo.taskStatus was not updated. Example:
+    retStatus = TaskStatus.SKIPPED;
+    taskInfo.setTaskStatus(retStatus); // ensure taskInfo reflects the status
+    return ExecutionResult.builder().taskStatus(retStatus).build();
+
+  Rationale: the next code/callers might expect taskInfo.taskStatus to reflect the execution result; currently code updates taskInfo.setTaskStatus(TaskStatus.RUNNING) in other branches but not in these early-return branches.
+
+3) Defensive programming:
+- If taskInfo may be null or partially initialized in some test scenarios, consider null checks before using taskInfo.getTaskStatus() or use retStatus as the canonical source for ExecutionResult.taskStatus.
+
+Why this fixes the failing test
+- The test expects ExecutionResult.taskStatus to be TaskStatus.SKIPPED in the "answer task is null" scenario. The test failed because the code returned taskInfo.getTaskStatus(), which had not been initialized and was null. Returning the local retStatus (which has been explicitly set to TaskStatus.SKIPPED in that branch) satisfies the assertion.
+
+Files changed (from diff metadata)
+- Modified: rill-flow-dag/olympicene-traversal/src/main/java/com/weibo/rill/flow/olympicene/traversal/runners/AnswerTaskRunner.java
+  - 2 lines changed (2 added, 2 removed) — replacing returns that used taskInfo.getTaskStatus() with retStatus.
+
+Suggested next steps
+1. Merge the patch (or equivalent) so ExecutionResult.taskStatus is correctly set (return retStatus) and/or set taskInfo.taskStatus to the same retStatus before returning.
+2. Run the failing test locally:
+   - mvn -pl rill-flow-dag/olympicene-traversal -Dtest=com.weibo.rill.flow.olympicene.traversal.runners.AnswerTaskRunnerTest test
+3. Consider adding an assertion in code (or a unit test) that ensures ExecutionResult.taskStatus is never null for completed/terminal branches of doRun.
+4. Optionally make the update to set taskInfo.setTaskStatus(retStatus) to keep the internal state coherent.
+
+Summary
+- Root cause: ExecutionResult was built using taskInfo.getTaskStatus() which was null in the early-return path where answer task expression was empty.
+- Fix in diff: return ExecutionResult with the local retStatus (retStatus is set to TaskStatus.SKIPPED in that branch).
+- Optional improvement: also set taskInfo.taskStatus = retStatus before returning to keep state consistent.

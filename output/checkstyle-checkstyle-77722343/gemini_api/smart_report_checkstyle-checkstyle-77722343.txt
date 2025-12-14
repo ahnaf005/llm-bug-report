@@ -1,0 +1,87 @@
+Here is a detailed bug report based on the provided build log and code diff:
+
+---
+
+### Bug Report
+
+**1. Title:**
+Checkstyle build fails due to "Redundant 'public' modifier" in `EqualsAvoidNullCheck.java`
+
+**2. Steps to Reproduce:**
+1.  Clone the `checkstyle/checkstyle` repository from GitHub.
+2.  Checkout the specific commit `da6ebe6de41b7a5afc6f6746ff0c2382c2a4be0f`.
+3.  Execute the Maven build command: `mvn clean verify -DskipTests -DskipITs -Dpmd.skip=true -Dfindbugs.skip=true -Dcobertura.skip=true`
+
+**3. Triggering Input:**
+The presence of the `public` access modifier on the `FieldFrame` constructor within the `EqualsAvoidNullCheck.java` file, specifically at line 489.
+
+**4. Expected Behavior:**
+The Maven build should complete successfully, indicating that all code adheres to the defined Checkstyle rules and other quality checks. Checkstyle should not report any errors for the `EqualsAvoidNullCheck.java` file.
+
+**5. Observed Behavior:**
+The Maven build fails during the `ant-phase-verify` step, which executes Checkstyle. Checkstyle reports a "Redundant 'public' modifier" error for the `FieldFrame` constructor in `EqualsAvoidNullCheck.java`, leading to a build failure.
+
+*   **Specific Checkstyle Error Message:**
+    ```
+    [checkstyle] /home/travis/build/checkstyle/checkstyle/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java:489:9: Redundant 'public' modifier.
+    ```
+*   **Build Failure Message:**
+    ```
+    [ERROR] Failed to execute goal org.apache.maven.plugins:maven-antrun-plugin:1.8:run (ant-phase-verify) on project checkstyle: An Ant BuildException has occured: The following error occurred while executing this line:
+    [ERROR] /home/travis/build/checkstyle/checkstyle/config/ant-phase-verify.xml:50: Checkstyle failed: Got 1 errors and 0 warnings.
+    ```
+
+**6. Relevant Code Snippets:**
+The issue is located in `src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java`. The problematic line is the declaration of the `FieldFrame` constructor:
+
+```java
+// ... (lines 486-488)
+         * Creates new frame.
+         * @param parent parent frame.
+         */
+        public FieldFrame(FieldFrame parent) { // This line (489) causes the error
+            this.parent = parent;
+        }
+// ...
+```
+
+**7. Stack Traces:**
+```
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time: 01:40 min
+[INFO] Finished at: 2015-08-28T19:01:36+00:00
+[INFO] Final Memory: 42M/482M
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-antrun-plugin:1.8:run (ant-phase-verify) on project checkstyle: An Ant BuildException has occured: The following error occurred while executing this line:
+[ERROR] /home/travis/build/checkstyle/checkstyle/config/ant-phase-verify.xml:50: Checkstyle failed: Got 1 errors and 0 warnings.
+[ERROR] around Ant part ...<ant antfile="config/ant-phase-verify.xml"/>... @ 7:47 in /home/travis/build/checkstyle/checkstyle/target/antrun/build-main.xml
+[ERROR] -> [Help 1]
+[ERROR]
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR]
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException
+```
+The specific Checkstyle error that triggered the Ant BuildException:
+```
+[checkstyle] /home/travis/build/checkstyle/checkstyle/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java:489:9: Redundant 'public' modifier.
+```
+
+**8. Patches / Suggested Fixes:**
+The provided code diff indicates the fix involves removing the redundant `public` modifier from the `FieldFrame` constructor. This makes the constructor package-private, which is the default access level and likely the intended scope for an inner helper class.
+
+```diff
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java
+@@ -486,7 +486,7 @@ public class EqualsAvoidNullCheck extends Check {
+          * Creates new frame.
+          * @param parent parent frame.
+          */
+-        public FieldFrame(FieldFrame parent) {
++        FieldFrame(FieldFrame parent) {
+             this.parent = parent;
+         }
+```

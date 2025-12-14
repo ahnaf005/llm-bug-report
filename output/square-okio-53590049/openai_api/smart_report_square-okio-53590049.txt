@@ -1,0 +1,90 @@
+Title
+- Compilation failure: Buffer.java references non-existent SegmentPool.INSTANCE causing build to fail
+
+Steps to Reproduce
+1. Clone the repository and checkout the failing commit (seen in the build log):
+   - git clone --depth=50 --branch=master git://github.com/square/okio.git
+   - cd okio
+   - git checkout ffc28d67927d01c2900f3646710e564fc945cd7a
+2. Ensure JDK 8 and Maven are available (build log used Oracle JDK8).
+3. Run Maven install (as CI did):
+   - mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+4. Observe the compilation error during javac compilation.
+
+Triggering Input / Conditions
+- The code references SegmentPool.INSTANCE.recycle(segment) in okio/src/main/java/okio/Buffer.java (two locations: around lines ~457 and ~513).
+- The class okio.SegmentPool does not define a static field named INSTANCE (so the symbol can't be resolved).
+- Build environment: JDK 8, Maven 3.2.5 (as in the build log).
+
+Expected Behavior
+- The module should compile successfully. The Buffer class should call whatever API SegmentPool exposes to recycle a Segment (either a static recycle(...) method or a singleton INSTANCE with a recycle(...) method) and compile without unresolved symbol errors.
+
+Observed Behavior
+- Maven compile fails with two "cannot find symbol" errors referencing SegmentPool.INSTANCE:
+  - /home/travis/build/square/okio/okio/src/main/java/okio/Buffer.java:[457,20] cannot find symbol
+    symbol:   variable INSTANCE
+    location: class okio.SegmentPool
+  - /home/travis/build/square/okio/okio/src/main/java/okio/Buffer.java:[513,20] cannot find symbol
+    symbol:   variable INSTANCE
+    location: class okio.SegmentPool
+- Maven build step fails and the overall build is aborted.
+
+Relevant Build Log / Stack Trace
+- Key error output from the build log (trimmed to relevant lines):
+  [ERROR] /home/travis/build/square/okio/okio/src/main/java/okio/Buffer.java:[457,20] cannot find symbol
+    symbol:   variable INSTANCE
+    location: class okio.SegmentPool
+  [ERROR] /home/travis/build/square/okio/okio/src/main/java/okio/Buffer.java:[513,20] cannot find symbol
+    symbol:   variable INSTANCE
+    location: class okio.SegmentPool
+- Maven failure summary:
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.0:compile (default-compile) on project okio: Compilation failure
+
+Relevant Code Snippets (from diff)
+- Old (failing) code in okio/src/main/java/okio/Buffer.java:
+  - At ~line 457:
+    SegmentPool.INSTANCE.recycle(segment);
+  - At ~line 513:
+    SegmentPool.INSTANCE.recycle(segment);
+
+- New (fixed) code in okio/src/main/java/okio/Buffer.java (patch shown in diff):
+  - At ~line 457:
+    SegmentPool.recycle(segment);
+  - At ~line 513:
+    SegmentPool.recycle(segment);
+
+Patch / Suggested Fixes
+- The provided diff already contains a minimal and correct fix: replace calls to the non-existent INSTANCE field with a static call to SegmentPool.recycle(segment).
+  - Change:
+    SegmentPool.INSTANCE.recycle(segment);
+  - To:
+    SegmentPool.recycle(segment);
+
+- Rationale: The SegmentPool API in this codebase exposes a static recycle(Segment) method (or otherwise expects static access). The previous code attempted to call recycle(...) on a non-existent INSTANCE, causing the compiler error. Using the static method matches the current SegmentPool API and resolves the symbol.
+
+Alternative fixes (if code intent differs)
+- If the intent was to keep an instance-based API, then modify SegmentPool to provide an INSTANCE singleton:
+  - Add in SegmentPool:
+    public static final SegmentPool INSTANCE = new SegmentPool();
+    // plus non-static recycle method: public void recycle(Segment s) { ... }
+  - But this is invasive. The simpler, correct fix per the diff is to call the static recycle method.
+
+Files/Lines Affected
+- okio/src/main/java/okio/Buffer.java
+  - Two replacements around lines 454–516:
+    - The code that previously invoked SegmentPool.INSTANCE.recycle(segment) at two places was changed to SegmentPool.recycle(segment).
+
+Commit / CI Context
+- Failing sha referenced by CI: ffc28d67927d01c2900f3646710e564fc945cd7a
+- The diff shows the code change that fixes the error; after applying the diff the compilation error should be resolved.
+
+Action Items
+1. Apply the change shown in the diff (replace SegmentPool.INSTANCE.recycle(segment) with SegmentPool.recycle(segment) in Buffer.java).
+2. Re-run mvn install -DskipTests=true -Dmaven.javadoc.skip=true to confirm the module compiles.
+3. (Optional) Run unit tests if available to ensure runtime behavior is correct.
+4. If there are other references to SegmentPool.INSTANCE elsewhere, update them similarly or add the INSTANCE field in SegmentPool intentionally (but prefer using the existing static API).
+
+Summary
+- Cause: Buffer.java calls SegmentPool.INSTANCE but SegmentPool has no INSTANCE field.
+- Fix: Use the existing static method SegmentPool.recycle(segment) (patch present in diff).
+- Result: After the change build should succeed (the compilation error will be resolved).

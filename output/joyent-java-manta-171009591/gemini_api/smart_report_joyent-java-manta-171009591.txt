@@ -1,0 +1,56 @@
+## Bug Report: Checkstyle TodoComment Violation in MantaMultipartManager.java
+
+### 1. Title
+Build Fails Due to Checkstyle TodoComment Violation in `MantaMultipartManager.java`
+
+### 2. Steps to Reproduce
+1.  Clone the `joyent/java-manta` repository.
+2.  Checkout the `FETCH_HEAD` for pull request #120 (corresponding to `e5c53bf1f1df1d34783f390562179d6a48292f95`).
+3.  Execute the Maven install command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+### 3. Triggering Input
+The presence of a `TODO:` comment at line 641 in the file `src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java` that violates the Checkstyle `TodoComment` rule.
+
+### 4. Expected Behavior
+The Maven build should complete successfully, indicating that all compilation, dependency resolution, and code quality checks (including Checkstyle) have passed without errors. Specifically, no `TodoComment` violations should be reported.
+
+### 5. Observed Behavior
+The Maven `install` command fails during the Checkstyle plugin execution. The build log reports a `TodoComment` violation in `src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java` at line 641. The build retries twice, failing each time, and ultimately stops.
+
+**Error Message:**
+```
+[ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[641] (misc) TodoComment: Comment matches to-do format 'TODO:'.
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation. -> [Help 1]
+```
+
+### 6. Relevant Code Snippets
+The build log indicates a `TodoComment` violation at line 641 of `MantaMultipartManager.java`. The provided code diff shows that a `TODO:` comment was present at the *original* line 641 and was intended to be removed.
+
+**From `java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java`:**
+```diff
+--- a/java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java
++++ b/java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java
+@@ -608,43 +610,72 @@ public class MantaMultipartManager {
+         final StringBuilder jobExecText = new StringBuilder("mget -q ");
+ 
+-        // TODO: Validate parts and match up etags with path
+```
+*(Note: The build log reports the error at line 641 in the *patched* file, while the diff shows the `TODO:` comment being removed from the *original* line 641. This suggests either the diff is incomplete, or the `TODO:` comment was not fully removed, or a new `TODO:` was introduced at the new line 641.)*
+
+### 7. Stack Traces
+The build log provides the following error details:
+```
+[ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[641] (misc) TodoComment: Comment matches to-do format 'TODO:'.
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation. -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+```
+
+### 8. Patches / Suggested Fixes
+The provided diff includes a patch that *removes* the `// TODO: Validate parts and match up etags with path` comment from the original line 641. However, since the build still fails with a `TodoComment` violation at line 641, it indicates that either this specific `TODO:` comment was not effectively removed in the final code state, or another `TODO:` comment was introduced at that line.
+
+The suggested fix is to ensure that any `TODO:` comment at line 641 in `src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java` is either completely removed or modified to comply with the project's Checkstyle rules (e.g., by changing its format or adding a ticket reference if required by the rule).

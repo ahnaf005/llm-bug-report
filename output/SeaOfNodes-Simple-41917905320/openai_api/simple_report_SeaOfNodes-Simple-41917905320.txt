@@ -1,0 +1,142 @@
+Title: Build failure in chapter22 — two test failures in Chapter19 due to recent x86_64 and merge-code changes
+
+Summary
+- CI build failed (maven test phase) for chapter22 with 2 test failures in com.seaofnodes.simple.Chapter19Test.
+- Failures are comparison mismatches where machine/IR printing now includes immediate operands that the tests expect to be absent.
+- The code diff shows multiple changes in chapter22 that can explain the behavior:
+  - MulIX86: changed ModR/M operand ordering and changed asm printing of the Mul-immediate instruction.
+  - MemMergeNode: changed loop index from 2 -> 1.
+  - SetX86: changed REX zero-extend condition from dst >= 8 -> dst >= 4.
+  - Tests in Chapter19Test (and some other tests) were updated in the diff to expect the new printed forms (i.e. immediate values are included), but the CI build shows the repository state that executed tests did not match those updated expectations (CI reported expected strings without immediates while actual included immediates).
+- Net effect: mismatch between behavior (printer/IR emission) and test expectations; possibly also risky changes to code generation semantics (REX handling, ModR/M ordering, memory-phi merging).
+
+Environment (from BUILD LOG)
+- Runner image: ubuntu-24.04
+- Java: Temurin 21.0.7+6
+- Maven: 3.10.1 (maven-compiler and surefire plugins used)
+- Commit used by failing run: 239d52984594c2011ea3093e90a3aa68faad6fbd
+- Failures occur in module: chapter22 during surefire:test
+
+Failure (excerpts from BUILD LOG)
+- Two failing tests in com.seaofnodes.simple.Chapter19Test:
+  1) testFcn1
+     - junit.ComparisonFailure expected:<...urn (add,#2,(muli,#2[])); ]> but was:<...urn (add,#2,(muli,#2[,10])); ]>
+     - Shows an unexpected immediate 10 appended to a muli node.
+  2) testBasic8
+     - junit.ComparisonFailure expected:<return (muli,arg[]);> but was:<return (muli,arg[,6]);>
+     - Shows an unexpected immediate 6 appended to a muli node.
+- Overall build summary: BUILD FAILURE and Maven reports test failures in chapter22.
+
+Relevant changes in CODE DIFF (summary + important lines)
+- File: chapter22/src/main/java/com/seaofnodes/simple/node/cpus/x86_64_v2/MulIX86.java
+  - Encoded ModR/M changed from:
+      enc.add1( x86_64_v2.modrm(x86_64_v2.MOD.DIRECT, src, dst) );
+    to:
+      enc.add1( x86_64_v2.modrm(x86_64_v2.MOD.DIRECT, dst, src) );
+    (modrm operand order swapped)
+  - asm printing changed from:
+      sb.p(code.reg(this)).p(" ").p(glabel()).p("= #").p(_imm);
+    to:
+      sb.p(code.reg(this)).p(" = ").p(code.reg(in(1))).p(" * #").p(_imm);
+    (previous print was odd; new one explicitly shows dst = reg(in(1)) * #imm)
+- File: chapter22/src/main/java/com/seaofnodes/simple/node/MemMergeNode.java
+  - Loop index boundary changed:
+      for( int i = 2; i < len; i++)
+    -> for( int i = 1; i < len; i++)
+    (now iterates one index earlier)
+- File: chapter22/src/main/java/com/seaofnodes/simple/node/cpus/x86_64_v2/SetX86.java
+  - REX zero-extend condition changed:
+      if( dst >= 8 ) enc.add1(x86_64_v2.rex(dst, dst, 0, false));
+    -> if( dst >= 4 ) enc.add1(x86_64_v2.rex(dst, dst, 0, false));
+    (this is potentially incorrect; REX is required for registers 8..15)
+- Tests changed in chapter22 (Chapter19Test, Chapter20Test, Chapter21Test, Chapter22Test) to expect new textual forms (e.g. include immediates). The diff shows tests were updated to match new printer behavior; however CI executed tests that expected the old forms — which explains the failures observed in the BUILD LOG.
+
+Root cause analysis
+1) Immediate values appearing in printed IR nodes (muli,arg[,6], muli,#2[,10]) are the immediate operand becoming part of the node representation that is used by tests. The immediate presence is caused by change(s) to how Mul-with-immediate operations are represented/printed in the backend.
+   - The direct code change that affects the human-readable instruction/node text is the MulIX86.asm change (the sb.p(...) printing line). That modifies what the machine-level node prints.
+   - Additionally, the change to modrm parameter order (dst, src vs src, dst) affects encoding and could affect which input is considered immediate/which is register in the machine node; if the mapping of inputs to printer fields changed, the printed representation will change.
+   - Tests in the diff were updated to accept the new form, so the logical intention seems to have been to change the printer to include immediates. But CI used a commit that did not include those updated tests — therefore failing.
+
+2) Secondary risks:
+   - SetX86: changing the REX emission condition from dst>=8 to dst>=4 is likely wrong and will cause invalid encoding or wrong behavior for registers 4..7. On x86_64, registers 0..7 are legacy registers (no REX), registers 8..15 require setting the REX.B/REX.R bits. The modified condition will emit REX erroneously for registers 4..7 (and possibly not emit correctly for high registers depending on other usage). This can introduce subtle runtime mis-encodings on x86_64 targets.
+   - MemMergeNode: changing loop start from 2 to 1 will cause the merging logic to consider an additional input (probably a control input or argument slot previously skipped). This can create or avoid PHI nodes incorrectly, affecting IR shape and test expectations elsewhere.
+
+Why the build shows the older expectations
+- The code diff shows both implementation and tests were changed together (tests updated to include immediates). The failing CI output indicates the build used a SHA where tests expected the older outputs (without immediates) but the runtime actual output included immediates. This suggests either:
+  - The CI ran on an intermediate commit where code changes were applied but tests were not updated.
+  - Or there are multiple code paths/backends producing different textual outputs and the test suite used a different backend/config than expected.
+- The immediate fix is to make code and tests consistent; the permanent fix is to ensure the representation semantics are stable and documented and to avoid accidental changes to instruction printing when unrelated.
+
+Impact
+- Immediate: CI failure for chapter22 — blocking merge.
+- Functional risk: incorrect instruction encoding (SetX86) for some registers — could break generated binaries for x86_64.
+- Semantic risk: MemMergeNode change may introduce extra PHI nodes or incorrect merging, altering program graphs and causing further downstream test and runtime differences.
+
+Reproduction steps
+1. Checkout the failing commit (the one used by CI) or apply the changes locally.
+2. Run tests for the failing module:
+   - mvn -pl chapter22 -Dtest=com.seaofnodes.simple.Chapter19Test#testBasic8 test
+   - mvn -pl chapter22 -Dtest=com.seaofnodes.simple.Chapter19Test#testFcn1 test
+3. Observe the printed code (or code._stop.toString(), code.print()) and compare to expected strings in tests. The printed strings will include immediates (e.g. "(muli,arg[,6])") while tests may expect "(muli,arg[])" if they were not updated.
+
+Suggested fixes (priority order)
+1) Make tests and implementation consistent
+   - If the intended change is to include immediates in the textual IR for muli nodes, ensure the updated tests are committed and the CI runs with those updated tests.
+   - If the intended change is NOT to include immediates, revert the asm printing change in MulIX86 (or alter the node printer) so textual form remains unchanged.
+
+   Quick patch (if intent is to keep immediates out of the textual IR):
+   - In MulIX86.java revert the asm printing change to match previous textual format printed by the system-wide IR printer (or delegate printing to a central node printer).
+   - Or adjust the central printer of the IR node (MulI node) so it omits immediates in the contexts tests expect.
+
+2) Fix potential encoding bugs
+   - SetX86.java: revert condition to dst >= 8 (the correct condition to determine if a REX is needed for high registers) unless there is a documented encoding scheme change. Replace:
+       if( dst >= 4 ) enc.add1(x86_64_v2.rex(dst, dst, 0, false));
+     with:
+       if( dst >= 8 ) enc.add1(x86_64_v2.rex(dst, dst, 0, false));
+     Rationale: REX prefix is required for registers 8-15 in x86_64. Using >=4 is incorrect.
+
+3) Review MemMergeNode change
+   - Confirm why the index loop was changed from i = 2 to i = 1. Usually merging starts at index 2 to skip $ctrl and $mem or $arg slots — changing to 1 can include a slot that should be excluded. If the change was intentional, add a comment and tests that document why the extra alias should be considered.
+   - If it was a mistake, revert to i = 2.
+
+4) Audit ModR/M parameter order
+   - MulIX86.modrm change switched (src,dst) -> (dst,src). Confirm that the modrm API expects (reg,rm) or specific ordering. Ensure the correct order is used; otherwise encodings will be wrong or inconsistent.
+   - Write a unit test that encodes mul immediate in a variety of src/dst register combinations and validates binary encoding against a reference.
+
+Concrete code suggestions
+- If you want to keep the new printed form that includes immediate, ensure chapter22 tests are updated and committed. The CODE DIFF shows tests already updated to expect immediates; make sure CI picks that commit.
+- Otherwise revert the line in MulIX86:
+    // revert to the old textual signature if tests expect that
+    sb.p(code.reg(this)).p(" ").p(glabel()).p("= #").p(_imm);
+  but better: use the same printer/formatter used by other concrete machine nodes (avoid ad-hoc printing here).
+
+Additional recommended tests
+- Add unit tests that assert textual representation of a simple "return arg * CONST;" for each target (x86_64_v2, riscv, arm). That will catch changes in printing or immediate handling.
+- Add binary-encoding tests for SetX86 with registers in ranges [0..3], [4..7], [8..15] to validate REX emission logic.
+- Add MemMergeNode unit tests that construct inputs with known alias patterns and assert expected phi insertion/merging counts.
+
+Immediate remediation steps
+1. Reproduce locally and confirm which commit contains the mismatched tests vs implementation.
+2. If test updates are intended, re-run CI on the branch that includes both implementation & test updates (ensure all changes pushed).
+3. If the SetX86 change was accidental, revert dst >= 4 back to dst >= 8 and run the x86_64 unit tests.
+4. Revert or carefully review MemMergeNode change to ensure it doesn't create unintended PHIs.
+5. Add the encoding/printing unit tests (above) and run the full chapter22 test suite locally.
+
+Risk / Notes
+- The SetX86 change is high-risk for correctness of produced x86_64 binaries.
+- The ModR/M operand order change must be confirmed against the modrm helper function's parameter contract (it may expect (reg, rm) or (rm, reg)). Using wrong order will produce corrupted machine code or incorrect semantics.
+- Make sure any change to textual printing is done via central printer functionality rather than local per-MachNode ad-hoc prints; that reduces chance of tests being out-of-sync after refactors.
+
+Attachments / references
+- Relevant failing log excerpts (from BUILD LOG): comparison failures with exact expected vs actual strings (see lines ~2025-05-09T04:46:29.768..29.776).
+- CODE DIFF patches referenced above.
+
+Summary / Recommendation
+- The likely immediate cause of CI failures is a mismatch between implementation (which now prints immediates on muli nodes) and the tests used in the CI run. Confirm whether the intent was to change the printed form. If intent is to include immediates, update the test expectations on the CI branch; otherwise revert the printing change in MulIX86.
+- Independently, revert or re-evaluate the SetX86 REX condition (dst >= 4 appears incorrect) and review the MemMergeNode change (loop index) for unintended effects.
+- Add targeted unit tests for printing and encoding to prevent regressions.
+
+If you want, I can:
+- Propose exact patch snippets to revert or modify MulIX86/SetX86/MemMergeNode.
+- Produce a minimal unit test to demonstrate the encoding/printing mismatch.
+- Suggest a short CI job to validate the fixes before full run.

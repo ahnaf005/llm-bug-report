@@ -1,0 +1,137 @@
+Title
+- Test compilation fails in java-manta-it: missing commons-codec / httpclient classes (DigestUtils, Charsets, DateUtils)
+
+Steps to Reproduce
+1. Clone the repository and checkout the failing commit/branch (the build used commit bb242902... on branch multipart).
+2. From the repository root run (same command the CI used):
+   mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+   or at minimum to reproduce the test compile failure:
+   mvn -pl java-manta-it test-compile
+3. Observe compilation errors during the test-compile phase of the java-manta-it module.
+
+Triggering Input / Conditions
+- Building the project at commit bb242902336c1d9120168470fe181b515ef4b36b (failed_sha).
+- The java-manta-it/pom.xml was modified in the change under review (see diff). A dependency org.apache.httpcomponents:httpclient (scope test) was added; however other needed test dependencies are missing (commons-codec) or the httpclient dependency is not being resolved to provide org.apache.http.client.utils.*.
+
+Expected Behavior
+- The java-manta-it module test sources should compile successfully during the test-compile phase. Specifically:
+  - Classes referenced in integration tests (DigestUtils, Charsets, DateUtils, and org.apache.http.client.utils) should be resolved by declared test-scope dependencies.
+
+Observed Behavior
+- Maven fails during test compilation with multiple "package ... does not exist" and "cannot find symbol" errors for classes used in test sources:
+  - org.apache.commons.codec.digest (DigestUtils)
+  - org.apache.commons.codec (Charsets / DigestUtils)
+  - org.apache.http.client.utils (DateUtils / other utils)
+- The build fails repeatedly (3 retry attempts) and the CI stops the job.
+
+Relevant excerpt of the observed compilation errors (from build log)
+- /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaObjectOutputStreamIT.java:[6,39] package org.apache.commons.codec.digest does not exist
+- /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaClientIT.java:[14,32] package org.apache.commons.codec does not exist
+- /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaClientIT.java:[15,36] package org.apache.http.client.utils does not exist
+- /home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaObjectOutputStreamIT.java:[83,35] cannot find symbol
+  symbol:   variable DigestUtils
+  location: class com.joyent.manta.client.MantaObjectOutputStreamIT
+- ... (additional cannot find symbol errors for Charsets, DateUtils, DigestUtils)
+
+Relevant Code Snippets (from the code diff)
+The patch added an httpclient test dependency to java-manta-it/pom.xml:
+
+--- a/java-manta-it/pom.xml
++++ b/java-manta-it/pom.xml
+@@ -35,6 +35,18 @@
+             <version>2.5.1-SNAPSHOT</version>
+             <scope>test</scope>
+         </dependency>
++        <dependency>
++            <groupId>org.apache.httpcomponents</groupId>
++            <artifactId>httpclient</artifactId>
++            <version>${dependency.apache-http-client.version}</version>
++            <scope>test</scope>
++            <exclusions>
++                <exclusion>
++                    <groupId>commons-logging</groupId>
++                    <artifactId>commons-logging</artifactId>
++                </exclusion>
++            </exclusions>
++        </dependency>
+         <dependency>
+             <groupId>org.slf4j</groupId>
+             <artifactId>jul-to-slf4j</artifactId>
+
+Analysis / Root Cause (likely)
+- The integration test sources reference classes from Apache Commons Codec (DigestUtils, Charsets) and Apache HttpClient (DateUtils, org.apache.http.client.utils). The current change added httpclient, but:
+  - commons-codec is not declared in java-manta-it/pom.xml, so DigestUtils and Charsets are unresolved.
+  - The added httpclient dependency references a property ${dependency.apache-http-client.version}. If that property is not defined in the effective POM (or not inherited/available to this module), Maven will not resolve the dependency, leading to missing org.apache.http.client.utils.*.
+  - The patch excludes commons-logging from httpclient; that exclusion is OK, but unrelated to the missing codec classes.
+- Net result: test compile classpath is missing required test dependencies.
+
+Suggested Fixes / Patches
+1. Add commons-codec as a test dependency to java-manta-it/pom.xml (to provide DigestUtils and Charsets). Example snippet to add inside <dependencies> (adjust version as appropriate / match project dependency management):
+
+<dependency>
+    <groupId>commons-codec</groupId>
+    <artifactId>commons-codec</artifactId>
+    <version>1.9</version> <!-- or the project-managed version -->
+    <scope>test</scope>
+</dependency>
+
+2. Ensure the httpclient dependency resolves:
+   - Confirm the property ${dependency.apache-http-client.version} is defined (in parent pom or a properties section). If it is not, either define it or use an explicit version in the module pom. Example:
+
+<properties>
+    <!-- either in parent or java-manta-it/pom.xml -->
+    <dependency.apache-http-client.version>4.5.2</dependency.apache-http-client.version>
+</properties>
+
+   or modify the dependency to use a literal version:
+
+<dependency>
+    <groupId>org.apache.httpcomponents</groupId>
+    <artifactId>httpclient</artifactId>
+    <version>4.5.2</version>
+    <scope>test</scope>
+    <exclusions>
+        <exclusion>
+            <groupId>commons-logging</groupId>
+            <artifactId>commons-logging</artifactId>
+        </exclusion>
+    </exclusions>
+</dependency>
+
+3. Verify other referenced test-only utilities/classes are present:
+   - DateUtils should be provided by httpclient (org.apache.http.client.utils.DateUtils). Adding httpclient (with correct version) will make it available.
+   - Charsets used in tests may be from commons-codec or guava. Inspect imports in failing test files:
+     - If tests import org.apache.commons.codec.Charsets, adding commons-codec fixes it.
+     - If they import com.google.common.base.Charsets, ensure guava is available in test scope (but the errors indicate commons-codec specifically).
+
+4. After making the dependency changes, run:
+   mvn -pl java-manta-it -am test-compile
+   to confirm the test sources compile.
+
+Suggested combined patch (apply to java-manta-it/pom.xml inside <dependencies>):
+
++        <dependency>
++            <groupId>commons-codec</groupId>
++            <artifactId>commons-codec</artifactId>
++            <version>1.9</version>
++            <scope>test</scope>
++        </dependency>
++        <dependency>
++            <groupId>org.apache.httpcomponents</groupId>
++            <artifactId>httpclient</artifactId>
++            <version>4.5.2</version> <!-- replace with managed property if present -->
++            <scope>test</scope>
++            <exclusions>
++                <exclusion>
++                    <groupId>commons-logging</groupId>
++                    <artifactId>commons-logging</artifactId>
++                </exclusion>
++            </exclusions>
++        </dependency>
+
+Notes and verification
+- Confirm whether the project uses dependencyManagement in the parent POM to supply httpclient and commons-codec versions. If so, prefer using that property instead of hardcoding the version.
+- After applying the fixes, re-run the full build command used by CI to ensure no other missing test dependencies remain.
+- If any other "cannot find symbol" errors appear after adding these dependencies, inspect the specific missing class and add the corresponding test-scoped dependency.
+
+If you want, I can produce a patch file in unified diff format to add commons-codec and/or set the httpclient version in the pom.

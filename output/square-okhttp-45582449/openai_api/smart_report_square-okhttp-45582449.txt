@@ -1,0 +1,118 @@
+Title
+- Build failure: samples/guide WebSocket sample fails to compile after WebSocket API/internal API change (missing WebSocketResponse, missing onPong, missing execute method)
+
+Steps to Reproduce
+1. Checkout the pull request/branch that triggered the build (in CI log: refs/pull/1260/merge).
+2. Ensure environment similar to the build:
+   - Java 7 (java version "1.7.0_72")
+   - Maven 3.2.3
+3. From project root run:
+   mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+4. Observe failure during module samples/guide compilation.
+
+Triggering Input / Conditions
+- Building the repo at FETCH_HEAD (refs/pull/1260/merge).
+- Maven compile step for module samples/guide (compiling 22 source files).
+- JDK 1.7.0_72, Maven 3.2.3, running mvn install with skipTests and skip javadoc flags.
+- The code diff provided to CI could not be loaded (see CODE DIFF section below), but the build log shows the compilation failures.
+
+Expected Behavior
+- The entire multi-module build should succeed, including the samples/guide module.
+- The WebSocket sample (WebSocketEcho.java) should compile against the OkHttp codebase in the repository.
+
+Observed Behavior (Errors)
+- samples/guide compilation fails with 4 compiler errors related to WebSocket internal API changes:
+  - cannot find symbol: class WebSocketResponse in package com.squareup.okhttp.internal.ws
+  - class WebSocketEcho is not abstract and does not override abstract method onPong(okio.Buffer) in com.squareup.okhttp.internal.ws.WebSocketListener
+  - cannot find symbol: class WebSocketResponse in class com.squareup.okhttp.recipes.WebSocketEcho
+  - cannot find symbol: method execute(com.squareup.okhttp.recipes.WebSocketEcho) on variable call of type com.squareup.okhttp.internal.ws.WebSocketCall
+
+Exact error messages from the build log:
+/home/travis/build/square/okhttp/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java:[8,39] cannot find symbol
+  symbol:   class WebSocketResponse
+  location: package com.squareup.okhttp.internal.ws
+
+/home/travis/build/square/okhttp/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java:[20,14] com.squareup.okhttp.recipes.WebSocketEcho is not abstract and does not override abstract method onPong(okio.Buffer) in com.squareup.okhttp.internal.ws.WebSocketListener
+
+/home/travis/build/square/okhttp/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java:[28,5] cannot find symbol
+  symbol:   class WebSocketResponse
+  location: class com.squareup.okhttp.recipes.WebSocketEcho
+
+/home/travis/build/square/okhttp/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java:[28,47] cannot find symbol
+  symbol:   method execute(com.squareup.okhttp.recipes.WebSocketEcho)
+  location: variable call of type com.squareup.okhttp.internal.ws.WebSocketCall
+
+Relevant Build Summary
+- Module that fails: Sample: Guide
+- Build stops at maven-compiler-plugin:3.0:compile for the guide module.
+- The same errors occurred across 3 consecutive mvn attempts in CI.
+
+Relevant Code Snippets
+- Compilation failure locations (from build log):
+  samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java
+  - import failure for: com.squareup.okhttp.internal.ws.WebSocketResponse
+  - missing implementation for: onPong(okio.Buffer) in WebSocketListener
+  - call.execute(this) invocation on WebSocketCall
+
+- "CODE DIFF" that was supplied to the CI job could not be retrieved; the provided diff content is a 404-style error JSON:
+{
+  "_error": {
+    "code": 404,
+    "message": "The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again."
+  },
+  "_status": "ERR"
+}
+
+Analysis / Root Cause (likely)
+- The samples/guide WebSocket sample depends on internal WebSocket API types:
+  - com.squareup.okhttp.internal.ws.WebSocketResponse
+  - com.squareup.okhttp.internal.ws.WebSocketListener (expected to have onPong(okio.Buffer))
+  - com.squareup.okhttp.internal.ws.WebSocketCall.execute(WebSocketListener)
+- The codebase has apparently changed the internal WebSocket API:
+  - WebSocketResponse class is no longer present in that package (or has been moved/renamed).
+  - WebSocketListener has gained a new abstract method onPong(okio.Buffer) which the sample does not implement.
+  - WebSocketCall.execute(...) no longer exists with that signature (or was removed/renamed), so the sample's call.execute(this) no longer compiles.
+- In short: samples are out-of-sync with library/internal API changes.
+
+Patches / Suggested Fixes
+1. Make the sample compatible with the updated WebSocket API.
+   - Update imports and types in samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java to match the current API (either the new internal.ws API or, preferably, the public ws package).
+   - Implement the new onPong(okio.Buffer) method required by the updated WebSocketListener interface.
+
+Example (conceptual) fixes you should apply in WebSocketEcho.java:
+- Add/implement the missing method required by WebSocketListener:
+  // implement new pong handler
+  @Override
+  public void onPong(okio.Buffer payload) {
+    // handle pong or ignore
+  }
+
+- Replace or remove references to WebSocketResponse:
+  - If the updated API uses a different response type, use that type.
+  - Prefer moving sample to use the supported public API (com.squareup.okhttp.ws.*) instead of internal.* so that samples remain stable across refactors.
+
+- Replace call.execute(this) with the current way to initiate a websocket call:
+  - If the API used to be execute(WebSocketListener) and now is enqueue(WebSocketListener) or call.enqueue(listener), change call.execute(this) -> call.enqueue(this) (or the correct method name).
+  - If the API now returns a WebSocket object directly, adapt to that.
+
+Concrete suggested steps:
+- Inspect the current code in the repo for the current websocket types and signatures:
+  - Search for WebSocketListener interface to see the required methods (onOpen, onMessage, onPong, onClose, etc.).
+  - Search for WebSocketCall (or the equivalent) to see how to create/execute/enqueue a websocket connection.
+- Update samples/guide/WebSocketEcho.java to import the correct package and match the method signatures.
+- Prefer using the public websocket package (com.squareup.okhttp.ws) instead of com.squareup.okhttp.internal.ws so the sample does not depend on internal implementation details.
+
+2. Alternatively: if the API change was accidental and the internal types were removed unintentionally, consider:
+- Restoring/backwards-compatible stubs for types used by samples (not recommended long-term because code depending on internal.* is fragile).
+- Ensuring refactors that break the sample are accompanied by changes to the sample.
+
+3. CI / PR hygiene:
+- The code diff that CI attempted to use could not be loaded (404). Ensure PR/patch/diff is available to CI and that the path used by CI to fetch the diff is correct. This will allow easier verification of which changes caused the breakage.
+
+Additional notes
+- Because the sample references internal.* classes, it is especially susceptible to breakage when the library internals change. Samples should prefer public, supported APIs (or be updated alongside any internal API changes).
+- I did not have the actual modified source code for WebSocketEcho.java in the CODE DIFF (the diff returned a 404 JSON). The suggestions above are based on the compiler errors in the build log. If you can provide the actual code diff for WebSocketEcho.java (or the changes in the ws/internal websocket implementation), I can produce a precise patch.
+
+If you want, I can:
+- Draft the exact code patch for WebSocketEcho.java if you paste its current contents and the current websocket API (the interfaces/classes as present in the repository).
+- Search for current WebSocket types in the repo and propose precise replacements (imports, method names, signatures, and sample code).

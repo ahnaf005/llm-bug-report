@@ -1,0 +1,141 @@
+Bug report — Build failure caused by missing package-level Javadoc & breaking API change from refactor
+================================================================================
+
+Summary
+-------
+The Maven build fails during the checkstyle phase with the Checkstyle rule JavadocPackage: "Missing package-info.java file" for the package com.joyent.manta.client.multipart. The failing CI run is for commit SHA a61829b9... (the patch attempts a refactor that moves the inner Part class to a new top-level class and adds package-info.java, but the build logs indicate the package-info.java was missing at the time the build ran). Beyond the immediate checkstyle failure, the refactor introduces a breaking public API change by removing the nested MantaMultipartUpload.Part type and replacing it with a top-level MantaMultipartUploadPart type — this will break binary/API compatibility for clients expecting the nested class.
+
+Environment (from build log)
+----------------------------
+- OS: Ubuntu 12.04/14.04 (Travis container)
+- JDK: Oracle JDK 8 (1.8.0_31)
+- Maven: 3.2.5
+- Build command (CI): mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+- Failing module: java-manta-client
+- Checkstyle plugin: org.apache.maven.plugins:maven-checkstyle-plugin:2.17
+
+Failure / symptoms
+------------------
+- Maven fails in the checkstyle:check goal with:
+  [ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[0] (javadoc) JavadocPackage: Missing package-info.java file.
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation.
+
+- The build is aborted by CI after three retries.
+
+Relevant changes from the patch (summary)
+-----------------------------------------
+Key diffs in the provided CODE DIFF:
+
+1. Moved the nested Part class out of MantaMultipartUpload into a new top-level class:
+   - Removed inner class MantaMultipartUpload.Part from java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartUpload.java.
+   - Added new file MantaMultipartUploadPart.java in the same package implementing the same behavior.
+
+2. Updated all references:
+   - MantaMultipartManager.java: changed signatures and references from MantaMultipartUpload.Part to MantaMultipartUploadPart and updated return types.
+   - Tests updated to use MantaMultipartUploadPart.
+
+3. Added package-info.java:
+   - New file java-manta-client/src/main/java/com/joyent/manta/client/multipart/package-info.java was added with package-level Javadoc.
+
+4. Removed some imports from MantaMultipartUpload.java (MantaClient, MantaObject, MantaUtils) since the Part implementation moved out.
+
+Root cause analysis
+-------------------
+Immediate cause of CI failure:
+- Checkstyle JavadocPackage emits "Missing package-info.java file" if a package lacks a package-info.java. The build log indicates this violation existed for package com.joyent.manta.client.multipart when the build ran. The correct fix for that error is to add package-info.java to that package — and the patch does add such a file. The failure indicates the package-info.java was not present in the commit that CI ran (either it was missing from that commit or committed in a different patch ordering), so CI failed prior to the commit that would fix it.
+
+Secondary issues (introduced by this refactor):
+- Breaking API change: The nested public static class MantaMultipartUpload.Part was removed and replaced by a new public top-level class MantaMultipartUploadPart. This is a binary and source-breaking change for consumers that referenced MantaMultipartUpload.Part. The refactor changes method signatures and return types across the code base (e.g., MantaMultipartManager), so downstream projects that depend on the old nested type will fail to compile (or may fail at runtime if binary-incompatible).
+- Possible missing imports: MantaMultipartUpload.java had imports removed that were required for code that used the inner Part class; reintroducing compatibility wrappers may require some imports (MantaObject, MantaUtils).
+
+Impact
+------
+- CI builds are failing (blocking merges).
+- Downstream consumers or other modules depending on this package will fail to compile when the refactor is merged, because the nested Part type is removed.
+- API consumers will need to update references to the new top-level type (breaking change).
+
+How to reproduce locally
+------------------------
+From project root:
+1. Checkout the failing commit (a61829b9...).
+2. Run:
+   mvn -DskipTests=true -Dmaven.javadoc.skip=true install
+3. Observe the Checkstyle failure:
+   src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[0] (javadoc) JavadocPackage: Missing package-info.java file.
+
+Recommended fixes
+------------------
+
+Short-term (unblock CI quickly)
+- Ensure package-info.java is present in the package path used by the checkstyle plugin BEFORE releasing/merging:
+  - Confirm java-manta-client/src/main/java/com/joyent/manta/client/multipart/package-info.java exists in the same commit that adds other changes.
+  - If it was added in the patch but CI still failed, re-run CI after confirming the file is included and committed in the same commit/PR.
+
+Recommended long-term / proper fix (preserve compatibility)
+1. Keep package-info.java in the package (already added by the patch). This addresses the Checkstyle JavadocPackage error.
+
+2. Restore backward compatibility for public API:
+   - Re-introduce the nested public static Part class in MantaMultipartUpload as a thin wrapper/delegating subclass of the new MantaMultipartUploadPart. This allows existing clients to continue referencing MantaMultipartUpload.Part while you provide the new top-level class for any new code. Example to add to MantaMultipartUpload.java:
+
+   (conceptual snippet — adapt to project imports and style)
+   public static class Part extends MantaMultipartUploadPart {
+       private static final long serialVersionUID = -738331736064518314L;
+
+       public Part(final int partNumber, final String objectPath, final String etag, final Long length) {
+           super(partNumber, objectPath, etag, length);
+       }
+
+       // preserve package-private constructor that takes MantaObject if needed
+       Part(final com.joyent.manta.client.MantaObject object) {
+           super(object);
+       }
+   }
+
+   - Re-add required imports (com.joyent.manta.client.MantaObject and com.joyent.manta.client.MantaUtils) where necessary to compile the wrapper.
+
+   - Mark the nested Part type as @Deprecated if you intend to phase it out, and document the replacement (MantaMultipartUploadPart) in Javadoc.
+
+3. Update all code and tests consistently:
+   - Existing internal code can be adjusted to use MantaMultipartUploadPart, but public library API should keep compatibility.
+   - Update unit tests to validate both types if compatibility wrapper is added.
+
+4. Document API change and versioning:
+   - If you intentionally want to break API, record this change in the release notes and bump the major/minor version following semantic versioning.
+   - If not intended, revert the public API change or add the compatibility wrapper.
+
+Suggested code-level actions (concrete)
+-------------------------------------
+- Ensure package-info.java is present, has correct package declaration and Javadoc, and is commited (the patch already contains it; verify it is in the same commit on CI).
+- Add wrapper nested class Part to MantaMultipartUpload.java (see snippet above).
+- Reintroduce imports if you add the wrapper that uses MantaObject/MantaUtils:
+  import com.joyent.manta.client.MantaObject;
+  import com.joyent.manta.client.MantaUtils;
+- Run checkstyle locally to confirm:
+  mvn org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check
+
+- Run full build:
+  mvn -DskipTests=true -Dmaven.javadoc.skip=true install
+
+Tests to validate
+-----------------
+- Local: run the maven command above and confirm no checkstyle violations.
+- Unit tests: run mvn test (after ensuring compatibility wrapper is present).
+- Integration: confirm other modules in repo (or downstream projects) compile against the built artifact without source-breaking errors.
+
+Risk and follow-up
+------------------
+- If you keep the API change as-is (remove nested class), expect breaking changes and need to publish a major or minor version with clear migration instructions.
+- If you re-introduce the nested wrapper, be careful to keep behavior and equals/hashCode/serialization compatibility that users might rely on.
+- Consider adding CI check that a package-info.java is present for packages enforced by Checkstyle before merging such refactors to avoid flapping merges.
+
+Files to inspect/patch (from the diff)
+-------------------------------------
+- Added: java-manta-client/src/main/java/com/joyent/manta/client/multipart/package-info.java (fixes JavadocPackage)
+- Added: java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartUploadPart.java (new top-level Part class)
+- Changed: java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartUpload.java (removed the inner Part class)
+- Changed: java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java (updated signatures to use MantaMultipartUploadPart)
+- Tests: updated test references to MantaMultipartUploadPart
+
+Conclusion
+----------
+The immediate CI failure is because Checkstyle detected a missing package-level Javadoc. The patch already contains package-info.java, so include/confirm it in the commit and re-run CI to fix that failure. However, the refactor that removed the nested class Part breaks the public API — to avoid breaking downstream users, either reintroduce a compatibility wrapper nested class (recommended) or treat the change as a breaking API bump with documentation and a version increase. If you want, I can prepare the wrapper-class patch and exact import edits to restore compatibility.

@@ -1,0 +1,92 @@
+**Bug Report: Build Failure - `Unsupported protocol` in SSLManager during Vertx TLS Client Test**
+
+**1. Title:**
+Build Failure: `Unsupported protocol` in SSLManager during `TestVertxTLSBuilder` execution.
+
+**2. Steps to Reproduce:**
+1.  Checkout the `apache/servicecomb-java-chassis` repository at commit `f21f483658e51b5ea2dc3a470d0c9b49f4b6eac6`.
+2.  Run the Maven build command: `mvn -B -Dcheckstyle.skip -Dspotbugs.skip=true clean install -Pit`
+3.  Observe the build failure during the `maven-surefire-plugin:3.0.0-M7:test` phase for the `foundation-vertx` module.
+
+**3. Triggering Input:**
+The bug is triggered when running the unit test `org.apache.servicecomb.foundation.vertx.TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory`. This test likely attempts to configure an SSL client without explicitly specifying a TLS protocol, or with an empty/invalid protocol string, leading to an `Unsupported protocol` error when `SSLManager.createSSLSocket` is invoked.
+
+**4. Expected Behavior:**
+The build should complete successfully, and all unit tests, including `TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory`, should pass. The SSL configuration should correctly handle cases where no specific TLS protocol is provided, defaulting to a supported version like TLSv1.2.
+
+**5. Observed Behavior:**
+The build fails during the execution of unit tests for the `foundation-vertx` module. Specifically, the test `org.apache.servicecomb.foundation.vertx.TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory` throws a `java.lang.IllegalArgumentException: Unsupported protocol`. This indicates that the underlying Java SSL/TLS implementation cannot create an `SSLSocket` with the protocol(s) it was configured to use.
+
+**6. Relevant Code Snippets:**
+The issue is in `foundations/foundation-ssl/src/main/java/org/apache/servicecomb/foundation/ssl/SSLManager.java`. The `getEnabledCiphers` method attempts to create an `SSLSocket` using protocols from `sslOption`. The original code directly used `sslOption.getProtocols()` without a null/empty check or a default value.
+
+```diff
+--- a/foundations/foundation-ssl/src/main/java/org/apache/servicecomb/foundation/ssl/SSLManager.java
++++ b/foundations/foundation-ssl/src/main/java/org/apache/servicecomb/foundation/ssl/SSLManager.java
+@@ -34,6 +34,8 @@ import javax.net.ssl.SSLSocketFactory;
+ import javax.net.ssl.TrustManager;
+ import javax.net.ssl.X509ExtendedTrustManager;
+ 
++import org.apache.commons.lang.StringUtils;
++
+ /**
+  * 根据传递的SSLOption构造SSL上下文。请参考JSSE获取相关API的层次参考。
+  *
+@@ -216,7 +218,11 @@ public final class SSLManager {
+ 
+   public static String[] getEnabledCiphers(SSLOption sslOption) {
+     SSLOption option = new SSLOption();
+-    option.setProtocols(sslOption.getProtocols());
++    if (StringUtils.isNotEmpty(sslOption.getProtocols())) {
++      option.setProtocols(sslOption.getProtocols());
++    } else {
++      option.setProtocols("TLSv1.2");
++    }
+     option.setCiphers(sslOption.getCiphers());
+     SSLCustom custom = SSLCustom.defaultSSLCustom();
+     SSLSocket socket = createSSLSocket(option, custom);
+```
+
+**7. Stack Traces:**
+```
+2022-11-01T08:05:17.7211906Z [ERROR] Tests run: 10, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.25 s <<< FAILURE! - in org.apache.servicecomb.foundation.vertx.TestVertxTLSBuilder
+2022-11-01T08:05:17.7212734Z [ERROR] org.apache.servicecomb.foundation.vertx.TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory  Time elapsed: 0.002 s  <<< ERROR!
+2022-11-01T08:05:17.7213715Z java.lang.IllegalArgumentException: Unsupported protocol
+2022-11-01T08:05:17.7214231Z 	at org.apache.servicecomb.foundation.ssl.SSLManager.createSSLSocket(SSLManager.java:183)
+2022-11-01T08:05:17.7214847Z 	at org.apache.servicecomb.foundation.ssl.SSLManager.getEnabledCiphers(SSLManager.java:222)
+2022-11-01T08:05:17.7215492Z 	at org.apache.servicecomb.foundation.vertx.VertxTLSBuilder.buildTCPSSLOptions(VertxTLSBuilder.java:157)
+2022-11-01T08:05:17.7216215Z 	at org.apache.servicecomb.foundation.vertx.VertxTLSBuilder.buildClientOptionsBase(VertxTLSBuilder.java:98)
+2022-11-01T08:05:17.7216940Z 	at org.apache.servicecomb.foundation.vertx.VertxTLSBuilder.buildHttpClientOptions(VertxTLSBuilder.java:91)
+2022-11-01T08:05:17.7217644Z 	at org.apache.servicecomb.foundation.vertx.VertxTLSBuilder.buildHttpClientOptions(VertxTLSBuilder.java:86)
+2022-11-01T08:05:17.7218432Z 	at org.apache.servicecomb.foundation.vertx.TestVertxTLSBuilder.testBuildHttpClientOptions_ssl_withFactory(TestVertxTLSBuilder.java:83)
+```
+
+**8. Patches / Suggested Fixes:**
+The provided code diff addresses the issue by ensuring a default protocol is set if `sslOption.getProtocols()` is empty. This prevents the `Unsupported protocol` error when no specific protocol is configured.
+
+```diff
+--- a/foundations/foundation-ssl/src/main/java/org/apache/servicecomb/foundation/ssl/SSLManager.java
++++ b/foundations/foundation-ssl/src/main/java/org/apache/servicecomb/foundation/ssl/SSLManager.java
+@@ -34,6 +34,8 @@ import javax.net.ssl.SSLSocketFactory;
+ import javax.net.ssl.TrustManager;
+ import javax.net.ssl.X509ExtendedTrustManager;
+ 
++import org.apache.commons.lang.StringUtils;
++
+ /**
+  * 根据传递的SSLOption构造SSL上下文。请参考JSSE获取相关API的层次参考。
+  *
+@@ -216,7 +218,11 @@ public final class SSLManager {
+ 
+   public static String[] getEnabledCiphers(SSLOption sslOption) {
+     SSLOption option = new SSLOption();
+-    option.setProtocols(sslOption.getProtocols());
++    if (StringUtils.isNotEmpty(sslOption.getProtocols())) {
++      option.setProtocols(sslOption.getProtocols());
++    } else {
++      option.setProtocols("TLSv1.2");
++    }
+     option.setCiphers(sslOption.getCiphers());
+     SSLCustom custom = SSLCustom.defaultSSLCustom();
+     SSLSocket socket = createSSLSocket(option, custom);
+```

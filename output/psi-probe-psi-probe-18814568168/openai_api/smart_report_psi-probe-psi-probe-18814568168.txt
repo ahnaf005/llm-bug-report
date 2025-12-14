@@ -1,0 +1,140 @@
+Title
+- Unit tests fail due to missing javax.transaction classes after dependency changes in pom.xml (NoClassDefFoundError: javax/transaction/SystemException and related mockit redefinition errors)
+
+Steps to Reproduce
+1. Check out the branch/commit that contains the provided code diff.
+2. Build and run tests with Java 21 (as in CI): ./mvnw test (or mvn test) on the repo root (psi-probe, run full build which runs psi-probe-core tests).
+3. Observe test failures in module psi-probe-core, specifically OpenEjbManagedDatasourceAccessorTest.
+
+Triggering Input / Conditions
+- The build under JDK 21.
+- The modified pom.xml (the diff shows the project dependencies and plugin changes), specifically:
+  - Removal of older openejb/persistence entries and addition of Apache Tomee (tomee.version) + openejb-api/openejb-core/openejb-loader/tomee-jdbc dependencies with exclusions.
+  - Removal of the jakarta.persistence dependency block.
+- Unit tests exercising OpenEJB-managed datasource accessors (OpenEjbManagedDatasourceAccessorTest) run with JMockit and attempt to retransform/mock classes that reference javax.transaction.* types.
+
+Expected Behavior
+- Tests run successfully (all tests in psi-probe-core should pass).
+- The OpenEjbManagedDatasourceAccessorTest should execute without ClassNotFound errors for javax.transaction.* types and without mockit instrumentation failures.
+
+Observed Behavior (from build log)
+- Multiple test errors in psi-probe-core:
+  - java.lang.NoClassDefFoundError: javax/transaction/SystemException
+    - Occurs early in OpenEjbManagedDatasourceAccessorTest, when some code/classloader attempts to load javax.transaction.SystemException.
+    - Caused by java.lang.ClassNotFoundException: javax.transaction.SystemException
+  - java.lang.IllegalArgumentException: No class with name "javax.transaction.Transaction" found
+    - Thrown from mockit internal class-loading logic when mockit tries to compute common superclasses while instrumentation/redefinition is performed.
+  - java.lang.InternalError: class redefinition failed: invalid class
+    - Raised by java.instrument during mockit retransformClasses call, triggered subsequently.
+
+Relevant excerpts from the build log (most relevant stack frames):
+- NoClassDefFoundError and ClassNotFoundException:
+  - 18:36:00.4276524Z java.lang.NoClassDefFoundError: javax/transaction/SystemException
+  - 18:36:00.4277956Z 	at java.base/java.lang.Class.forName0(Native Method)
+  - 18:36:00.4280344Z Caused by: java.lang.ClassNotFoundException: javax.transaction.SystemException
+  - 18:36:00.4283541Z 	at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:526)
+- IllegalArgumentException from mockit:
+  - 18:36:00.4541124Z java.lang.IllegalArgumentException: No class with name "javax.transaction.Transaction" found
+  - 18:36:00.4542865Z 	at mockit.internal.util.ClassLoad.loadClassFromAClassLoader(ClassLoad.java:70)
+  - ... (mockit internal stack frames computing common superclasses / bytecode manipulation)
+- InternalError class redefinition:
+  - 18:36:00.4469364Z java.lang.InternalError: class redefinition failed: invalid class
+  - 18:36:00.4470972Z 	at java.instrument/sun.instrument.InstrumentationImpl.retransformClasses0(Native Method)
+  - ... (mockit retransformClasses and other mockit internals)
+
+Overall test summary at end of build:
+- [ERROR] Errors: OpenEjbManagedDatasourceAccessorTest.getInfoTest, .canMapTest, .cannotMapTest (3 errors)
+- BUILD FAILURE for psi-probe-core, causing whole build to fail.
+
+Relevant Code Snippets (from the diff)
+1) pom.xml changes that likely triggered the missing class situation (removed persistence/openejb version lines, added tomee, changed openejb dependency layout):
+
+- Removed openejb.version and persistence.version, added tomee.version:
+  - (diff excerpt)
+    - -        <openejb.version>8.0.16</openejb.version>
+    - -        <persistence.version>2.2.3</persistence.version>
+    +        <tomee.version>8.0.16</tomee.version>
+
+- Removed jakarta.persistence dependency block (note: jakarta.persistence provided javax <-> jakarta package mapping changed):
+  - diff shows the following block removed (paraphrased):
+    - Removed dependency:
+      - groupId: org.eclipse.persistence
+      - artifactId: jakarta.persistence
+      - version: ${persistence.version}
+
+- Added Tomee / OpenEJB dependencies (but with exclusions):
+  - Added:
+    - <dependency>
+        <groupId>org.apache.tomee</groupId>
+        <artifactId>openejb-api</artifactId>
+        <version>${tomee.version}</version>
+        <exclusions> ... </exclusions>
+      </dependency>
+    - <dependency>
+        <groupId>org.apache.tomee</groupId>
+        <artifactId>openejb-core</artifactId>
+        <version>${tomee.version}</version>
+        <exclusions>
+          <exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion>
+        </exclusions>
+      </dependency>
+    - plus openejb-loader and tomee-jdbc dependencies were added.
+
+2) Tests were modified to import different pooling libs (many test files switched from ComboPooledDataSource to HikariDataSource), but the failing tests are in the OpenEJB area.
+
+Why this is causing the observed failures
+- The errors indicate that code or test code attempts to load classes from package javax.transaction.* (javax.transaction.SystemException, javax.transaction.Transaction) but those classes are not present on the test classpath.
+- The pom changes removed or altered dependencies that previously supplied the javax.transaction API (or related libraries). The project still includes jakarta.transaction-api (if present) — but jakarta.transaction packages are jakarta.transaction.*, not javax.transaction.*. Tests and/or OpenEJB-managed classes are expecting the legacy javax.transaction package names, hence ClassNotFoundException.
+- mockit instrumentation tries to inspect / retransform classes and compute common superclasses; while doing so, it tries to load javax.transaction.Transaction and fails, causing IllegalArgumentException and subsequent instrumentation InternalError (class redefinition failed).
+
+Suggested Patches / Fixes
+1) Quick patch (recommended, minimal change)
+- Add the legacy javax.transaction API artifact so tests that reference javax.transaction.* compile and run.
+- Edit pom.xml (likely in the top-level pom or psi-probe-core pom) and add:
+
+  <dependency>
+    <groupId>javax.transaction</groupId>
+    <artifactId>javax.transaction-api</artifactId>
+    <version>1.3</version> <!-- or 1.3.3 if you prefer -->
+    <scope>test</scope> <!-- or provided if the runtime container supplies it; test will get it onto the test classpath -->
+  </dependency>
+
+- Place this dependency in the module where OpenEjbManagedDatasourceAccessorTest runs (psi-probe-core). Alternatively add it to the parent pom so all modules see it.
+- Rationale: The tests (and mockit) are trying to load javax.transaction classes; adding the legacy API artifact restores those classes on the test classpath and removes the ClassNotFoundException and mockit redefinition cascade.
+
+2) Better/longer-term alternatives
+- Migrate the OpenEJB / code/tests to use jakarta.transaction.* instead of javax.transaction.* (major refactor).
+  - This requires updating code, tests, and mocking expectations to use jakarta.* package names and ensuring all dependencies (OpenEJB/Tomee artifacts) use the Jakarta namespace.
+- If moving to jakarta packages, ensure all libraries (OpenEJB/Tomee) and test code are consistent with Jakarta EE namespaces (note — migration is non-trivial).
+- Alternatively, add a compatibility bridge that provides javax.* classes mapped to jakarta.* equivalents (but adding the javax.transaction-api artifact is the simpler and safe bridging approach in test scope).
+
+3) Fix exclusions/packaging in the new Tomee/openejb dependency additions
+- The diff shows openejb-core was added with a broad wildcard exclusion (exclusion of <groupId>*<artifactId>*). That's very suspicious — it effectively excludes almost everything from that dependency's transitive set and might have removed the previously available javax.transaction classes. Review and tighten exclusions to exclude only intended modules (rather than wildcard).
+- Example: revert wildcard exclusions and only exclude specific artifacts known to cause conflicts (commons-logging, slf4j-jdk14, etc.) — do not exclude the core JTA API packages.
+
+Concrete patch suggestion (example snippet to add to psi-probe-core/pom.xml or parent pom):
+- Add under <dependencies> (preferably in psi-probe-core where tests run):
+
+  <dependency>
+    <groupId>javax.transaction</groupId>
+    <artifactId>javax.transaction-api</artifactId>
+    <version>1.3</version>
+    <scope>test</scope>
+  </dependency>
+
+- Or, if the runtime container will provide the API in production, use <scope>provided</scope> instead of test.
+
+Notes and Rationale
+- The build errors clearly show mockit failing when trying to inspect types that are not available due to package/name differences. Since the failing name is javax.transaction.SystemException and javax.transaction.Transaction, and the diff replaced/removed persistence/openejb artifacts while introducing Tomee in a way that altered transitive dependencies, the fastest fix is to reintroduce the javax.transaction API artifact on the test classpath.
+- The diff also shows multiple other dependency and code changes (byte-buddy, jmockit version tweaks, adding openejb-api/openejb-core/openejb-loader, switching tests to Hikari, etc.) — if additional failing tests surface after solving the javax.transaction missing class, similar dependency/classpath fixes or test updates may be necessary.
+- Avoid using wildcard exclusions in the openejb/openejb-core dependency — it is likely to remove important transitive dependencies unexpectedly, including APIs used by tests.
+
+Follow-up actions / checks
+- After adding the javax.transaction-api dependency (or correcting openejb exclusions), run:
+  - ./mvnw -T1C test -DskipITs (or simply ./mvnw test) and confirm OpenEjbManagedDatasourceAccessorTest passes and mockit does not throw redefinition errors.
+- Review other tests that were previously passing — the pom changes are broad and may have removed other transitive APIs; run the full test suite to confirm.
+- If the project intends to adopt Jakarta namespace (jakarta.transaction.*) across the codebase, schedule a dedicated codemod and dependency migration (this is a broader change).
+
+If you want, I can:
+- Produce the exact patch (pom.xml fragment) to add the javax.transaction-api dependency in the proper module (parent vs psi-probe-core).
+- Inspect the openejb/openejb-core exclusion list in more detail and propose a corrected exclusions block that retains JTA API classes.

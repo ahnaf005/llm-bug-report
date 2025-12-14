@@ -1,0 +1,4 @@
+gemini_simple: 64.70606590530575
+gemini_smart: 67.24604410525333
+openai_simple: 60.72251468199427
+openai_smart: 50.7674184036793

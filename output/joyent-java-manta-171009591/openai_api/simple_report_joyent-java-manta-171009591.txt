@@ -1,0 +1,94 @@
+Title: CI build fails due to Checkstyle violation (TodoComment) in MantaMultipartManager.java
+
+Summary
+- The Maven build in CI fails during the checkstyle phase with a TodoComment violation:
+  src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[641] (misc) TodoComment: Comment matches to-do format 'TODO:'.
+- This breaks the build (mvn install) and prevents the PR from merging.
+- The attached patch modifies Manta multipart handling and test names; one or more TODO style comments remain in MantaMultipartManager.java (or were reintroduced elsewhere in that file), which triggers the Checkstyle rule.
+
+Affected components
+- java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java
+- CI build (Travis) / maven-checkstyle-plugin
+
+Severity
+- High: CI build is failing (blocking merges).
+
+Build log excerpts (relevant part)
+- mvn install fails with:
+  [ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[641] (misc) TodoComment: Comment matches to-do format 'TODO:'.
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation.
+
+Reproduction steps
+1. Checkout the branch / apply the patch used in the PR.
+2. Ensure JDK 8 and Maven 3.x are installed (CI environment used oraclejdk8).
+3. Run:
+   mvn install -DskipTests=true -Dmaven.javadoc.skip=true
+4. The build will fail in the checkstyle phase with the TodoComment violation shown above.
+
+Observed behavior
+- The maven-checkstyle-plugin fails the build because it found a comment using the "TODO" token that matches the configured TodoComment check.
+
+Expected behavior
+- The build should pass checkstyle. The code changes in the PR should not include TODO comments matching the "TODO:" pattern, or there should be a valid suppression or justification for them.
+
+Root cause analysis / Findings
+- The Checkstyle TodoComment rule flags comments containing the TODO keyword. The build-time error identifies MantaMultipartManager.java at line 641 as containing such a comment.
+- The provided diff shows that at least one TODO comment was removed in the new code ("// TODO: Validate parts and match up etags with path"), but the checkstyle error indicates that at least one other TODO-style comment still exists in MantaMultipartManager.java (either in lines not included in the diff excerpt, or new TODO-style text was added or left behind as part of the changes).
+- Because the check is enforced globally during the maven build, any remaining TODO-style comment anywhere under src/main/java will cause the build to fail.
+
+Secondary observations in the diff (non-blocking but worth reviewing)
+- The new logic builds a HashMap of parts by ETag:
+    listStream.forEach(p -> listing.put(p.getEtag(), p));
+  - If multiple parts have the same ETag (unlikely but possible), this will keep only the last one. If uniqueness of etag is an assumption, consider asserting it or documenting behavior.
+- partsStream.sorted().forEach(...) is used; this assumes MantaMultipartUploadTuple implements Comparable with the intended ordering, otherwise the sort is a no-op / may cause unexpected order.
+- Using AtomicInteger for part count inside a stream forEach is functional but introduces side-effects; consider doing collection + size checks or using limit/peek patterns to keep logic clearer.
+- The code throws IllegalArgumentException from inside a lambda passed to forEach. That's valid but can make the stack traces less obvious. Consider throwing a specific unchecked exception or validating before streaming.
+- The equals() / hashCode() overrides were removed from MantaMultipartUploadPart.java in the patch. Removing these can change behavior in collections / tests that rely on value equality. Ensure this was intentional (and that tests have been updated accordingly).
+
+Suggested fixes
+Primary fix (to unblock CI):
+1. Remove or change any "TODO" comments in src/main/java (MantaMultipartManager.java in particular) so they don't match the Checkstyle TodoComment pattern.
+   - Replace "TODO:" with a non-TODO phrasing, e.g. "NOTE:" or "REVIEW:" plus a short explanation or an issue tracker reference (preferred: a JIRA/issue link).
+   - Or implement the work item the TODO refers to (preferred when feasible).
+   - Alternatively, if a TODO must remain, add an explicit Checkstyle suppression with justification — but suppression is discouraged for new code.
+
+Example quick fix (edit the file at the flagged location):
+- Change:
+    // TODO: Validate parts and match up etags with path
+  To:
+    // NOTE: Parts are validated below; if further validation is required file an issue: <ISSUE-1234>
+
+2. Re-run locally:
+   mvn -DskipTests=true -Dmaven.javadoc.skip=true install
+   or
+   mvn checkstyle:check
+   Ensure no TodoComment violations are reported.
+
+Additional recommended improvements (optional)
+- Add a unit test or static analysis check to ensure no TODO comments are committed (if not already enforced).
+- Consider validating uniqueness of ETags when creating the listing map and failing with a clear error if duplicate etags are encountered.
+- Consider collecting the stream into a List first, validate size and etag presence, then assemble jobExecText — this is clearer and avoids side effects inside forEach.
+- If equals/hashCode removal was accidental, restore them or ensure downstream code/tests do not rely on value semantics.
+
+Patch guidance
+- Locate the TODO comment at or near line 641 in MantaMultipartManager.java and change/remove it. The build log gives the exact location: src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[641].
+- After editing, run:
+  mvn -DskipTests=true -Dmaven.javadoc.skip=true install
+  to confirm fix.
+
+Why this blocks the PR
+- The repository enforces Checkstyle during the build. Any violation fails the build and prevents the CI job from completing successfully — this is what happened. Fixing the TODO comment(s) will allow the build to proceed to later phases.
+
+If you want, I can:
+- Propose an exact one-line replacement for the TODO comment if you paste the around-641 code context, or
+- Create a small patch that replaces all TODO tokens in src/main/java with NOTE and run the check locally (I can simulate recommended patch text here).
+
+Summary of actionable items
+1. Remove/replace the TODO comment at MantaMultipartManager.java:641 (and any other TODO comments in src/main/java).
+2. Re-run maven checkstyle locally to confirm.
+3. Optionally review the other code changes in the patch for:
+   - uniqueness of ETags,
+   - side-effects in streams,
+   - equals/hashCode removal in MantaMultipartUploadPart.java.
+
+If you want, I can draft the precise code diff to remove/replace the TODO comment and/or create a follow-up patch addressing the secondary observations.

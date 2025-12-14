@@ -1,0 +1,75 @@
+## Software Bug Report
+
+**Bug ID:** TRACCAR-BUILD-222703226-001
+**Title:** Build Failure: Checkstyle Unused Import in `ReportUtils.java`
+
+**Status:** Open (Build Failed)
+**Severity:** High
+**Priority:** High (Blocks continuous integration and deployment)
+
+**Component/Module:** `traccar` project, `src/org/traccar/reports`
+**Affected Version:** `3.11-SNAPSHOT` (at commit `136a302846ad340f6babaa5f0f35018d867f73e8`)
+
+**Environment:**
+*   **Build System:** Travis CI
+*   **Worker Hostname:** `i-0234af4-precise-production-2-worker-org-docker.travisci.net`
+*   **Operating System:** Ubuntu 12.04.5 LTS (Precise)
+*   **Linux Kernel:** 3.13.0-29-generic
+*   **Java Version:** OpenJDK 1.7.0_75 (IcedTea 2.5.4)
+*   **Maven Version:** Apache Maven 3.2.5
+*   **Git Commit (Failing):** `136a302846ad340f6babaa5f0f35018d867f73e8`
+
+**Reproducibility:** Always (Failed 3 out of 3 retries)
+
+**Description:**
+The Travis CI build for the `traccar` project is failing during the `mvn install` phase. The failure is consistently caused by a Checkstyle violation related to an unused import statement in the `ReportUtils.java` file.
+
+**Steps to Reproduce:**
+1.  Clone the `traccar` repository: `git clone https://github.com/tananaev/traccar.git`
+2.  Navigate into the repository directory: `cd traccar`
+3.  Checkout the failing commit: `git checkout 136a302846ad340f6babaa5f0f35018d867f73e8`
+4.  Execute the Maven install command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+**Expected Result:**
+The Maven build should complete successfully, indicating no Checkstyle violations and a successful installation of the project artifacts.
+
+**Actual Result:**
+The Maven build fails with the following error message, indicating a Checkstyle `UnusedImports` violation:
+
+```
+[ERROR] src/org/traccar/reports/ReportUtils.java:[29,8] (imports) UnusedImports: Unused import - org.traccar.helper.Log.
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project traccar: You have 1 Checkstyle violation. -> [Help 1]
+```
+
+**Root Cause Analysis:**
+The build log clearly indicates that the `maven-checkstyle-plugin` (version 2.17) detected an `UnusedImports` violation in `src/org/traccar/reports/ReportUtils.java` at line 29, column 8. The specific unused import is `org.traccar.helper.Log`.
+
+The provided `CODE DIFF` shows the changes between a `passed_sha` (`a1d91f3b8a80758d5f3e7804afec66256ab27e68`) and the `failed_sha` (`136a302846ad340f6babaa5f0f35018d867f73e8`). Interpreting the diff in the context of fixing the failing build:
+*   The `--- a/src/org/traccar/reports/ReportUtils.java` represents the state of the file in the `failed_sha`.
+*   The `+++ b/src/org/traccar/reports/ReportUtils.java` represents the state of the file in the `passed_sha`.
+
+The diff for `src/org/traccar/reports/ReportUtils.java` shows:
+```diff
+--- a/src/org/traccar/reports/ReportUtils.java
++++ b/src/org/traccar/reports/ReportUtils.java
+@@ -26,7 +26,6 @@ import org.jxls.transform.Transformer;
+ import org.jxls.transform.poi.PoiTransformer;
+ import org.jxls.util.TransformerFactory;
+ import org.traccar.Context;
+-import org.traccar.helper.Log;
+ import org.traccar.model.Position;
+ 
+ import java.io.IOException;
+```
+This indicates that the line `-import org.traccar.helper.Log;` was present in the `failed_sha` (the `a/` side of the diff) and was subsequently removed in the `passed_sha` (the `b/` side of the diff). This confirms that the `failed_sha` indeed contained the unused import statement, which triggered the Checkstyle failure.
+
+Additionally, the `CODE DIFF` also shows changes in `test/org/traccar/reports/ReportUtilsTest.java`, specifically in the `testCalculateSpentFuel` method. The original test assertions expected string values like `"-"` or `"0.02 %"`, while the updated test expects `null` or `"0.2"`. This suggests a change in the return type or formatting logic of the `ReportUtils.calculateFuel` method, which is a related but separate change from the unused import.
+
+**Proposed Solution:**
+To resolve this specific build failure, the unused import statement `import org.traccar.helper.Log;` should be removed from `src/org/traccar/reports/ReportUtils.java`. This change is already reflected in the `passed_sha` provided in the diff.
+
+**Additional Notes:**
+The changes in `test/org/traccar/reports/ReportUtilsTest.java` indicate a modification to the `calculateFuel` method's behavior. While not directly causing the Checkstyle error, it's important to ensure that the `calculateFuel` method's implementation aligns with the new test expectations and that the `Log` import was indeed no longer needed after these or other related code changes.

@@ -1,0 +1,106 @@
+## Bug Report: Checkstyle Javadoc Missing for FieldProxy.java Constructors
+
+### 1. Title
+Build Failure: Checkstyle Javadoc Missing for `FieldProxy.java` Constructors
+
+### 2. Steps to Reproduce
+1.  Clone the `raphw/byte-buddy` repository.
+2.  Checkout the specific commit `14f2faaea3331b0f0ce5cbe2f53d2b7aaf48015a`.
+3.  Execute the Maven build command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+### 3. Triggering Input
+The bug is triggered by the absence of Javadoc comments for two constructors within the `net.bytebuddy.implementation.bind.annotation.FieldProxy.java` file, which violates the project's Checkstyle rules.
+
+### 4. Expected Behavior
+The Maven build should complete successfully, indicating that all code adheres to the defined Checkstyle rules, including Javadoc requirements for all public and protected members.
+
+### 5. Observed Behavior
+The Maven build fails during the `maven-checkstyle-plugin:2.17:check` goal for the `byte-buddy-dep` project. The build log explicitly reports two "Missing a Javadoc comment" errors for constructors in `net.bytebuddy.implementation.bind.annotation.FieldProxy.java`.
+
+**Error Messages:**
+```
+/home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/FieldProxy.java:225:9: error: Missing a Javadoc comment.
+/home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/FieldProxy.java:229:9: error: Missing a Javadoc comment.
+Audit done.
+...
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (default) on project byte-buddy-dep: Failed during checkstyle execution: There are 2 errors reported by Checkstyle 6.11.2 with checkstyle.xml ruleset. -> [Help 1]
+```
+
+### 6. Relevant Code Snippets
+The following code snippets from `net/bytebuddy/implementation/bind/annotation/FieldProxy.java` are missing Javadoc comments, causing the Checkstyle errors:
+
+```java
+// ... (lines 222-224)
+         private final FieldResolver.Factory fieldResolverFactory;
+ 
+         protected Binder(MethodDescription.InDefinedShape getterMethod, MethodDescription.InDefinedShape setterMethod) { // Line 225
+             this(new FieldResolver.Factory.Simplex(getterMethod, setterMethod));
+         }
+ 
+         protected Binder(TypeDescription proxyType, MethodDescription.InDefinedShape getterMethod, MethodDescription.InDefinedShape setterMethod) { // Line 229
+             this(new FieldResolver.Factory.Duplex(proxyType, getterMethod, setterMethod));
+         }
+// ...
+```
+
+### 7. Stack Traces
+```
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary:
+[INFO] 
+[INFO] Byte Buddy (parent) ................................ SUCCESS [ 31.697 s]
+[INFO] Byte Buddy Java agent .............................. SUCCESS [ 21.788 s]
+[INFO] Byte Buddy (with dependencies) ..................... FAILURE [ 12.723 s]
+[INFO] Byte Buddy (without dependencies) .................. SKIPPED
+[INFO] Byte Buddy benchmarks .............................. SKIPPED
+[INFO] Byte Buddy for Android ............................. SKIPPED
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time: 01:28 min
+[INFO] Finished at: 2016-08-04T08:13:51+00:00
+[INFO] Final Memory: 33M/494M
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (default) on project byte-buddy-dep: Failed during checkstyle execution: There are 2 errors reported by Checkstyle 6.11.2 with checkstyle.xml ruleset. -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException
+[ERROR] 
+[ERROR] After correcting the problems, you can resume the build with the command
+[ERROR]   mvn <goals> -rf :byte-buddy-dep
+```
+
+### 8. Patches / Suggested Fixes
+The provided code diff includes the necessary Javadoc comments to resolve the issue:
+
+```diff
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/FieldProxy.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bind/annotation/FieldProxy.java
+@@ -222,10 +222,23 @@ public @interface FieldProxy {
+          */
+         private final FieldResolver.Factory fieldResolverFactory;
+ 
++        /**
++         * Creates a new binder for a {@link FieldProxy} in simplex mode.
++         *
++         * @param getterMethod The getter method.
++         * @param setterMethod The setter method.
++         */
+         protected Binder(MethodDescription.InDefinedShape getterMethod, MethodDescription.InDefinedShape setterMethod) {
+             this(new FieldResolver.Factory.Simplex(getterMethod, setterMethod));
+         }
+ 
++        /**
++         * Creates a new binder for a {@link FieldProxy} in duplex mode.
++         *
++         * @param proxyType    The proxy type.
++         * @param getterMethod The getter method.
++         * @param setterMethod The setter method.
++         */
+         protected Binder(TypeDescription proxyType, MethodDescription.InDefinedShape getterMethod, MethodDescription.InDefinedShape setterMethod) {
+             this(new FieldResolver.Factory.Duplex(proxyType, getterMethod, setterMethod));
+         }
+```

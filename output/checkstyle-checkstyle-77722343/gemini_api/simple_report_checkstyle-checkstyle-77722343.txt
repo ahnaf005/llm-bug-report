@@ -1,0 +1,98 @@
+## Software Bug Report
+
+**Bug ID:** CS-BUILD-20150828-001 (Placeholder)
+**Title:** Build Failure: Checkstyle reports 'Redundant public modifier' after `public` keyword removal in `EqualsAvoidNullCheck.java`
+
+**Severity:** High (Build Failure)
+**Priority:** High
+**Status:** New
+**Reporter:** [Your Name/Role]
+**Date Reported:** 2024-06-26
+
+---
+
+### 1. Description
+
+The CI build for the `checkstyle` project is failing at commit `da6ebe6de41b7a5afc6f6746ff0c238c2a4be0f`. The failure is caused by the Checkstyle tool, which reports a "Redundant 'public' modifier" error in the `EqualsAvoidNullCheck.java` file.
+
+The critical observation is that the code change introduced in this failing commit (relative to the previously passing commit `1e7ae5866daead0d81be2bfcf7febbd1ca0fcbd8`) *removed* the `public` modifier from the constructor at the exact line reported by Checkstyle. This creates a contradiction: removing a `public` modifier should logically *resolve* a "Redundant 'public' modifier" error, not cause the build to fail with it.
+
+This suggests either:
+1.  A misconfiguration in the Checkstyle rules that incorrectly flags the absence of a `public` modifier as a "redundant public" error.
+2.  A bug in the Checkstyle tool itself, leading to an incorrect error message or analysis.
+3.  A change in Checkstyle configuration between the `passed_sha` and `failed_sha` that now enforces a different access modifier for this constructor, and the error message is misleading.
+
+### 2. Steps to Reproduce
+
+1.  Clone the `checkstyle/checkstyle` repository.
+2.  Checkout the failing commit: `git checkout da6ebe6de41b7a5afc6f6746ff0c238c2a4be0f`
+3.  Execute the build command: `mvn clean verify -DskipTests -DskipITs -Dpmd.skip=true -Dfindbugs.skip=true -Dcobertura.skip=true`
+
+### 3. Expected Behavior
+
+The build should pass. The code change removed the `public` modifier from the `FieldFrame` constructor. If a "Redundant 'public' modifier" error was present before, this change should have resolved it. If no such error was present, removing `public` should not introduce an error with this specific message.
+
+### 4. Actual Behavior
+
+The build fails with the following error from Checkstyle:
+```
+[checkstyle] /home/travis/build/checkstyle/checkstyle/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java:489:9: Redundant 'public' modifier.
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-antrun-plugin:1.8:run (ant-phase-verify) on project checkstyle: An Ant BuildException has occured: The following error occurred while executing this line:
+[ERROR] /home/travis/build/checkstyle/checkstyle/config/ant-phase-verify.xml:50: Checkstyle failed: Got 1 errors and 0 warnings.
+```
+
+### 5. Environment
+
+*   **Operating System:** Ubuntu 12.04.5 LTS
+*   **Linux Kernel:** 3.13.0-29-generic
+*   **Java Version:** OpenJDK Runtime Environment (IcedTea 2.5.4) (7u75-2.5.4-1~precise1), OpenJDK 64-Bit Server VM (build 24.75-b04, mixed mode)
+*   **Maven Version:** Apache Maven 3.2.5
+*   **Checkstyle Version:** 6.10-SNAPSHOT (as reported in build log)
+*   **Git SHAs:**
+    *   **Passed SHA:** `1e7ae5866daead0d81be2bfcf7febbd1ca0fcbd8`
+    *   **Failed SHA:** `da6ebe6de41b7a5afc6f6746ff0c238c2a4be0f`
+
+### 6. Relevant Code Diff
+
+The following diff shows the change from `passed_sha` to `failed_sha` in the file `src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java`:
+
+```diff
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java
+@@ -486,7 +486,7 @@ public class EqualsAvoidNullCheck extends Check {
+          * Creates new frame.
+          * @param parent parent frame.
+          */
+-        public FieldFrame(FieldFrame parent) {
++        FieldFrame(FieldFrame parent) {
+             this.parent = parent;
+         }
+ 
+```
+As seen above, the `public` modifier was removed from the `FieldFrame` constructor at line 489.
+
+### 7. Build Log Snippet (Error Section)
+
+```
+[INFO] --- maven-antrun-plugin:1.8:run (ant-phase-verify) @ checkstyle ---
+[INFO] Executing tasks
+
+main:
+
+execute:
+     [echo] Checkstyle started: 28/08/2015 07:00:27 PM
+[checkstyle] Running Checkstyle 6.10-SNAPSHOT on 687 files
+[checkstyle] /home/travis/build/checkstyle/checkstyle/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java:489:9: Redundant 'public' modifier.
+     [echo] Checkstyle finished: 28/08/2015 07:01:36 PM
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time: 01:40 min
+[INFO] Finished at: 2015-08-28T19:01:36+00:00
+[INFO] Final Memory: 42M/482M
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-antrun-plugin:1.8:run (ant-phase-verify) on project checkstyle: An Ant BuildException has occured: The following error occurred while executing this line:
+[ERROR] /home/travis/build/checkstyle/checkstyle/config/ant-phase-verify.xml:50: Checkstyle failed: Got 1 errors and 0 warnings.
+[ERROR] around Ant part ...<ant antfile="config/ant-phase-verify.xml"/>... @ 7:47 in /home/travis/build/checkstyle/checkstyle/target/antrun/build-main.xml
+[ERROR] -> [Help 1]
+```

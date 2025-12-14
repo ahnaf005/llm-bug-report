@@ -1,0 +1,206 @@
+Here's a detailed bug report based on the provided build log and code diff:
+
+---
+
+## Bug Report: Inconsistent Module Extraction Results in `TutorialSnippetsTestCase`
+
+### 1. Title
+`TutorialSnippetsTestCase.testModularizationWithAtomicDecomposition` Fails Due to Inconsistent Module Extraction Results
+
+### 2. Steps to Reproduce
+1.  Checkout the repository at commit `c391f19dfc7d99d0ed31b9bfcf2d17bdcdeabd5c`.
+2.  Navigate to the project root directory.
+3.  Execute the Maven `verify` phase: `mvn verify`
+
+### 3. Triggering Input
+The test `testModularizationWithAtomicDecomposition` in `TutorialSnippetsTestCase.java` attempts to extract a module from the `koala.owl` ontology. The seed signature for the module extraction includes the `Quokka` class and its subclasses.
+
+Specifically, the test compares the output of two module extraction methods:
+*   `getTraditionalModule`: Uses `SyntacticLocalityModuleExtractor` with `ModuleType.STAR`.
+*   `getADModule`: Uses `AtomicDecompositionImpl` to get a module with `ModuleType.STAR`.
+
+### 4. Expected Behavior
+The `testModularizationWithAtomicDecomposition` test should pass, indicating that the set of axioms extracted by `getADModule` is identical to the set of axioms extracted by `getTraditionalModule` for the given ontology and seed signature.
+
+### 5. Observed Behavior
+The `testModularizationWithAtomicDecomposition` test fails with an `AssertionError`. The module extracted by `getADModule` (the "but was" part) contains additional axioms, such as `Declaration` and `AnnotationAssertion`, that are not present in the module extracted by `getTraditionalModule` (the "expected" part). This indicates a discrepancy in how the two module extraction methods handle or include certain types of axioms.
+
+**Error Message Snippet:**
+```
+Failed tests:
+  TutorialSnippetsTestCase.testModularizationWithAtomicDecomposition:642 expected:<[FunctionalDataProperty(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking>), DataPropertyRange(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking> xsd:boolean), DisjointClasses(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Marsupials> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Person>), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal> ObjectExactCardinality(1 <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> owl:Thing)), FunctionalObjectProperty(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender>), ClassAssertion(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Degree> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#PhD>), ClassAssertion(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Degree> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#BA>), ClassAssertion(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Degree> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#BS>), ClassAssertion(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Degree> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#MA>), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal> ObjectMinCardinality(1 <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasHabitat> owl:Thing)), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Quokka> DataHasValue(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking> "true"^^xsd:boolean)), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Quokka> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Marsupials>), DataPropertyDomain(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Person>), EquivalentClasses(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Male> ObjectHasValue(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#male>) ), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Marsupials> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>), ClassAssertion(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Gender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#male>), ClassAssertion(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Gender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#female>), ObjectPropertyRange(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Gender>), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Person> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>), ObjectPropertyDomain(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasHabitat> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>), ObjectPropertyDomain(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>), EquivalentClasses(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Female> ObjectHasValue(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#female>) ), ObjectPropertyRange(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasHabitat> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Habitat>)]> but was:<[FunctionalDataProperty(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking>), DataPropertyRange(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking> xsd:boolean), Declaration(ObjectProperty(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender>)), Declaration(Class(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Marsupials>)), AnnotationAssertion(owl:versionInfo <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal> "1.1"^^xsd:string), Declaration(Class(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>)), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal> ObjectExactCardinality(1 <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> owl:Thing)), EquivalentClasses(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Female> ObjectHasValue(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#female>) ), FunctionalObjectProperty(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender>), DisjointClasses(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Marsupials> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Person>), Declaration(Class(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Person>)), AnnotationAssertion(rdfs:seeAlso <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal> "Male"^^xsd:string), Declaration(Class(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Female>)), EquivalentClasses(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Male> ObjectHasValue(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#male>) ), Declaration(DataProperty(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking>)), ObjectPropertyDomain(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasHabitat> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Marsupials> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>), Declaration(Class(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Male>)), Declaration(Class(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Quokka>)), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Quokka> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Marsupials>), DataPropertyDomain(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Person>), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Quokka> DataHasValue(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#isHardWorking> "true"^^xsd:boolean)), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Person> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>), Declaration(ObjectProperty(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasHabitat>)), SubClassOf(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal> ObjectMinCardinality(1 <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasHabitat> owl:Thing)), ObjectPropertyDomain(<http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#hasGender> <http://protege.stanford.edu/plugins/owl/owl-library/koala.owl#Animal>)]>
+```
+
+### 6. Relevant Code Snippets
+The failing test and related helper methods from `contract/src/test/java/uk/ac/manchester/owl/owlapi/tutorialowled2011/TutorialSnippetsTestCase.java` (before the patch):
+
+```java
+// Imports for AtomicDecomposition and AtomicDecompositionImpl were present
+// import uk.ac.manchester.cs.atomicdecomposition.AtomicDecomposition;
+// import uk.ac.manchester.cs.atomicdecomposition.AtomicDecompositionImpl;
+
+@Test
+public void testModularizationWithAtomicDecomposition() throws OWLException {
+    OWLOntologyManager m = create();
+    OWLOntology o = loadPizzaOntology(m);
+    // extract a module for all toppings.
+    // start by creating a signature that consists of "Quokka".
+    OWLClass quokkaCls = df.getOWLClass(KOALA_IRI + "#Quokka");
+    Set<OWLEntity> sig = new HashSet<>();
+    sig.add(quokkaCls);
+    // We now add all subclasses (direct and indirect) of the chosen
+    // classes.
+    OWLReasoner reasoner = reasonerFactory.createNonBufferingReasoner(o);
+    Set<OWLEntity> seedSig = asUnorderedSet(sig.stream().filter(e -> e.isOWLClass())
+        .flatMap(e -> reasoner.getSubClasses(e.asOWLClass(), false).entities()));
+    seedSig.addAll(sig);
+    // We now extract a locality-based module. STAR provides the smallest
+    // ones
+    Set<OWLAxiom> mod = getADModule(o, sig);
+    assertNotNull(mod);
+    assertEquals(mod, getTraditionalModule(m, o, seedSig)); // This is line 642
+}
+
+protected Set<OWLAxiom> getTraditionalModule(OWLOntologyManager m, OWLOntology o, Set<OWLEntity> seedSig) {
+    SyntacticLocalityModuleExtractor sme = new SyntacticLocalityModuleExtractor(m, o, ModuleType.STAR);
+    Set<OWLAxiom> mod = sme.extract(seedSig);
+    return mod;
+}
+
+protected Set<OWLAxiom> getADModule(OWLOntology o, Set<OWLEntity> sig) {
+    AtomicDecomposition ad = new AtomicDecompositionImpl(o);
+    Set<OWLAxiom> mod = asSet(ad.getModule(sig.stream(), false, ModuleType.STAR));
+    return mod;
+}
+```
+
+### 7. Stack Traces
+The build log indicates a `MojoFailureException` from the `maven-surefire-plugin` due to test failures. The most relevant part of the "stack trace" is the JUnit assertion failure message itself, as provided in the "Observed Behavior" section.
+
+```
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.18.1:test (default-test) on project owlapi-contract: There are test failures.
+[ERROR] 
+[ERROR] Please refer to /home/travis/build/owlcs/owlapi/contract/target/surefire-reports for the individual test results.
+[ERROR] -> [Help 1]
+```
+
+### 8. Patches / Suggested Fixes
+The provided code diff indicates that the `testModularizationWithAtomicDecomposition` test and its associated helper methods (`getTraditionalModule`, `getADModule`) were removed from `contract/src/test/java/uk/ac/manchester/owl/owlapi/tutorialowled2011/TutorialSnippetsTestCase.java`. Additionally, the `shouldExtractADModules` example method was removed from `contract/src/test/java/org/semanticweb/owlapi/examples/Examples.java`.
+
+This suggests that the immediate fix was to remove the failing test, possibly because the `AtomicDecomposition` module extraction was either not intended to produce identical results to `SyntacticLocalityModuleExtractor` for all axiom types, or there was an underlying issue in one of the implementations that was not immediately resolvable.
+
+**Code Diff Snippet (showing deletion):**
+```diff
+--- a/contract/src/test/java/org/semanticweb/owlapi/examples/Examples.java
++++ b/contract/src/test/java/org/semanticweb/owlapi/examples/Examples.java
+@@ -1404,51 +1404,6 @@ public class Examples extends TestBase {
+         // The module can now be saved as usual
+     }\n 
+-    /**
+-     * This example shows how to extract modules.
+-     * 
+-     * @throws Exception
+-     *         exception
+-     */
+-    @Test
+-    public void shouldExtractADModules() throws Exception {
+-        // Create our manager
+-        OWLOntologyManager man = OWLManager.createOWLOntologyManager();
+-        // Load the Koala ontology
+-        OWLOntology ont = load(man);
+-        // We want to extract a module for all toppings. We therefore have to
+-        // generate a seed signature that contains "Quokka" and its
+-        // subclasses. We start by creating a signature that consists of
+-        // "Quokka".
+-        OWLClass toppingCls = df.getOWLClass(ont.getOntologyID().getOntologyIRI().get() + "#Quokka");
+-        Set<OWLEntity> sig = new HashSet<OWLEntity>();
+-        sig.add(toppingCls);
+-        // We now add all subclasses (direct and indirect) of the chosen
+-        // classes. Ideally, it should be done using a DL reasoner, in order to
+-        // take inferred subclass relations into account. We are using the
+-        // structural reasoner of the OWL API for simplicity.
+-        Set<OWLEntity> seedSig = new HashSet<OWLEntity>();
+-        OWLReasoner reasoner = new StructuralReasoner(ont, new SimpleConfiguration(), BufferingMode.NON_BUFFERING);
+-        for (OWLEntity ent : sig) {
+-            seedSig.add(ent);
+-            if (OWLClass.class.isAssignableFrom(ent.getClass())) {
+-                NodeSet<OWLClass> subClasses = reasoner.getSubClasses((OWLClass) ent, false);
+-                seedSig.addAll(asList(subClasses.entities()));
+-            }
+-        }
+-        // We now extract a locality-based module. For most reuse purposes, the
+-        // module type should be STAR -- this yields the smallest possible
+-        // locality-based module. These modules guarantee that all entailments
+-        // of the original ontology that can be formulated using only terms from
+-        // the seed signature or the module will also be entailments of the
+-        // module. In easier words, the module preserves all knowledge of the
+-        // ontology about the terms in the seed signature or the module.
+-        SyntacticLocalityModuleExtractor sme = new SyntacticLocalityModuleExtractor(man, ont, ModuleType.STAR);
+-        IRI moduleIRI = IRI.create("urn:test:QuokkaModule.owl");
+-        OWLOntology mod = sme.extractAsOntology(seedSig, moduleIRI);
+-        // The module can now be saved as usual
+-    }\n 
+      /**
+       * The following example uses entities and axioms that are used in the OWL
+       * Primer. The purpose of this example is to illustrate some of the methods
+```
+
+```diff
+--- a/contract/src/test/java/uk/ac/manchester/owl/owlapi/tutorialowled2011/TutorialSnippetsTestCase.java
++++ b/contract/src/test/java/uk/ac/manchester/owl/owlapi/tutorialowled2011/TutorialSnippetsTestCase.java
+@@ -14,7 +14,7 @@ package uk.ac.manchester.owl.owlapi.tutorialowled2011;
+ 
+ import static org.junit.Assert.*;
+ import static org.semanticweb.owlapi.search.EntitySearcher.getAnnotationObjects;\n-import static org.semanticweb.owlapi.util.OWLAPIStreamUtils.*;\n+import static org.semanticweb.owlapi.util.OWLAPIStreamUtils.asUnorderedSet;\n 
+ import java.io.ByteArrayOutputStream;
+ import java.io.File;
+ import java.io.IOException;
+@@ -48,8 +48,6 @@ import org.semanticweb.owlapi.vocab.OWLFacet;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+-import uk.ac.manchester.cs.atomicdecomposition.AtomicDecomposition;
+-import uk.ac.manchester.cs.atomicdecomposition.AtomicDecompositionImpl;
+ import uk.ac.manchester.cs.owlapi.modularity.ModuleType;
+ import uk.ac.manchester.cs.owlapi.modularity.SyntacticLocalityModuleExtractor;
+ 
+@@ -616,42 +614,9 @@ public class TutorialSnippetsTestCase {
+         seedSig.addAll(sig);
+         // We now extract a locality-based module. STAR provides the smallest
+         // ones
+-        Set<OWLAxiom> mod = getTraditionalModule(m, o, seedSig);
+-        assertNotNull(mod);
+-    }\n 
+-    @Test
+-    public void testModularizationWithAtomicDecomposition() throws OWLException {
+-        OWLOntologyManager m = create();
+-        OWLOntology o = loadPizzaOntology(m);
+-        // extract a module for all toppings.\n-        // start by creating a signature that consists of "Quokka".
+-        OWLClass quokkaCls = df.getOWLClass(KOALA_IRI + "#Quokka");
+-        Set<OWLEntity> sig = new HashSet<>();
+-        sig.add(quokkaCls);
+-        // We now add all subclasses (direct and indirect) of the chosen
+-        // classes.\n-        OWLReasoner reasoner = reasonerFactory.createNonBufferingReasoner(o);
+-        Set<OWLEntity> seedSig = asUnorderedSet(sig.stream().filter(e -> e.isOWLClass())
+-            .flatMap(e -> reasoner.getSubClasses(e.asOWLClass(), false).entities()));
+-        seedSig.addAll(sig);
+-        // We now extract a locality-based module. STAR provides the smallest
+-        // ones
+-        Set<OWLAxiom> mod = getADModule(o, sig);
+-        assertNotNull(mod);
+-        assertEquals(mod, getTraditionalModule(m, o, seedSig));
+-    }\n 
+-    protected Set<OWLAxiom> getTraditionalModule(OWLOntologyManager m, OWLOntology o, Set<OWLEntity> seedSig) {
+         SyntacticLocalityModuleExtractor sme = new SyntacticLocalityModuleExtractor(m, o, ModuleType.STAR);
+         Set<OWLAxiom> mod = sme.extract(seedSig);
+-        return mod;
+-    }\n 
+-    protected Set<OWLAxiom> getADModule(OWLOntology o, Set<OWLEntity> sig) {
+-        AtomicDecomposition ad = new AtomicDecompositionImpl(o);
+-        Set<OWLAxiom> mod = asSet(ad.getModule(sig.stream(), false, ModuleType.STAR));
+-        return mod;
++        assertNotNull(mod);
+     }\n 
+     @Test
+     public void testCreateOntology() throws OWLException {
+```

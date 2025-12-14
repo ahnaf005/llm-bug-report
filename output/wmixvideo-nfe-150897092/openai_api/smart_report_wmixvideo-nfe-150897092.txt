@@ -1,0 +1,109 @@
+Title
+- Build failure: Javadoc generation error "bad use of '>'" caused by unescaped '>' in comment in NFAutorizador31.java
+
+Steps to Reproduce
+1. Clone repository and checkout the failing commit (the build used commit 12c8a862...).
+2. Run Maven install including javadoc generation, e.g.:
+   - mvn install -DskipTests=true -Dgpg.skip=true --settings ~/settings.xml
+   (or run the maven-javadoc-plugin phase directly: mvn javadoc:jar)
+3. Observe build failure during the javadoc generation phase.
+
+Triggering Input / Conditions
+- Source file: src/main/java/com/fincatto/nfe310/classes/NFAutorizador31.java
+- A Javadoc comment contains the sequence "=>", specifically:
+  "* Links NFC-e segundo site => https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia"
+- The Maven javadoc plugin (maven-javadoc-plugin:2.9.1) was invoked (via mvn install). Javadoc tool (Standard Doclet) fails parsing the comment.
+
+Expected Behavior
+- Maven build completes successfully (javadoc plugin produces apidocs and javadoc jar).
+- Javadoc generation should properly handle comments and produce apidocs.
+
+Observed Behavior
+- Maven build fails during the javadoc plugin (attach-javadocs) with a Javadoc parsing error:
+  - "bad use of '>'" pointing at the comment that contains "=>".
+- Build stops with:
+  - [ERROR] Failed to execute goal org.apache.maven.plugins:maven-javadoc-plugin:2.9.1:jar (attach-javadocs) on project nfe: MavenReportException: Error while creating archive: Exit code: 1 - /home/.../NFAutorizador31.java:93: error: bad use of '>' ...
+- Many warnings about missing @param/@return appear, but the only fatal error is the '>' parsing error.
+
+Relevant Stack Trace / Build Log Extract (most relevant lines)
+- The final error block (truncated to the most relevant lines):
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-javadoc-plugin:2.9.1:jar (attach-javadocs) on project nfe: MavenReportException: Error while creating archive:
+  [ERROR] Exit code: 1 - /home/travis/build/wmixvideo/nfe/src/main/java/com/fincatto/nfe310/classes/NFAutorizador31.java:93: error: bad use of '>'
+  [ERROR] * Links NFC-e segundo site => https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia
+  [ERROR] ^
+  ...
+  [ERROR] Command line was: /usr/lib/jvm/java-8-oracle/jre/../bin/javadoc @options @packages
+
+- Build summary:
+  [INFO] 1 error
+  [INFO] 33 warnings
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD FAILURE
+
+Relevant Code Snippets (from the provided code diff)
+- Offending Javadoc line (in original file as seen in build log):
+  /**
+   * Links NFC-e segundo site => https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia
+   */
+
+- The code diff shows this original line and the proposed fix. Patch excerpt (context around the change):
+--- original
+-    /**
+-     * Links NFC-e segundo site => https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia
+-     */
++    /**
++     * Links NFC-e segundo site: https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia
++     */
+
+Other changes in the diff (not directly related to the javadoc error) include formatting/whitespace and adding final modifiers and array spacing, e.g.:
+- public String getNfceInutilizacao(NFAmbiente ambiente) -> public String getNfceInutilizacao(final NFAmbiente ambiente)
+- return new NFUnidadeFederativa[]{NFUnidadeFederativa.AM}; -> return new NFUnidadeFederativa[] { NFUnidadeFederativa.AM };
+
+Root Cause Analysis
+- The JavaDoc tool treats the '>' character as an HTML tag delimiter or otherwise expects proper markup. The sequence "=>" inside a Javadoc comment can confuse the doclet/parser and produce "bad use of '>'" during javadoc generation.
+- The fatal error is triggered during javadoc generation (maven-javadoc-plugin). The compiler step and tests compiled successfully; only the Javadoc phase failed.
+- The fix is to avoid unescaped '>' in Javadoc text. The code diff shows a change replacing "=>" with ":" which eliminates the problematic '>'.
+
+Patches / Suggested Fixes
+1) Immediate fix (already present in the diff)
+- Replace the problematic comment line:
+  "* Links NFC-e segundo site => https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia"
+  with
+  "* Links NFC-e segundo site: https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia"
+
+  This removes the '>' character and fixes the javadoc parse error.
+
+2) Alternative (robust) fixes (recommended)
+- Escape the '>' character as an HTML entity:
+  "* Links NFC-e segundo site =&gt; https://ciranda.me/..."
+- Use {@literal ...} to preserve the literal characters without confusing javadoc:
+  "* Links NFC-e segundo site {@literal =>} https://ciranda.me/..."
+- Use {@code ...} to render the token as code:
+  "* Links NFC-e segundo site {@code =>} https://ciranda.me/..."
+- Wrap the entire URL or the whole text in {@literal ...} or {@code ...} where appropriate to make Javadoc treat characters literally.
+
+3) Preventative suggestions
+- Run javadoc generation locally or add a CI check to catch Javadoc parsing errors earlier.
+- When adding comments that include symbols like <, >, or sequences that look like HTML tags, use {@literal} or escape as &lt; and &gt;.
+
+Patch from Diff (explicit)
+- The diff included this change which will fix the build error:
+
+--- a/src/main/java/com/fincatto/nfe310/classes/NFAutorizador31.java
++++ b/src/main/java/com/fincatto/nfe310/classes/NFAutorizador31.java
+@@
+-    /**
+-     * Links NFC-e segundo site => https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia
+-     */
++    /**
++     * Links NFC-e segundo site: https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia
++     }
+
+Notes
+- The build log also shows numerous Javadoc warnings (missing @param/@return tags) — these are warnings and don't fail the build, but consider addressing them to produce cleaner Javadocs.
+- The single fatal parsing error (bad use of '>') is sufficient to abort javadoc generation; resolving the '>' in the comment allows the javadoc plugin to proceed and finish.
+
+Summary / Recommendation
+- Apply the comment change (replace "=>" with a colon or escape/mark it) in NFAutorizador31.java to eliminate the '>' character that Javadoc cannot parse.
+- Re-run the build (mvn install -DskipTests=true -Dgpg.skip=true) — the javadoc plugin should then complete and the build should succeed.
+- For robustness, prefer using {@literal} or {@code} when including symbols in Javadoc and consider adding a CI javadoc check to catch similar issues early.

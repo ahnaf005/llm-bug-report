@@ -1,0 +1,103 @@
+## Bug Report: Compilation Error due to Method Signature Mismatch in `StartGocodeServerOperation`
+
+**1. Title:**
+Compilation Error: Method Signature Mismatch in `StartGocodeServerOperation` prevents build.
+
+**2. Steps to Reproduce:**
+1.  Clone the GoClipse repository:
+    `git clone --depth=50 --branch=master https://github.com/GoClipse/goclipse.git GoClipse/goclipse`
+2.  Navigate into the repository directory:
+    `cd GoClipse/goclipse`
+3.  Checkout the specific failing commit:
+    `git checkout -qf f737d664794570bb2a319d7bff9111f2c0ca9e0a`
+4.  Switch to Oracle JDK 8:
+    `jdk_switcher use oraclejdk8`
+5.  Set Maven memory options:
+    `export MAVEN_OPTS="-Xmx2g"`
+6.  Execute the Maven build with integration tests:
+    `mvn clean integration-test`
+
+**3. Triggering Input:**
+The bug is triggered by the code in `plugin_ide.ui/src/com/googlecode/goclipse/ui/actions/StartGocodeServerOperation.java` at commit `f737d664794570bb2a319d7bff9111f2c0ca9e0a`. Specifically, the `performBackgroundComputation()` method signature and its call to `super.performBackgroundComputation()` no longer align with the `AbstractUIOperation` superclass.
+
+**4. Expected Behavior:**
+The `com.googlecode.goclipse.ui` project should compile successfully, and the entire Maven build process should complete without compilation errors.
+
+**5. Observed Behavior:**
+The Maven build fails during the compilation of the `com.googlecode.goclipse.ui` project. The compiler reports two errors related to the `performBackgroundComputation()` method in `StartGocodeServerOperation.java`:
+*   The method is incorrectly annotated with `@Override` because it does not override or implement a supertype method.
+*   A call to `super.performBackgroundComputation()` is made, but this method is undefined in the `AbstractUIOperation` supertype.
+
+**6. Relevant Code Snippets:**
+The following code snippet from `plugin_ide.ui/src/com/googlecode/goclipse/ui/actions/StartGocodeServerOperation.java` (at the failing commit `f737d664794570bb2a319d7bff9111f2c0ca9e0a`) causes the compilation failure:
+
+```java
+// File: plugin_ide.ui/src/com/googlecode/goclipse/ui/actions/StartGocodeServerOperation.java
+// Line 35:
+@Override
+protected void performBackgroundComputation() throws CommonException, OperationCancellation, CoreException {
+    if (ToolchainPreferences.AUTO_START_DAEMON.get() == false) {
+        return; // stop operation
+    }
+    
+    gocodePath = GocodeServerManager.getGocodePath();
+    boolean needsStart = gocodeServerManager.prepareServerStart(gocodePath);
+    if(needsStart) {
+        // Line 43:
+        super.performBackgroundComputation(); 
+    } else {
+        return;
+    }
+}
+
+// The doBackgroundComputation method also has a problematic signature in the failing commit:
+@Override
+protected void doBackgroundComputation(IProgressMonitor monitor)
+        throws CoreException, CommonException, OperationCancellation {
+    gocodeServerManager.doStartServer(gocodePath, monitor);
+}
+```
+
+**7. Stack Traces:**
+```
+[ERROR] Failed to execute goal org.eclipse.tycho:tycho-compiler-plugin:0.24.0:compile (default-compile) on project com.googlecode.goclipse.ui: Compilation failure: Compilation failure:
+[ERROR] /home/travis/build/GoClipse/goclipse/plugin_ide.ui/src/com/googlecode/goclipse/ui/actions/StartGocodeServerOperation.java:[35]
+[ERROR] protected void performBackgroundComputation() throws CommonException, OperationCancellation, CoreException {
+[ERROR] ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[ERROR] The method performBackgroundComputation() of type StartGocodeServerOperation must override or implement a supertype method
+[ERROR] /home/travis/build/GoClipse/goclipse/plugin_ide.ui/src/com/googlecode/goclipse/ui/actions/StartGocodeServerOperation.java:[43]
+[ERROR] super.performBackgroundComputation();
+[ERROR] ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[ERROR] The method performBackgroundComputation() is undefined for the type AbstractUIOperation
+[ERROR] 2 problems (2 errors)
+```
+
+**8. Patches / Suggested Fixes:**
+The provided code diff (`1f7bf7775a8cd5e33a0507a2f41abb712ae4917f`) contains the fix for this issue. It refactors the `performBackgroundComputation()` method into two distinct methods, `isBackgroundComputationNecessary()` and `doBackgroundComputation()`, aligning with changes in the `AbstractUIOperation` superclass.
+
+```diff
+--- a/plugin_ide.ui/src/com/googlecode/goclipse/ui/actions/StartGocodeServerOperation.java
++++ b/plugin_ide.ui/src/com/googlecode/goclipse/ui/actions/StartGocodeServerOperation.java
+@@ -32,23 +32,18 @@ public class StartGocodeServerOperation extends AbstractUIOperation {
+ 	}
+ 	
+ 	@Override
+-	protected void performBackgroundComputation() throws CommonException, OperationCancellation, CoreException {
++	protected boolean isBackgroundComputationNecessary() throws CoreException, CommonException, OperationCancellation {
+ 		if (ToolchainPreferences.AUTO_START_DAEMON.get() == false) {
+-\t\t\treturn; // stop operation
++\t\t\treturn false; // stop operation
+ 		}
+ 	\t
+ \t\tgocodePath = GocodeServerManager.getGocodePath();
+ \t\tboolean needsStart = gocodeServerManager.prepareServerStart(gocodePath);\
+-\t\tif(needsStart) {\n-\t\t\tsuper.performBackgroundComputation();\n-\t\t} else {\n-\t\t\treturn;\n-\t\t}\n+\t\treturn needsStart;\
+ 	}
+ 	
+ 	@Override
+-\tprotected void doBackgroundComputation(IProgressMonitor monitor)\n-\t\t\tthrows CoreException, CommonException, OperationCancellation {\
++\tprotected void doBackgroundComputation(IProgressMonitor monitor) throws CoreException, OperationCancellation {\
+ \t\tgocodeServerManager.doStartServer(gocodePath, monitor);\
+ \t}\
+ \t
+```

@@ -1,0 +1,132 @@
+Title: CI build failed due to Checkstyle "MissingSwitchDefault" violations (two files) — checkstyle rule removed in diff but build used older commit
+
+Summary
+- The Maven build fails in CI with Checkstyle errors: "switch without 'default' clause" for two source files:
+  - byte-buddy-dep/src/main/java/net/bytebuddy/asm/TypeConstantAdjustment.java:122
+  - byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java:2343
+- The provided code diff removes the MissingSwitchDefault module from checkstyle.xml (so the intent appears to be to stop failing the build on missing default cases). However, the failing CI log corresponds to an earlier commit/sha that still enforces the rule (the build used failed_sha 664f65cc..., while the diff indicates a change that likely occurs in a later commit). The build failure therefore occurs before that change was (successfully) applied in CI.
+
+Environment
+- CI: Travis (container-based) running on Ubuntu 12.04 LTS
+- JDK: Oracle JDK 7 (1.7.0_76)
+- Maven: 3.2.5
+- Checkstyle plugin: maven-checkstyle-plugin:2.17 with Checkstyle 6.11.2
+- Project: byte-buddy, module byte-buddy-dep
+
+Failure / Reproduction
+1. The CI command that fails:
+   mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+2. Reproduce locally:
+   - Checkout the commit that CI is building (sha shown in BUILD LOG: 664f65ccf2fc5b9d9c977f254cff39aade0a7734).
+   - Run: mvn install -DskipTests=true -Dmaven.javadoc.skip=true
+   - Expected result: build fails during the maven-checkstyle-plugin:check phase with the two errors shown.
+
+Relevant Build Log Extract (errors)
+- /home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/asm/TypeConstantAdjustment.java:122:21: error: switch without "default" clause.
+- /home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java:2343:25: error: switch without "default" clause.
+
+Code Diff (provided)
+- File changed: checkstyle.xml
+- Change: removal of the MissingSwitchDefault module
+  - Deleted line: <module name="MissingSwitchDefault"/>
+- diff shows only that one-line deletion (deleted_code_size: 1).
+
+Root Cause Analysis
+- Immediate cause: Checkstyle check MissingSwitchDefault flagged two switch statements without a default clause; maven-checkstyle-plugin fails the build on these violations.
+- Secondary/organizational cause: The code diff removes the MissingSwitchDefault rule from checkstyle.xml, which is a valid way to avoid the error. However, the CI build that failed used an older commit SHA (failed_sha) that still enforced the rule. That means:
+  - The change to checkstyle.xml had not been applied to the commit that triggered the failing build, OR
+  - Multiple checkstyle.xml files exist (e.g., one in a different module or parent) and the change removed the rule in one copy but not all copies used by the build, OR
+  - The maven-checkstyle-plugin was configured to use a different ruleset (not the modified checkstyle.xml).
+- Net effect: Checkstyle plugin enforcement and source code mismatch cause the build to fail.
+
+Severity / Impact
+- Build failure (CI) — prevents release/merges until fixed.
+- Blocks other downstream changes that rely on successful build.
+
+Recommended fixes / options (ranked)
+You can choose one of the following approaches depending on project policy.
+
+A) Fix the source code to satisfy the MissingSwitchDefault rule (recommended if you want to keep the rule)
+- Add a default branch to each switch to make intent explicit. Prefer doing something non-silent:
+  - If switch is exhaustive (e.g., enum), use default to throw an AssertionError / IllegalStateException so future additions don't silently pass:
+    default:
+        throw new IllegalStateException("Unhandled value: " + value);
+  - Or, if a no-op default is intended and acceptable:
+    default:
+        break; // explicit no-op default
+- Benefits: Keeps the code robust against future changes and maintains stricter style checks.
+
+B) Remove or disable the Checkstyle rule (what the diff attempts)
+- Ensure that the change to checkstyle.xml removing <module name="MissingSwitchDefault"/> is included in the exact commit/branch used by CI.
+- Verify there are no other copies of checkstyle.xml (parent POM, module-specific rules) that still include the rule.
+- Confirm the maven-checkstyle-plugin configuration points to the modified file (if using a custom configLocation property).
+- If you intend to relax this rule globally, commit the change and re-run CI.
+
+C) Suppress the rule locally for specific code blocks (if the omissions are intentional)
+- Use Checkstyle suppression for those lines/files:
+  - Add a SuppressionFilter entry in checkstyle.xml, or
+  - Add an inline suppression comment (if your Checkstyle setup and version allow). Checkstyle does not support a standardized inline annotation like @SuppressWarnings for specific rules in Java source; better to use the suppression XML file.
+
+D) Temporary CI workaround
+- To unblock CI quickly, you can skip Checkstyle by invoking Maven with -Dcheckstyle.skip=true (not recommended long-term):
+  mvn install -Dcheckstyle.skip=true -DskipTests=true -Dmaven.javadoc.skip=true
+- Or adjust pom.xml to skip checkstyle in CI profile.
+
+Concrete suggestions for the two failing files
+- TypeConstantAdjustment.java (approx. line 122):
+  - Add a default branch. Example:
+    switch (someValue) {
+        case X:
+            ...
+            break;
+        case Y:
+            ...
+            break;
+        default:
+            throw new IllegalStateException("Unexpected value: " + someValue);
+    }
+- TypeWriter.java (approx. line 2343):
+  - Add default similarly (break or throw). If the switch deliberately omits default because all cases covered by enums, still add default that throws to catch future regressions.
+
+Why adding default is preferred
+- Makes intent explicit and prevents silent failures when new enum/case values are introduced.
+- Keeps code compliant with existing style rules (if you intend to enforce them).
+
+Checklist to resolve the CI failure
+1. Decide policy: keep rule or remove rule.
+2a. If keeping rule:
+   - Add default clauses in the two files at the lines indicated.
+   - Run mvn install locally to verify no Checkstyle errors.
+   - Push commit and re-run CI.
+2b. If removing rule:
+   - Ensure the change to checkstyle.xml is committed in the same branch/sha that CI builds.
+   - Search repository for other checkstyle.xml copies and remove the rule in all relevant ones.
+   - Verify maven-checkstyle-plugin config (configLocation) references the expected checkstyle.xml.
+   - Push commit and re-run CI.
+3. If you need an immediate unblock:
+   - Use -Dcheckstyle.skip=true in CI profile until proper fix is merged.
+
+Additional notes
+- The BUILD LOG shows the build used commit 664f65cc... as failed_sha; the patch metadata shows passed_sha 67654ac4... and the diff that removed the MissingSwitchDefault line. This suggests the change likely exists in a later commit than the one CI was building. Confirm that CI was triggered for the intended commit.
+- The maven-checkstyle-plugin version and Checkstyle version are visible in the log in case any behavior depends on those. (Plugin: 2.17, Checkstyle: 6.11.2.)
+- If using multiple modules, ensure the checkstyle configuration is consistent across modules (byte-buddy-dep and others).
+
+Suggested patch examples
+- Example quick-fix to TypeConstantAdjustment.java (conceptual):
+  Add after existing case blocks:
+  default:
+      throw new IllegalStateException("Unexpected constant in TypeConstantAdjustment: " + value);
+
+- Example quick-fix to TypeWriter.java (conceptual):
+  default:
+      throw new IllegalStateException("Unhandled switch value in TypeWriter: " + value);
+
+Closing / Next steps
+- Confirm whether the team prefers enforcing MissingSwitchDefault or removing it.
+- If enforcing: implement defaults in the two files and re-run CI.
+- If removing: ensure checkstyle.xml change is present in the CI build and that plugin uses the modified config; re-run CI.
+- If you want I can:
+  - Propose exact code patches for the two files if you paste the surrounding code for each switch (so I can provide precise default branches),
+  - Or prepare a full patch to remove or suppress the rule across the repository.
+
+If you want, paste the switch code blocks (TypeConstantAdjustment.java around line 122 and TypeWriter.java around line 2343) and I will craft exact fixes.

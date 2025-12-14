@@ -1,0 +1,136 @@
+Title
+- Maven Checkstyle failure: TodoComment detected in MantaMultipartManager.java (build fails)
+
+Steps to Reproduce
+1. Clone the repository at the commit referenced by the build (branch multipart, commit 6605599...).
+2. From project root run:
+   mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+3. Observe the build output produced by the maven-checkstyle-plugin.
+
+Triggering Input / Conditions
+- Source file contains a single-line comment matching the configured TODO pattern (e.g. "// TODO: …") in:
+  src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java
+- The maven-checkstyle-plugin is enabled in the build and configured to treat TODO comments as violations.
+
+Expected Behavior
+- The build should complete successfully (or at least proceed past the checkstyle phase if there are no other checkstyle violations).
+- If TODO comments are undesired, either no TODO comments should exist or checkstyle should be configured to allow them.
+
+Observed Behavior (actual)
+- Maven fails during the install phase with a checkstyle violation:
+  [ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[641] (misc) TodoComment: Comment matches to-do format 'TODO:'.
+- The maven-checkstyle-plugin aborts the build:
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation. -> [Help 1]
+- The build is retried (Travis shows 3 attempts) and then fails.
+
+Relevant Stack Trace / Build Log Excerpts
+- Key console lines:
+  [ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[641] (misc) TodoComment: Comment matches to-do format 'TODO:'.
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation. -> [Help 1]
+  [ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+  [ERROR] Re-run Maven using the -X switch to enable full debug logging.
+  [ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+
+Relevant Code Snippets (from the diff)
+- The offending TODO comment (present in the old file; checkstyle reports at line ~641):
+  // TODO: Validate parts and match up etags with path
+
+- The patch that removes the TODO and adds validation and error handling (excerpt from java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java):
+  (added imports)
+  import com.joyent.manta.exception.MantaMultipartException;
+  import java.util.concurrent.atomic.AtomicInteger;
+
+  (inside complete(...) method)
+  final Map<String, MantaMultipartUploadPart> listing = new HashMap<>();
+  try (Stream<MantaMultipartUploadPart> listStream = listParts(id)
+          .limit(MAX_PARTS)) {
+      listStream.forEach(p -> listing.put(p.getEtag(), p));
+  }
+
+  final StringBuilder jobExecText = new StringBuilder("mget -q ");
+
+  List<MantaMultipartUploadTuple> missingTuples = new ArrayList<>();
+
+  final AtomicInteger count = new AtomicInteger(0);
+  partsStream.sorted().forEach(part -> {
+      if (count.incrementAndGet() > MAX_PARTS) {
+          String msg = String.format("Too many multipart parts specified [%d]. "
+                  + "The maximum number of parts is %d", MAX_PARTS, count.get());
+          throw new IllegalArgumentException(msg);
+      }
+
+      final MantaMultipartUploadPart o = listing.get(part.getEtag());
+
+      if (o != null) {
+          jobExecText.append(o.getObjectPath()).append(" ");
+      } else {
+          missingTuples.add(part);
+      }
+  });
+
+  if (!missingTuples.isEmpty()) {
+      final MantaMultipartException e = new MantaMultipartException(
+              "Multipart part(s) specified couldn't be found");
+
+      int missingCount = 0;
+      for (MantaMultipartUploadTuple missingPart : missingTuples) {
+          String key = String.format("missing_part_%d", ++missingCount);
+          e.setContextValue(key, missingPart.toString());
+      }
+
+      throw e;
+  }
+
+  jobExecText.append("| mput -q ")
+
+- New exception class added: java-manta-client/src/main/java/com/joyent/manta/exception/MantaMultipartException.java
+  package com.joyent.manta.exception;
+
+  /** General exception type for errors relating to multipart uploads. */
+  public class MantaMultipartException extends MantaClientException {
+      private static final long serialVersionUID = ...;
+
+      public MantaMultipartException() { }
+
+      public MantaMultipartException(final String message) {
+          super(message);
+      }
+
+      public MantaMultipartException(final Throwable cause) {
+          super(cause);
+      }
+
+      public MantaMultipartException(final String message, final Throwable cause) {
+          super(message, cause);
+      }
+  }
+
+- Tests were updated to supply a Stream of uploaded parts to complete(...). Example test change:
+  // before:
+  multipart.complete(uploadId);
+  // after:
+  multipart.complete(uploadId, uploadedParts.stream());
+
+Patches / Suggested Fixes
+- The code diff already contains the appropriate fix for the TODO checkstyle violation:
+  - Remove the TODO comment.
+  - Replace the placeholder TODO with a real implementation that:
+    - builds a listing of existing parts (listing map),
+    - iterates the provided parts Stream, counting parts (AtomicInteger) and enforcing MAX_PARTS with an IllegalArgumentException,
+    - looks up each part by etag and appends existing part object paths to the jobExecText,
+    - collects missing parts and throws a new MantaMultipartException with contextual information if any are missing.
+
+- If you cannot or do not want to implement the validation logic right now, alternative fixes are:
+  1. Remove the "TODO:" comment (simply delete or rewrite the comment without the "TODO:" token) to satisfy checkstyle.
+  2. Replace the "TODO:" with an issue tracker reference or a less-checked token (for example, "NOTE:"), or
+  3. Adjust the checkstyle configuration to allow TODO comments (not recommended — TODOs are generally intentional policy violations caught by checkstyle).
+
+Recommended action
+- Apply the patch that replaces the TODO with the validation code (as shown in the diff). This both removes the checkstyle violation and implements part validation.
+- Run a local build:
+  mvn -DskipTests=true install
+  Ensure no other checkstyle violations exist.
+- Update/verify unit/integration tests (diff shows tests were updated to pass a parts stream to complete()).
+
+Additional notes
+- The build log shows the checkstyle error occurred in commit 6605599062fa..., which indicates the repository version used by the CI still contained the TODO comment. The diff you have removes that comment and implements proper handling — once merged and built, the checkstyle violation should be resolved.

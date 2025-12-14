@@ -1,0 +1,120 @@
+## Software Bug Report: Build Failure - NullPointerExceptions due to Corrupted/Invalid JAR Dependencies
+
+**Bug ID:** CDR-BUG-XXXX (Assign a unique ID)
+
+**Project:** Carolina Digital Repository
+
+**Version/Commit:** Pull Request #725 merge commit (Specific commit hash not provided, but derived from `git fetch origin +refs/pull/725/merge`)
+
+**Environment:**
+*   **Operating System:** Ubuntu 14.04.5 LTS (trusty)
+*   **Kernel Version:** 4.14.12-041412-generic
+*   **Java Version:** Oracle JDK 1.8.0_151 (Java HotSpot(TM) 64-Bit Server VM, build 25.151-b12)
+*   **Maven Version:** Apache Maven 3.5.2
+*   **Build System:** Travis CI (worker v3.6.0)
+
+**Severity:** High (Build Failure)
+
+**Priority:** High (Blocks CI/CD pipeline, indicates critical dependency issues)
+
+---
+
+### Description
+
+The continuous integration (CI) build for the `Carolina-Digital-Repository` project failed during the `test` phase of the `services-camel` module. The failure is specifically caused by multiple `java.lang.NullPointerException` errors originating from `edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest`.
+
+Analysis of the build log indicates that these test failures are a symptom of deeper dependency issues. Maven reported `WARNING`s about invalid POMs and `ERROR`s about failing to read specific JAR files (`puretls:1.1.jar` and `cog-jglobus:1.8.0.jar`) during the compilation phase of several modules, including `services-camel`. This suggests that these critical dependencies are either corrupted in the Maven local cache or are being served in a corrupted state from a remote repository, leading to incomplete or malformed classes at runtime which then trigger the `NullPointerException`s in tests.
+
+---
+
+### Steps to Reproduce
+
+1.  Trigger a Travis CI build for the `UNC-Libraries/Carolina-Digital-Repository` project, specifically for Pull Request #725.
+2.  Observe the build log during the `mvn test` phase.
+
+---
+
+### Expected Behavior
+
+*   The `mvn install` and `mvn test` commands should complete successfully for all modules.
+*   All tests, including `edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest`, should pass without `NullPointerException`s or other errors.
+*   Maven should successfully resolve and read all project dependencies without reporting "error in opening zip file" or "invalid POM" warnings/errors.
+
+---
+
+### Actual Behavior
+
+*   The `mvn test` command failed for the `services-camel` module.
+*   Three tests within `edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest` (`nonbinaryTest`, `validTest`, `noLocalBinaryTest`) resulted in `java.lang.NullPointerException`.
+*   During the `install` and `test` phases, Maven reported multiple `WARNING`s about invalid POMs for `com.claymoresystems:puretls:jar:1.1` and `org.globus.jglobus:cog-jglobus:jar:1.8.0`.
+*   Crucially, during the `compile` phase of modules like `persistence`, `sword-server`, `services`, `services-camel`, `admin`, and `deposit`, Maven reported `ERROR reading ...jar; error in opening zip file` for these same `puretls` and `cog-jglobus` dependencies.
+
+---
+
+### Error Messages / Stack Traces
+
+**Primary Test Failures (from `services-camel` module):**
+```
+[ERROR] Tests run: 3, Failures: 0, Errors: 3, Skipped: 0, Time elapsed: 0.511 s <<< FAILURE! - in edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest
+[ERROR] nonbinaryTest(edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest)  Time elapsed: 0.499 s  <<< ERROR!
+java.lang.NullPointerException
+	at edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest.nonbinaryTest(BinaryMetadataProcessorTest.java:129)
+
+[ERROR] validTest(edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest)  Time elapsed: 0.001 s  <<< ERROR!
+java.lang.NullPointerException
+	at edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest.validTest(BinaryMetadataProcessorTest.java:102)
+
+[ERROR] noLocalBinaryTest(edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest)  Time elapsed: 0.008 s  <<< ERROR!
+java.lang.NullPointerException
+	at edu.unc.lib.dl.services.camel.BinaryMetadataProcessorTest.noLocalBinaryTest(BinaryMetadataProcessorTest.java:149)
+```
+
+**Underlying Dependency Errors (examples from `services-camel` and `persistence` modules):**
+```
+[WARNING] The POM for com.claymoresystems:puretls:jar:1.1 is invalid, transitive dependencies (if any) will not be available, enable debug logging for more details
+[WARNING] The POM for org.globus.jglobus:cog-jglobus:jar:1.8.0 is invalid, transitive dependencies (if any) will not be available, enable debug logging for more details
+...
+[ERROR] error reading /home/travis/.m2/repository/org/globus/jglobus/cog-jglobus/1.8.0/cog-jglobus-1.8.0.jar; error in opening zip file
+[ERROR] error reading /home/travis/.m2/repository/org/globus/jglobus/cog-jglobus/1.8.0/cog-jglobus-1.8.0.jar; error in opening zip file
+```
+These errors appear multiple times during the compilation of various modules, including `services-camel`, `persistence`, `sword-server`, `services`, `admin`, and `deposit`.
+
+---
+
+### Analysis / Root Cause (Hypothesis)
+
+The `NullPointerException`s in `BinaryMetadataProcessorTest` are a direct consequence of the Java compiler failing to properly read and process the `puretls:1.1` and `cog-jglobus:1.8.0` JAR files. When Maven reports "error in opening zip file" during compilation, it means the JAR files are either corrupted, incomplete, or malformed. This prevents the Java compiler from correctly linking or compiling classes that depend on these libraries.
+
+When the tests for `BinaryMetadataProcessorTest` are executed, if they rely on any classes or methods from these corrupted dependencies, the JVM will encounter issues (e.g., `NoClassDefFoundError`, `LinkageError`, or in this case, `NullPointerException` if a class was partially loaded but its internal state or dependencies are missing), leading to the observed runtime errors.
+
+The "invalid POM" warnings further suggest that the metadata for these dependencies might be incorrect, which could contribute to improper fetching or handling of the JARs.
+
+---
+
+### Proposed Solution / Workaround
+
+1.  **Clear Maven Cache:** The most immediate step is to clear the local Maven repository cache on the Travis CI build agent. This can often resolve transient corruption issues. This can be done by adding a `before_install` step in `.travis.yml` to remove the relevant directories:
+    ```yaml
+    before_install:
+      - rm -rf ~/.m2/repository/com/claymoresystems/puretls
+      - rm -rf ~/.m2/repository/org/globus/jglobus/cog-jglobus
+    ```
+    Or, more aggressively, clear the entire cache if the issue persists:
+    ```yaml
+    before_install:
+      - rm -rf ~/.m2/repository
+    ```
+    (Note: The build log shows `adding /home/travis/.m2/repository to cache`, so clearing it might impact build times if dependencies need to be re-downloaded, but it's necessary for debugging this issue.)
+
+2.  **Investigate Dependency Integrity:**
+    *   Manually verify the integrity of the `puretls:1.1` and `cog-jglobus:1.8.0` JAR files in the remote Maven repository (e.g., Maven Central or any custom repository being used). Download them and attempt to open them with a zip utility.
+    *   Check if these specific versions are known to be problematic or if there are newer, more stable versions available.
+    *   If the POMs are indeed malformed, update the project's `pom.xml` to correctly declare these dependencies or consider replacing them with alternative libraries if they are no longer maintained.
+
+3.  **Address Other Warnings:** While not the direct cause of this build failure, the numerous warnings about missing plugin versions and deprecated API usage should be addressed in separate tasks to improve overall code quality and build stability.
+
+---
+
+### Additional Notes
+
+The "CODE DIFF" section of the uploaded file contains an HTTP 404 error message (`The requested URL was not found on the server.`). This indicates that the system attempting to provide the code diff was unable to retrieve it from the specified URL. This is an issue with the bug reporting tool or its integration, not with the `Carolina-Digital-Repository` software itself, but it prevents a full analysis of the code changes that triggered this particular build.

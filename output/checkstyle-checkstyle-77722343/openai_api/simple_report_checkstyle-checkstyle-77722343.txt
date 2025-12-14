@@ -1,0 +1,79 @@
+Title: Build failure due to Checkstyle "Redundant 'public' modifier" in EqualsAvoidNullCheck — fixed by removing redundant constructor modifier
+
+Summary
+- The CI build failed during the Checkstyle verification phase with a single error:
+  - /src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java:489:9: Redundant 'public' modifier.
+- Root cause: a constructor in an inner class (FieldFrame) had an unnecessary public modifier. Checkstyle's RedundantModifier rule flagged it.
+- A one-line change was applied to remove the redundant modifier (constructor changed from public to package-private). The patch is included in CODE DIFF and should resolve the Checkstyle violation.
+
+Build environment (from BUILD LOG)
+- Project: checkstyle 6.10-SNAPSHOT
+- Build command run on CI: mvn clean verify -DskipTests -DskipITs -Dpmd.skip=true -Dfindbugs.skip=true -Dcobertura.skip=true
+- Java: OpenJDK 1.7.0_75
+- Maven: 3.2.5
+- OS: Ubuntu 12.04.5 LTS (precise)
+- Checkstyle run reported: [checkstyle] Running Checkstyle 6.10-SNAPSHOT on 687 files
+
+Failing output (relevant excerpts)
+- Checkstyle error (causing Maven build failure):
+  - /home/travis/build/checkstyle/checkstyle/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java:489:9: Redundant 'public' modifier.
+- Build termination:
+  - [ERROR] /home/travis/build/checkstyle/checkstyle/config/ant-phase-verify.xml:50: Checkstyle failed: Got 1 errors and 0 warnings.
+  - Maven goal failed in ant-phase-verify (ant-run plugin).
+
+Code diff (summary)
+- File changed (one-line modification):
+  - src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java
+- Change:
+  - Constructor declaration changed from:
+      public FieldFrame(FieldFrame parent) {
+    to:
+      FieldFrame(FieldFrame parent) {
+- Patch context (from CODE DIFF):
+  - -        public FieldFrame(FieldFrame parent) {
+  - +        FieldFrame(FieldFrame parent) {
+  - This reduces the visibility from public to package-private (i.e., removes the redundant 'public').
+
+Root cause analysis
+- The Checkstyle RedundantModifier rule flags modifiers that are unnecessary for correctness of the code and violate the project's style rules.
+- In this case FieldFrame is an inner class (nested within EqualsAvoidNullCheck). For nested or inner classes that are not public at the class level, making their constructor public is redundant because the surrounding class/inner class visibility limits accessibility. The constructor's public modifier offered no additional visibility and thus triggered the Checkstyle violation.
+- The build error is a style-check failure (not a compilation/runtime error). The maven build stops because the project's build enforces Checkstyle during the verify phase.
+
+Fix applied
+- Removed the redundant 'public' modifier from the FieldFrame constructor, changing it to package-private.
+- This aligns the code with the project's Checkstyle rules and should eliminate the reported Checkstyle error.
+
+Files touched
+- Modified:
+  - src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/EqualsAvoidNullCheck.java
+    - Removed 'public' modifier on FieldFrame(FieldFrame parent) constructor.
+
+Commit references (from CODE DIFF metadata)
+- failed_sha (CI failure commit): da6ebe6de41b7a5afc6f6746ff0c2382c2a4be0f
+- passed_sha (previous passing commit): 1e7ae5866daead0d81be2bfcf7febbd1ca0fcbd8
+- Diff id: checkstyle-checkstyle-77722343
+
+How to reproduce locally
+1. Clone repository and checkout the failing commit (failed_sha).
+2. Run: mvn clean verify -DskipTests -DskipITs -Dpmd.skip=true -Dfindbugs.skip=true -Dcobertura.skip=true
+3. Observe the Checkstyle failure message pointing to EqualsAvoidNullCheck.java with "Redundant 'public' modifier."
+4. Apply the one-line change (remove 'public' from the FieldFrame constructor).
+5. Re-run the same mvn command — Checkstyle should pass for that file.
+
+Recommended next steps
+- Merge the one-line change to the branch associated with the failing SHA.
+- Re-run CI to confirm the Checkstyle violation is resolved and the build completes successfully.
+- Optional: add a quick pre-commit or IDE guidance reminding contributors about redundant modifier rules to avoid similar failures in future.
+- If you have a local script to run Checkstyle (mvn checkstyle:check or project's verify), encourage running it before pushing to CI to catch such style issues early.
+
+Risk assessment
+- Minimal risk: only a visibility modifier on a constructor was changed (narrower visibility). Because the constructor belongs to an inner class, and inner-class usage is constrained by the class visibility, this change should not affect behavior or break external usage. It only fixes a style violation.
+
+Notes
+- The failing build log shows the Checkstyle stage is enforced in the ant-phase-verify; style issues fail the build intentionally.
+- The provided fix aligns code with project style and should clear the sole Checkstyle error reported in CI.
+
+If you want, I can:
+- Produce a patch file ready to apply,
+- Run a local simulation (if you provide the repository), or
+- Search for other occurrences of redundant modifiers to prevent future CI failures.

@@ -1,0 +1,114 @@
+Here is a detailed bug report based on the provided build log and code diff:
+
+---
+
+### Bug Report
+
+**1. Title:**
+Compilation Failure: `ResultSetMapper` class not found
+
+**2. Steps to Reproduce:**
+1.  Clone the `rxjava-jdbc` repository:
+    `git clone --depth=50 --branch=master git://github.com/davidmoten/rxjava-jdbc.git davidmoten/rxjava-jdbc`
+2.  Navigate into the cloned directory:
+    `cd davidmoten/rxjava-jdbc`
+3.  Checkout the specific commit `12fa13a1276031b32c4f56ee211f35ed464add7d`:
+    `git checkout -qf 12fa13a1276031b32c4f56ee211f35ed464add7d`
+4.  Attempt to build the project using Maven:
+    `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+**3. Triggering Input:**
+*   **Commit SHA:** `12fa13a1276031b32c4f56ee211f35ed464add7d`
+*   **Build Command:** `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+*   **Java Version:** Oracle JDK 1.8.0_31
+*   **Maven Version:** Apache Maven 3.2.5
+
+**4. Expected Behavior:**
+The Maven `install` command should successfully compile the project, run resource processing, and install the artifact into the local Maven repository without any compilation errors.
+
+**5. Observed Behavior:**
+The Maven build fails during the `compile` phase with numerous "cannot find symbol" errors for the `ResultSetMapper` class. The build attempts to retry twice, but fails consistently with the same compilation errors. This indicates that the `ResultSetMapper` interface is referenced in multiple source files but is not present in the codebase at the specified commit.
+
+**6. Relevant Code Snippets:**
+The core issue is the absence of the `ResultSetMapper.java` file. The build log shows multiple files referencing this missing symbol. Examples of where `ResultSetMapper` is referenced:
+
+*   `com.github.davidmoten.rx.jdbc.QuerySelectOperator`
+*   `com.github.davidmoten.rx.jdbc.QuerySelect`
+*   `com.github.davidmoten.rx.jdbc.Util`
+*   `com.github.davidmoten.rx.jdbc.tuple.Tuples`
+*   `com.github.davidmoten.rx.jdbc.QuerySelectOperation`
+*   `com.github.davidmoten.rx.jdbc.QuerySelectProducer`
+
+For instance, from `QuerySelectOperator.java`:
+```java
+// In QuerySelectOperator.java (line 28)
+// This line would cause the error because ResultSetMapper is missing
+// Example:
+// public class QuerySelectOperator<T,R> implements Operator<R, T> {
+//     private final ResultSetMapper<R> mapper; // <-- ResultSetMapper not found
+//     // ...
+// }
+```
+
+**7. Stack Traces:**
+The build log shows the following compilation errors:
+
+```
+[ERROR] COMPILATION ERROR : 
+[INFO] -------------------------------------------------------------
+[ERROR] /home/travis/build/davidmoten/rxjava-jdbc/src/main/java/com/github/davidmoten/rx/jdbc/QuerySelectOperator.java:[28,19] cannot find symbol
+  symbol:   class ResultSetMapper
+  location: class com.github.davidmoten.rx.jdbc.QuerySelectOperator<T,R>
+[ERROR] /home/travis/build/davidmoten/rxjava-jdbc/src/main/java/com/github/davidmoten/rx/jdbc/QuerySelect.java:[83,38] cannot find symbol
+  symbol:   class ResultSetMapper
+  location: class com.github.davidmoten.rx.jdbc.QuerySelect
+[ERROR] /home/travis/build/davidmoten/rxjava-jdbc/src/main/java/com/github/davidmoten/rx/jdbc/QuerySelect.java:[97,19] cannot find symbol
+  symbol:   class ResultSetMapper
+  location: class com.github.davidmoten.rx.jdbc.QuerySelect
+[ERROR] /home/travis/build/davidmoten/rxjava-jdbc/src/main/java/com/github/davidmoten/rx/jdbc/QuerySelect.java:[115,13] cannot find symbol
+  symbol:   class ResultSetMapper
+  location: class com.github.davidmoten.rx.jdbc.QuerySelect
+[ERROR] /home/travis/build/davidmoten/rxjava-jdbc/src/main/java/com/github/davidmoten/rx/jdbc/Util.java:[237,16] cannot find symbol
+  symbol:   class ResultSetMapper
+  location: class com.github.davidmoten.rx.jdbc.Util
+[ERROR] /home/travis/build/davidmoten/rxjava-jdbc/src/main/java/com/github/davidmoten.rx.jdbc/QuerySelect.java:[210,38] cannot find symbol
+  symbol:   class ResultSetMapper
+  location: class com.github.davidmoten.rx.jdbc.QuerySelect.Builder
+[ERROR] /home/travis/build/davidmoten/rxjava-jdbc/src/main/java/com/github/davidmoten.rx.jdbc/QuerySelect.java:[442,39] cannot find symbol
+  symbol:   class ResultSetMapper
+  location: class com.github.davidmoten.rx.jdbc.QuerySelect.OperatorBuilder<R>
+[ERROR] /home/travis/build/davidmoten/rxjava-jdbc/src/main/java/com/github/davidmoten.rx.jdbc/QuerySelectOperator.java:[41,17] cannot find symbol
+  symbol:   class ResultSetMapper
+  location: class com.github.davidmoten.rx.jdbc.QuerySelectOperator.ApplyQuerySelect<R,T>
+[ERROR] /home/travis/build/davidmoten/rxjava-jdbc/src/main/java/com/github/davidmoten.rx.jdbc/QuerySelectOperator.java:[45,17] cannot find symbol
+  symbol:   class ResultSetMapper
+  location: class com.github.davidmoten.rx.jdbc.QuerySelectOperator.ApplyQuerySelect<R,T>
+[ERROR] /home/travis/build/davidmoten/rxjava-jdbc/src/main/java/com/github/davidmoten.rx.jdbc/tuple/Tuples.java:[10,37] cannot find symbol
+  symbol:   class ResultSetMapper
+  location: package com.github.davidmoten.rx.jdbc
+... (23 more similar errors) ...
+[INFO] 33 errors 
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.1:compile (default-compile) on project rxjava-jdbc: Compilation failure: Compilation failure:
+```
+
+**8. Patches / Suggested Fixes:**
+The provided code diff (`patches` section) contains the fix for this issue. It introduces the missing `ResultSetMapper.java` interface, which is required by other parts of the codebase. Applying this patch (i.e., ensuring this file exists in the project) will resolve the compilation errors.
+
+```diff
+--- /dev/null
++++ b/src/main/java/com/github/davidmoten/rx/jdbc/ResultSetMapper.java
+@@ -0,0 +1,9 @@
++package com.github.davidmoten.rx.jdbc;
++
++import java.sql.ResultSet;
++import java.sql.SQLException;
++
++public interface ResultSetMapper<T> {
++
++    T call(ResultSet rs) throws SQLException;
++}
+```

@@ -1,0 +1,214 @@
+Here's a detailed bug report based on the provided build log and code diff:
+
+---
+
+## Bug Report: Incorrect x86_64_v2 Multiplication Assembly Causes Chapter19Test Failures
+
+### 1. Title
+Incorrect x86_64_v2 Multiplication Assembly Causes Chapter19Test Failures
+
+### 2. Steps to Reproduce
+1.  Checkout the codebase at commit SHA: `239d52984594c2011ea3093e90a3aa68faad6fbd`.
+2.  Navigate to the project root directory.
+3.  Run the Maven build and test command: `mvn --batch-mode --update-snapshots verify`
+
+### 3. Triggering Input
+The bug is triggered when compiling and running tests for the `chapter22` module, specifically `Chapter19Test.java`, which involves generating x86_64_v2 assembly for multiplication operations with immediate values.
+
+**Specific code snippets from tests that trigger the failure:**
+*   `Chapter19Test.testBasic8`: `return arg * 6;`
+*   `Chapter19Test.testFcn1`:
+    ```java
+    String src = """
+    int fcn(int x) { return x*x; }
+    val fcn = arg ? { int x -> x*x; } : { int x -> x+x; };
+    return fcn(2)*10 + fcn(3);
+    """;
+    ```
+    (The `fcn(2)*10` part involves multiplication with an immediate `10`).
+
+### 4. Expected Behavior
+The `MulIX86` node in the `x86_64_v2` CPU backend should correctly generate assembly code for multiplication with immediate operands, and its `toString()` representation should accurately reflect the generated instruction, including the immediate value. The tests in `Chapter19Test` should pass, indicating correct code generation and graph representation.
+
+### 5. Observed Behavior
+The Maven build fails during the `chapter22` module's test phase due to `ComparisonFailure` in `Chapter19Test`. The `toString()` representation of the generated graph for `MulIX86` nodes does not include the immediate operand, leading to a mismatch with the expected output in the test assertions.
+
+**Error Messages from Build Log:**
+```
+[ERROR] Tests run: 37, Failures: 2, Errors: 0, Skipped: 0, Time elapsed: 0.171 s <<< FAILURE! -- in com.seaofnodes.simple.Chapter19Test
+[ERROR] com.seaofnodes.simple.Chapter19Test.testFcn1 -- Time elapsed: 0.029 s <<< FAILURE!
+org.junit.ComparisonFailure: expected:<...urn (add,#2,(muli,#2[])); ]> but was:<...urn (add,#2,(muli,#2[,10])); ]>
+	at org.junit.Assert.assertEquals(Assert.java:117)
+	at org.junit.Assert.assertEquals(Assert.java:146)
+	at com.seaofnodes.simple.Chapter19Test.testFcn1(Chapter19Test.java:319)
+	... (full stack trace omitted for brevity, see below)
+[ERROR] com.seaofnodes.simple.Chapter19Test.testBasic8 -- Time elapsed: 0 s <<< FAILURE!
+org.junit.ComparisonFailure: expected:<return (muli,arg[]);> but was:<return (muli,arg[,6]);>
+	at org.junit.Assert.assertEquals(Assert.java:117)
+	at org.junit.Assert.assertEquals(Assert.java:146)
+	at com.seaofnodes.simple.Chapter19Test.testBasic8(Chapter19Test.java:84)
+	... (full stack trace omitted for brevity, see below)
+[ERROR] Tests run: 375, Failures: 2, Errors: 0, Skipped: 8
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.1.2:test (default-test) on project chapter22: There are test failures.
+```
+
+### 6. Relevant Code Snippets
+
+**`chapter22/src/main/java/com/seaofnodes/simple/node/cpus/x86_64_v2/MulIX86.java` (The core fix for assembly generation and `toString` representation):**
+```diff
+--- a/chapter22/src/main/java/com/seaofnodes/simple/node/cpus/x86_64_v2/MulIX86.java
++++ b/chapter22/src/main/java/com/seaofnodes/simple/node/cpus/x86_64_v2/MulIX86.java
+@@ -18,13 +18,13 @@ public class MulIX86 extends MachConcreteNode implements MachNode {
+         enc.add1(x86_64_v2.rex(src, dst, 0));
+         // opcode; 0x69 or 0x6B
+         enc.add1( 0x69 + (x86_64_v2.imm8(_imm) ? 2 : 0) );
+-        enc.add1( x86_64_v2.modrm(x86_64_v2.MOD.DIRECT, src, dst) );
++        enc.add1( x86_64_v2.modrm(x86_64_v2.MOD.DIRECT, dst, src) );
+         // immediate(4 bytes) 32 bits or (1 byte)8 bits
+         if( x86_64_v2.imm8(_imm) ) enc.add1(_imm);
+         else                       enc.add4(_imm);
+     }
+     // General form: "addi  dst += #imm"
+     @Override public void asm(CodeGen code, SB sb) {
+-        sb.p(code.reg(this)).p(" ").p(glabel()).p("= #").p(_imm);
++        sb.p(code.reg(this)).p(" = ").p(code.reg(in(1))).p(" * #").p(_imm);
+     }
+ }
+```
+
+**`chapter22/src/test/java/com/seaofnodes/simple/Chapter19Test.java` (Updates to expected test output reflecting the fix):**
+```diff
+--- a/chapter22/src/test/java/com/seaofnodes/simple/Chapter19Test.java
++++ b/chapter22/src/test/java/com/seaofnodes/simple/Chapter19Test.java
+@@ -25,7 +25,7 @@ return 0;
+     public void testString() throws IOException {
+         String src = Files.readString(Path.of("src/test/java/com/seaofnodes/simple/progs/stringHash.smp"));
+         CodeGen code = new CodeGen(src).opto().typeCheck().GCM().localSched();
+-        assertEquals("Stop[ return Phi(Region,._hashCode,Phi(Region,123456789,Phi(Loop,0,(.[]+((Phi_hash<<5)-Phi_hash))))); return Phi(Region,1,0,0,1); ]", code._stop.toString());
++        assertEquals("Stop[ return Phi(Region,1,0,0,1); return Phi(Region,._hashCode,Phi(Region,123456789,Phi(Loop,0,(.[]+((Phi_hash<<5)-Phi_hash))))); ]", code._stop.toString());
+         //assertEquals("-4898613127354160978", Eval2.eval(code,  2));
+     }
+ 
+@@ -81,7 +81,7 @@ return 0;
+     @Test
+     public void testBasic8() {
+         CodeGen code = new CodeGen("return arg * 6;").driver(Phase.LocalSched,"x86_64_v2", "SystemV");
+-        assertEquals("return (muli,arg);", code._stop.toString());
++        assertEquals("return (muli,arg,6);", code._stop.toString());
+     }
+ 
+     @Test
+@@ -316,7 +316,7 @@ val fcn = arg ? { int x -> x*x; } : { int x -> x+x; };
+ return fcn(2)*10 + fcn(3);\n """");
+         code.driver(Phase.LocalSched,"x86_64_v2", "SystemV");
+-        assertEquals("Stop[ return (shli,Parm_x($fun2,int)); return (mul,Parm_x($fun1,int),x); return (add,#2,(muli,#2)); ]", code.print());
++        assertEquals("Stop[ return (shli,Parm_x($fun2,int)); return (mul,Parm_x($fun1,int),x); return (add,#2,(muli,#2,10)); ]", code.print());
+     }
+ 
+     @Test
+```
+
+### 7. Stack Traces
+
+**For `com.seaofnodes.simple.Chapter19Test.testFcn1`:**
+```
+org.junit.ComparisonFailure: expected:<...urn (add,#2,(muli,#2[])); ]> but was:<...urn (add,#2,(muli,#2[,10])); ]>
+	at org.junit.Assert.assertEquals(Assert.java:117)
+	at org.junit.Assert.assertEquals(Assert.java:146)
+	at com.seaofnodes.simple.Chapter19Test.testFcn1(Chapter19Test.java:319)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
+	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.execute(JUnit4Provider.java:316)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.executeWithRerun(JUnit4Provider.java:240)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.executeTestSet(JUnit4Provider.java:214)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.invoke(JUnit4Provider.java:155)
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:385)
+	at org.apache.maven.surefire.booter.ForkedBooter.execute(ForkedBooter.java:162)
+	at org.apache.maven.surefire.booter.ForkedBooter.run(ForkedBooter.java:507)
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:495)
+```
+
+**For `com.seaofnodes.simple.Chapter19Test.testBasic8`:**
+```
+org.junit.ComparisonFailure: expected:<return (muli,arg[]);> but was:<return (muli,arg[,6]);>
+	at org.junit.Assert.assertEquals(Assert.java:117)
+	at org.junit.Assert.assertEquals(Assert.java:146)
+	at com.seaofnodes.simple.Chapter19Test.testBasic8(Chapter19Test.java:84)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
+	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.execute(JUnit4Provider.java:316)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.executeWithRerun(JUnit4Provider.java:240)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.executeTestSet(JUnit4Provider.java:214)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.invoke(JUnit4Provider.java:155)
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:385)
+	at org.apache.maven.surefire.booter.ForkedBooter.execute(ForkedBooter.java:162)
+	at org.apache.maven.surefire.booter.ForkedBooter.run(ForkedBooter.java:507)
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:495)
+```
+
+### 8. Patches / Suggested Fixes
+The provided diff contains the necessary patches to resolve this issue and update related tests.
+
+**Core Fixes:**
+
+1.  **`chapter22/src/main/java/com/seaofnodes/simple/node/cpus/x86_64_v2/MulIX86.java`**:
+    *   Corrects the `modrm` encoding for `MulIX86` to use `dst` then `src` instead of `src` then `dst`.
+    *   Corrects the `asm` method's string representation to include the immediate value in the output, changing `sb.p(code.reg(this)).p(" ").p(glabel()).p("= #").p(_imm);` to `sb.p(code.reg(this)).p(" = ").p(code.reg(in(1))).p(" * #").p(_imm);`.
+
+**Test Updates (to reflect the corrected behavior):**
+
+2.  **`chapter22/src/test/java/com/seaofnodes/simple/Chapter19Test.java`**:
+    *   Updates the expected `toString()` output for `testBasic8` from `return (muli,arg);` to `return (muli,arg,6);`.
+    *   Updates the expected `toString()` output for `testFcn1` to include the immediate `10` in the `muli` instruction.
+    *   Also includes a reordering of `return` statements in the expected output for `testString`.
+
+**Other related changes in the commit (not directly related to the reported `Chapter19Test` failures but part of the same commit):**
+
+3.  **`chapter22/src/main/java/com/seaofnodes/simple/node/MemMergeNode.java`**:
+    *   Corrects a loop iteration range from `for( int i = 2; i < len; i++)` to `for( int i = 1; i < len; i++)`.
+
+4.  **`chapter22/src/main/java/com/seaofnodes/simple/node/cpus/x86_64_v2/SetX86.java`**:
+    *   Adjusts a condition for `rex` prefix generation from `if( dst >= 8 )` to `if( dst >= 4 )`.
+
+5.  **`chapter22/src/test/java/com/seaofnodes/simple/Chapter20Test.java`**:
+    *   Updates the expected output value for ARM CPU tests from `6` to `3`.
+
+6.  **`chapter22/src/test/java/com/seaofnodes/simple/Chapter21Test.java`**:
+    *   Updates the expected output value for ARM CPU tests from `6` to `3`.
+
+7.  **`chapter22/src/test/java/com/seaofnodes/simple/Chapter22Test.java`**:
+    *   Changes the source file used for `testJig` from `jig.smp` to `BubbleSort.smp`.
+
+Applying these patches should resolve the build failures and ensure correct assembly generation and test expectations.

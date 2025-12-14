@@ -1,0 +1,75 @@
+Title
+Missing Javadoc on SerializedConstant causes Maven build (checkstyle) failure
+
+Summary
+A recent change introduced/left the class net.bytebuddy.implementation.bytecode.constant.SerializedConstant without a Javadoc comment, which violates the project's Checkstyle rules. The Maven build fails during the maven-checkstyle-plugin:check goal for the byte-buddy-dep module with "Missing a Javadoc comment." The provided code diff includes the required Javadoc and a unit test — applying that patch fixes the build.
+
+Steps to reproduce
+1. Checkout the failing commit (sha reported in build log): cea264e688cf165d0693da9721eac5781905d3ee (or the tree state used by the failing build).
+2. In the repository root run:
+   mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+3. Observe the build failure during the checkstyle phase for module byte-buddy-dep.
+
+Triggering input / conditions
+- Source file missing a Javadoc comment for class SerializedConstant:
+  byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bytecode/constant/SerializedConstant.java
+- Project uses maven-checkstyle-plugin (Checkstyle 6.11.2) with a ruleset that requires Javadoc for classes.
+- Running the Maven build with default lifecycle and checkstyle enabled.
+
+Expected behavior
+Maven build should complete successfully (or at least fail for legitimate code/test errors). If Checkstyle is configured to require Javadoc comments, classes must provide them; builds should only fail when there is a real code/style violation. In this case, if a Javadoc requirement is intended, the expectation is that the class has a Javadoc and the check passes.
+
+Observed behavior
+Maven fails during the checkstyle check with one error:
+- Checkstyle reports "Missing a Javadoc comment." at SerializedConstant.java line 14.
+- Build fails with:
+  Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (default) on project byte-buddy-dep: Failed during checkstyle execution: There is 1 error reported by Checkstyle 6.11.2 with checkstyle.xml ruleset.
+
+Relevant build log excerpts / stack traces
+- Checkstyle error location:
+  /home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bytecode/constant/SerializedConstant.java:14: error: Missing a Javadoc comment.
+- Final Maven failure summary (repeated on retries):
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (default) on project byte-buddy-dep: Failed during checkstyle execution: There is 1 error reported by Checkstyle 6.11.2 with checkstyle.xml ruleset. -> [Help 1]
+- Maven exit message:
+  The command "mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V" failed 3 times.
+
+Relevant code snippets (from diff)
+- Patch added a Javadoc comment above the class (fix):
+  --- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bytecode/constant/SerializedConstant.java
+  +++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bytecode/constant/SerializedConstant.java
+  @@ -11,6 +11,9 @@ import org.objectweb.asm.MethodVisitor;
+   
+   import java.io.*;
+   
+  +/**
+  + * A constant that represents a value in its serialized form.
+  + */
+   public class SerializedConstant implements StackManipulation {
+
+- Patch also added unit tests (new file):
+  byte-buddy-dep/src/test/java/net/bytebuddy/implementation/bytecode/constant/SerializedConstantTest.java
+  (contains tests for null handling, serialization behavior and object-property assertions)
+
+Patches / Suggested fixes
+- The code diff already includes the recommended fix: add a Javadoc comment at the class declaration. That resolves the Checkstyle violation.
+  - Patch excerpt (applies to file byte-buddy-dep/src/main/java/.../SerializedConstant.java):
+    /**
+     * A constant that represents a value in its serialized form.
+     */
+    public class SerializedConstant implements StackManipulation {
+
+- Alternative fixes (if you prefer to change the policy instead of the code):
+  - Update Checkstyle configuration (checkstyle.xml) to not require Javadoc for this class or for all package-private or internal classes (if applicable).
+  - Add a Checkstyle suppression for this file (not recommended for project-wide style rules).
+  - If the class is intentionally undocumented and you do not want Javadoc, mark the class with a suppression annotation or configure checkstyle suppression filter appropriately.
+
+Notes / Recommendation
+- The simplest and most consistent fix is the one already included in the diff: add a short Javadoc comment above the class (as done in the patch).
+- Also verify the new test (SerializedConstantTest.java) compiles and passes (the build invoked with -DskipTests=true skipped tests, but the test addition is useful for coverage). If teams desire to keep builds faster, ensure tests are valid and consistent with CI settings.
+- After applying the patch, rerun:
+  mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+  to confirm the checkstyle error is resolved.
+
+If you want, I can:
+- Produce the exact git commands to create a branch with the fix and push it, or
+- Generate a minimal checkstyle suppression snippet to apply temporarily while reviewing whether the Javadoc rule should be relaxed.

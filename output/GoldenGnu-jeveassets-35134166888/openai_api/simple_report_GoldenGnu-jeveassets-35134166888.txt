@@ -1,0 +1,122 @@
+Title
+- Unit test failure after updating bundled Logback jars from 1.3.14 -> 1.3.15
+
+Summary
+- The CI build fails (maven surefire) due to one unit test: net.nikr.eve.jeveasset.lib.LibTest.testLibs. The test reports that LibraryManager now lists logback-core-1.3.15.jar and logback-classic-1.3.15.jar as "added" and that 1.3.14 variants are "removed". This is caused by a small change in LibraryManager that updates the shipped library file names to .1.3.15. The test expects the old names (1.3.14) and fails with an assertion.
+
+Environment
+- Project: GoldenGnu/jeveassets
+- CI: GitHub Actions runner ubuntu-22.04 (Java 17, Maven)
+- Build command: mvn -B package --file pom.xml -P skip-online-tests
+- Failing commit (failed_sha in diff): f91cc245896898e0bc0645b5cac1d3baeef6357b
+- Passing sha (previous): 38f5c01daff3f7c5a43fa5871f820f063f6cea29
+
+Relevant log excerpt (failure)
+- Test failure summary at end of build:
+  ---Libs added---
+  logback-core-1.3.15.jar
+  logback-classic-1.3.15.jar
+  ---Libs removed---
+  logback-core-1.3.14.jar
+  logback-classic-1.3.14.jar
+
+- Maven summary:
+  [ERROR] Failures: 
+  [ERROR]   LibTest.test:41->testLibs:78 
+  [ERROR] Tests run: 328, Failures: 1, Errors: 0, Skipped: 0
+  BUILD FAILURE
+
+Code diff that introduced change
+- File: src/main/java/net/nikr/eve/jeveasset/LibraryManager.java
+- Change (lines shown):
+  - Old:
+    files.add("logback-core-1.3.14.jar");
+    files.add("logback-classic-1.3.14.jar");
+  - New:
+    files.add("logback-core-1.3.15.jar");
+    files.add("logback-classic-1.3.15.jar");
+
+Root cause
+- The only change in the patch is to update the hard-coded library filenames in LibraryManager to the newer Logback version (1.3.15). The unit test LibTest.testLibs asserts the exact set/names of these bundled jar files. Because the LibraryManager now reports 1.3.15 but the test expects 1.3.14, the assertion fails.
+- There is no other failing stack trace indicating runtime errors; the test is a mismatch between test expectation and the updated source.
+
+Observed behavior
+- CI unit test LibTest.testLibs fails with an AssertionError listing the added and removed jar filenames (1.3.15 added; 1.3.14 removed).
+- The build stops as surefire treats the failed test as build failure.
+
+Expected behavior
+- Either:
+  - LibraryManager and project should consistently use the Logback version declared in build dependencies (if intentionally upgraded to 1.3.15), and tests should be updated accordingly; OR
+  - If upgrading was not intended, LibraryManager should continue to reference the expected 1.3.14 filenames.
+
+Impact
+- CI builds fail preventing merges / releases.
+- Any code relying on the LibraryManager static list of libraries could be affected in packaging/run-time if the actual dependency jars in other parts of the build are not aligned with this change.
+
+Recommendations / Fixes
+Option A — Update tests to accept the new version (preferred if bump to 1.3.15 was intentional)
+1. Update test expectation in net.nikr.eve.jeveasset.lib.LibTest to expect logback-core-1.3.15.jar and logback-classic-1.3.15.jar instead of 1.3.14.
+2. Better: make test version-agnostic (future-proof):
+   - Instead of asserting exact filenames, assert that there exists a logback-core-*.jar and a logback-classic-*.jar entry (use regex).
+   - Or assert that the filenames match pattern "logback-(core|classic)-1\\.3\\.[0-9]+\\.jar" or simply check prefix "logback-core-" and "logback-classic-".
+   - Example pseudo-code change (conceptual):
+     - Replace assertFalse(mismatch) with:
+       boolean hasCore = files.stream().anyMatch(f -> f.matches("logback-core-1\\.3\\.[0-9]+\\.jar"));
+       boolean hasClassic = files.stream().anyMatch(f -> f.matches("logback-classic-1\\.3\\.[0-9]+\\.jar"));
+       assertTrue("Logback jars present", hasCore && hasClassic);
+
+Option B — Revert LibraryManager change (if bump unintentional)
+1. Revert the two lines in LibraryManager back to 1.3.14:
+   files.add("logback-core-1.3.14.jar");
+   files.add("logback-classic-1.3.14.jar");
+2. Ensure the packaged libs and pom dependencies match.
+
+Option C — Keep both versions (not recommended long-term)
+- Temporarily include both versions in the list to preserve test expectations while other parts are migrated. This is messy and should be avoided unless co-existence is required.
+
+Suggested immediate patch (if upgrade intended)
+- Update LibTest to be version-tolerant. Minimal change example (Java pseudo-code snippet):
+
+  // Old assertion (strict):
+  // assertFalse("Unexpected difference", !expected.equals(actual));
+
+  // New check (version-agnostic):
+  boolean corePresent = actual.stream().anyMatch(s -> s.startsWith("logback-core-"));
+  boolean classicPresent = actual.stream().anyMatch(s -> s.startsWith("logback-classic-"));
+  assertTrue("Both logback-core and logback-classic must be present", corePresent && classicPresent);
+
+Commands to reproduce locally
+1. Checkout the failing commit/branch:
+   git checkout dependabot/maven/ch.qos.logback-logback-core-1.3.15
+2. Run tests (same as CI):
+   mvn -B test
+   or to run only failing test:
+   mvn -Dtest=net.nikr.eve.jeveasset.lib.LibTest test
+
+Verification after fix
+- Re-run the specific test:
+  mvn -Dtest=net.nikr.eve.jeveasset.lib.LibTest test
+- If green, re-run full test suite (mvn test) on CI.
+
+Additional notes / observations from build log
+- The build log contains many informational "Fatal Error: Content is not allowed in prolog." messages from XML parsing during BackupTest — those tests appear to expect and handle corrupted XML cases and are ultimately passing (the test harness treats them as expected). They are not the cause of build failure.
+- The root and only failing test is LibTest.testLibs; fix should be limited to test or LibraryManager change as explained.
+
+Risk & follow-up
+- Low-risk: updating the test to accept the new version is simple and correct if the dependency bump to 1.3.15 is intended and dependencies/poms are aligned.
+- Medium-risk: If the project still packages 1.3.14 artifacts anywhere (or the runtime expects 1.3.14), changing LibraryManager to 1.3.15 without updating packaging will cause runtime/packaging inconsistencies. Verify that pom.xml / dependency management was updated to 1.3.15 or that the build artifacts include the 1.3.15 jars.
+
+Suggested next steps
+1. Confirm whether updating Logback to 1.3.15 was intentional (check pom.xml / dependency updates or dependabot PR).
+2. If yes: update LibTest to be version-agnostic or to expect 1.3.15; run full test suite in CI.
+3. If no: revert LibraryManager to 1.3.14 or coordinate an intended version bump across code and test expectations.
+
+Files/lines changed (from diff)
+- src/main/java/net/nikr/eve/jeveasset/LibraryManager.java
+  - files.add("logback-core-1.3.14.jar"); -> files.add("logback-core-1.3.15.jar");
+  - files.add("logback-classic-1.3.14.jar"); -> files.add("logback-classic-1.3.15.jar");
+
+If you want, I can:
+- Produce a ready-to-apply patch for LibTest to make it version-independent.
+- Produce the revert patch for LibraryManager (back to 1.3.14).
+- Inspect pom.xml to confirm the declared logback version and suggest alignment steps.

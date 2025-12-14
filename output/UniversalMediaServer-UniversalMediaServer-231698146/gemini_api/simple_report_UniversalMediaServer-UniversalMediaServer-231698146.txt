@@ -1,0 +1,154 @@
+## Software Bug Report
+
+**Bug ID:** UMS-231698146-1 (Assigned for tracking)
+
+**Project:** Universal Media Server (UMS)
+
+**Version/Commit:** `0579589d0ccb96c37872eab4f6ba3238bcbe6fe6` (Failing commit)
+**Target Branch:** `dtshd_parsing`
+
+**Environment:**
+*   **CI System:** Travis CI
+*   **Operating System:** Ubuntu 12.04.5 LTS (Precise)
+*   **Linux Kernel:** 3.13.0-29-generic
+*   **Java Version:** Oracle JDK 1.7.0_76
+*   **Maven Version:** Apache Maven 3.2.5
+
+**Severity:** High (Build Failure)
+
+**Status:** Open
+
+---
+
+### 1. Description
+
+The build for Universal Media Server on the `dtshd_parsing` branch, at commit `0579589d0ccb96c37872eab4f6ba3238bcbe6fe6`, is failing during the unit test phase. Specifically, four tests within `net.pms.formats.v2.AudioPropertiesTest` are failing because they expect an `IllegalArgumentException` to be thrown for invalid input values (less than 1), but the current implementation of the `AudioProperties` class does not throw these exceptions.
+
+The provided code diff (`e1cf824307bdb0135098a1da083e588dcc84d24a`) introduces the necessary input validation to the `AudioProperties.java` file, which would resolve these test failures. This indicates a discrepancy where the tests are written to expect a certain behavior (throwing exceptions for invalid input) that is not yet implemented in the code being tested in the failing build.
+
+---
+
+### 2. Steps to Reproduce
+
+1.  Checkout the Universal Media Server repository.
+2.  Switch to the `dtshd_parsing` branch.
+3.  Reset to commit `0579589d0ccb96c378772eab4f6ba3238bcbe6fe6`.
+4.  Run a Maven build with tests: `mvn install -Dmaven.javadoc.skip=true -B -V`
+
+---
+
+### 3. Expected Behavior
+
+The `mvn install` command should complete successfully, with all unit tests passing. Specifically, the `AudioPropertiesTest` methods should pass, indicating that `IllegalArgumentException` is correctly thrown when invalid (less than 1) values are passed to the `setBitRate`, `setNumberOfChannels`, `setBitsperSample`, and `setSampleFrequency` methods.
+
+---
+
+### 4. Actual Behavior
+
+The `mvn install` command fails during the `maven-surefire-plugin:2.19.1:test` phase. The following four tests in `net.pms.formats.v2.AudioPropertiesTest` report failures:
+
+*   `testSetNumberOfChannels_withIllegalArgument`
+*   `testSampleFrequency_withIllegalArgument`
+*   `testBitsperSample_withIllegalArgument`
+*   `testSetBitRate_withIllegalArgument`
+
+Each failure is an `AssertionError: Expected exception: java.lang.IllegalArgumentException`, indicating that the expected exception was not thrown by the `AudioProperties` methods when provided with invalid arguments.
+
+---
+
+### 5. Error Messages / Logs
+
+```
+Running net.pms.formats.v2.AudioPropertiesTest
+Tests run: 21, Failures: 4, Errors: 0, Skipped: 0, Time elapsed: 0.022 sec <<< FAILURE! - in net.pms.formats.v2.AudioPropertiesTest
+testSetNumberOfChannels_withIllegalArgument(net.pms.formats.v2.AudioPropertiesTest)  Time elapsed: 0.006 sec  <<< FAILURE!
+java.lang.AssertionError: Expected exception: java.lang.IllegalArgumentException
+
+testSampleFrequency_withIllegalArgument(net.pms.formats.v2.AudioPropertiesTest)  Time elapsed: 0 sec  <<< FAILURE!
+java.lang.AssertionError: Expected exception: java.lang.IllegalArgumentException
+
+testBitsperSample_withIllegalArgument(net.pms.formats.v2.AudioPropertiesTest)  Time elapsed: 0.001 sec  <<< FAILURE!
+java.lang.AssertionError: Expected exception: java.lang.IllegalArgumentException
+
+testSetBitRate_withIllegalArgument(net.pms.formats.v2.AudioPropertiesTest)  Time elapsed: 0 sec  <<< FAILURE!
+java.lang.AssertionError: Expected exception: java.lang.IllegalArgumentException
+
+...
+
+Results :
+
+Failed tests: 
+  AudioPropertiesTest.testBitsperSample_withIllegalArgument Expected exception: java.lang.IllegalArgumentException
+  AudioPropertiesTest.testSampleFrequency_withIllegalArgument Expected exception: java.lang.IllegalArgumentException
+  AudioPropertiesTest.testSetBitRate_withIllegalArgument Expected exception: java.lang.IllegalArgumentException
+  AudioPropertiesTest.testSetNumberOfChannels_withIllegalArgument Expected exception: java.lang.IllegalArgumentException
+
+Tests run: 302, Failures: 4, Errors: 0, Skipped: 0
+
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.19.1:test (default-test) on project ums: There are test failures.
+```
+
+---
+
+### 6. Root Cause Analysis
+
+The unit tests in `net.pms.formats.v2.AudioPropertiesTest` are designed to verify that `IllegalArgumentException` is thrown when setter methods in `AudioProperties.java` receive invalid input values (specifically, integers less than 1).
+
+The build log corresponds to `failed_sha: 0579589d0ccb96c37872eab4f6ba3238bcbe6fe6`. At this commit, the `AudioProperties.java` file *does not* contain the necessary input validation logic. Therefore, when the tests pass invalid arguments, the methods execute without throwing the expected `IllegalArgumentException`, leading to the test failures.
+
+The provided `CODE DIFF` shows the changes introduced in `passed_sha: e1cf824307bdb0135098a1da083e588dcc84d24a`. This diff explicitly adds `if (value < 1) { throw new IllegalArgumentException(...); }` checks to the `setBitRate`, `setNumberOfChannels`, `setBitsperSample`, and `setSampleFrequency` methods. This indicates that the fix for this issue has already been developed and committed in a subsequent commit. The failing build is simply running against an older version of the code where this fix was not yet present.
+
+---
+
+### 7. Proposed Solution / Fix
+
+Apply the changes from the provided code diff (commit `e1cf824307bdb0135098a1da083e588dcc84d24a`) to the `src/main/java/net/pms/formats/v2/AudioProperties.java` file. This will introduce the necessary input validation, causing the `IllegalArgumentException` to be thrown as expected by the unit tests, and thus allowing the build to pass.
+
+**Code Diff to apply:**
+```diff
+--- a/src/main/java/net/pms/formats/v2/AudioProperties.java
++++ b/src/main/java/net/pms/formats/v2/AudioProperties.java
+@@ -75,6 +75,9 @@ public class AudioProperties {
+  * @param bitrate to set.
+  */
+ public void setBitRate(int bitRate) {
++		if (bitRate < 1) {
++			throw new IllegalArgumentException("Bitrate can't be less than 1.");
++		}
+ 		this.bitRate = bitRate;
+ }
+ 
+@@ -101,6 +104,9 @@ public class AudioProperties {
+  * @param numberOfChannels number of channels to set.
+  */
+ public void setNumberOfChannels(int numberOfChannels) {
++		if (numberOfChannels < 1) {
++			throw new IllegalArgumentException("Channel number can't be less than 1.");
++		}
+ 		this.numberOfChannels = numberOfChannels;
+ }
+ 
+@@ -127,6 +133,9 @@ public class AudioProperties {
+  * @param bitsperSample bits per sample to set.
+  */
+ public void setBitsperSample(int bitsperSample) {
++		if (bitsperSample < 1) {
++			throw new IllegalArgumentException("Bits per sample can't be less than 1.");
++		}
+ 		this.bitsperSample = bitsperSample;
+ }
+ 
+@@ -179,6 +188,9 @@ public class AudioProperties {
+  * @param sampleFrequency sample frequency in Hz
+  */
+ public void setSampleFrequency(int sampleFrequency) {
++		if (sampleFrequency < 1) {
++			throw new IllegalArgumentException("Sample frequency can't be less than 1 Hz.");
++		}
+ 		this.sampleFrequency = sampleFrequency;
+ }
+ 
+```

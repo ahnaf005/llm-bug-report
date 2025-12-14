@@ -1,0 +1,154 @@
+Title: Test failure in contract module — TutorialSnippetsTestCase.testModularizationWithAtomicDecomposition
+
+Status: Failing (reproducible in CI build)
+
+Summary
+- Maven verify on commit c391f19... (failed_sha from diff) fails with 1 test failure.
+- The failing test is uk.ac.manchester.owl.owlapi.tutorialowled2011.TutorialSnippetsTestCase.testModularizationWithAtomicDecomposition in module contract.
+- Failure is an assertion mismatch between the atomic-decomposition-based module and the syntactic-locality (traditional) module. The actual module contains additional Declaration and ontology-annotation axioms (e.g. AnnotationAssertion(owl:versionInfo ...)), so the sets differ.
+
+Environment
+- Build: Travis CI (Ubuntu 12.04 precise)
+- JDK: Oracle JDK 8u66
+- Maven 3.2.5
+- Project: owlapi (branch/version5)
+- Failed commit (from build log): c391f19dfc7d99d0ed31b9bfcf2d17bdcdeabd5c
+- Diff provided in report: changes between eaa87425... (passed_sha) and c391f19... (failed_sha)
+
+Reproduction (quick)
+- Clone repository (version/commit as in failed_sha)
+- Run: mvn -DskipTests=false -B -V verify
+- Observe test failures in module contract
+- CI log: "The command 'mvn verify' exited with 1."
+
+Failing test evidence (from build log)
+- Test report shows one failing test:
+  - Failed: TutorialSnippetsTestCase.testModularizationWithAtomicDecomposition
+- JUnit assert message excerpt (from log):
+  - expected:<[FunctionalDataProperty(...), DataPropertyRange(...), DisjointClasses(...), SubClassOf(...), FunctionalObjectProperty(...), ClassAssertion(...), ...]> but was:<[FunctionalDataProperty(...), DataPropertyRange(...), Declaration(ObjectProperty(...)), Declaration(Class(...)), AnnotationAssertion(owl:versionInfo <...#Animal> "1.1"^^xsd:string), Declaration(Class(...)), SubClassOf(...), ...]>
+
+- In short: one set (expected) lacked a bunch of Declaration and ontology annotation axioms that are present in the other set (actual).
+
+Related code changes (from CODE DIFF)
+Two relevant modified files in the diff:
+
+1) contract/src/test/java/uk/ac/manchester/owl/owlapi/tutorialowled2011/TutorialSnippetsTestCase.java
+- Replaced a wildcard import for OWLAPIStreamUtils with a specific static import: OWLAPIStreamUtils.asUnorderedSet
+- Removed these imports and code regions:
+  - uk.ac.manchester.cs.atomicdecomposition.AtomicDecomposition and AtomicDecompositionImpl imports were deleted.
+  - A test method testModularizationWithAtomicDecomposition (which used AtomicDecompositionImpl and compared getADModule(...) to getTraditionalModule(...)) was deleted in part (see diff).
+- The method getTraditionalModule(...) was modified: previously it returned a Set<OWLAxiom> and was used by other tests; in the patched version it calls the SyntacticLocalityModuleExtractor and now asserts mod is not null, but in the diff it no longer returns the module (it assertsNotNull(mod) instead of returning it).
+- The removal of getADModule(...) and deletion of the test that used it is visible in the diff (deleted lines).
+
+2) contract/src/test/java/org/semanticweb/owlapi/examples/Examples.java
+- A large example method showing module extraction using Atomic Decomposition (shouldExtractADModules) was removed.
+
+Analysis / Root cause hypotheses
+- The failing assertion compares an atomic-decomposition-derived module with a syntactic-locality-module extracted from the ontology. The test expected these two to be equal, but they are not: the actual module (returned at runtime) contains extra declaration and ontology annotation axioms (e.g., Declaration(ObjectProperty(...)), AnnotationAssertion(owl:versionInfo ...)).
+- Possible reasons for the difference:
+  1. Loading the ontology (or the manager configuration) has changed such that additional ontology-level annotations (e.g., owl:versionInfo) or explicit declarations are present in the ontology. Those ontology-annotation axioms may be included in one module extraction result and not in the other.
+  2. The Atomic Decomposition implementation or SyntacticLocalityModuleExtractor behavior might have changed (or different API usage/configuration is present) so that one includes declarations/ontology annotations, while the other does not.
+  3. The code changes in the diff partly remove the atomic decomposition-based code and refactor getTraditionalModule. If the test code at the failing commit still expects the previous method signatures/behaviors, this mismatch could cause incorrect test logic or unexpected results.
+- The immediate cause of the failure is that the two sets being compared are not identical: one set contains declarations and ontology-level annotations that the other does not. The test asserts exact set equality, so this difference causes failure.
+
+Why this likely originated in the recent changes (evidence)
+- The diff shows removal of the AtomicDecomposition-based method and modification of getTraditionalModule. If the build ran on a commit before those deletions were fully applied/validated (or if other tests still call the old methods), behavior drift could occur.
+- The test failure content includes AnnotationAssertion(owl:versionInfo <...#Animal> "1.1"^^xsd:string). That suggests ontology version info was present in the loaded ontology; either the ontology loader now preserves an annotation that previously was omitted, or one module extractor includes ontology annotations in modules, while the other does not.
+
+Suggested fixes
+(Short-term / quick patch recommendations)
+
+1) Make the test robust to ontology-level annotation and declaration differences
+- Normalize both modules before comparison by removing Declaration axioms and ontology annotation axioms like owl:versionInfo, or explicitly exclude ontology annotation axioms from the module before comparison.
+
+Example normalization helper (conceptual, add to test class):
+- Filter out OWLDeclarationAxiom and any OWLAnnotationAssertionAxiom whose subject is an ontology IRI or whose property is a built-in ontology annotation (owl:versionInfo, owl:specifiedBy, etc.). Then compare normalized sets.
+
+2) Restore method behavior that other tests rely on
+- Ensure getTraditionalModule returns the module (Set<OWLAxiom>) instead of asserting only not-null if other test code expects a Set result.
+
+Restore original getTraditionalModule implementation:
+protected Set<OWLAxiom> getTraditionalModule(OWLOntologyManager m, OWLOntology o, Set<OWLEntity> seedSig) {
+    SyntacticLocalityModuleExtractor sme = new SyntacticLocalityModuleExtractor(m, o, ModuleType.STAR);
+    Set<OWLAxiom> mod = sme.extract(seedSig);
+    return mod;
+}
+
+3) If AtomicDecomposition-based comparison is desired, reintroduce getADModule and the test or adapt the test
+- Re-add the helper that uses AtomicDecompositionImpl and returns a Set<OWLAxiom>, and make sure it uses the same module type (ModuleType.STAR) and same settings.
+- Ensure the test uses the same manager/ontology instance for both extractions, and that both extractors operate under the same configuration (e.g., treat ontology annotations consistently).
+
+Example getADModule (restore):
+protected Set<OWLAxiom> getADModule(OWLOntology o, Set<OWLEntity> sig) {
+    AtomicDecomposition ad = new AtomicDecompositionImpl(o);
+    Set<OWLAxiom> mod = asSet(ad.getModule(sig.stream(), false, ModuleType.STAR));
+    return mod;
+}
+
+4) If a decision was made to remove atomic-decomposition-based tests (refactor intent), ensure:
+- All tests and helper methods that used AtomicDecomposition are safely removed and there are no remaining references.
+- No code left in test suite expects getTraditionalModule to return a value if its signature changed.
+- Update / remove any test assertions that compared AD modules to traditional modules accordingly.
+
+Concrete recommended change to fix failing test (minimal, safest):
+- Restore getTraditionalModule to return the module as above.
+- Restore getADModule method (reintroduce AtomicDecompositionImpl import).
+- In testModularizationWithAtomicDecomposition, before comparing sets, normalize both by removing Declaration axioms and ontology-annotation assertions (or ignore declarations when comparing).
+
+Normalization code (example approach, Java 8 streams):
+private Set<OWLAxiom> normalizeModule(Set<OWLAxiom> module, OWLOntology o) {
+    IRI ontIRI = o.getOntologyID().getOntologyIRI().orElse(null);
+    return module.stream()
+        .filter(ax -> !(ax instanceof OWLDeclarationAxiom))
+        .filter(ax -> {
+            if (ax instanceof OWLAnnotationAssertionAxiom) {
+                OWLAnnotationAssertionAxiom ann = (OWLAnnotationAssertionAxiom) ax;
+                // if annotation subject is the ontology IRI, skip it
+                if (ann.getSubject().isIRI() && ann.getSubject().asIRI().equals(ontIRI)) {
+                    return false;
+                }
+            }
+            return true;
+        })
+        .collect(Collectors.toSet());
+}
+
+Then in the test:
+Set<OWLAxiom> adMod = getADModule(o, sig);
+Set<OWLAxiom> tradMod = getTraditionalModule(m, o, seedSig);
+assertEquals(normalizeModule(adMod, o), normalizeModule(tradMod, o));
+
+Notes / Additional considerations
+- The difference may also be caused by ordering or presence of Declaration axioms. Since module extraction is a set of axioms, tests should compare sets, not lists — which seems to be done already; still, explicit filtering is safer.
+- Investigate whether SyntacticLocalityModuleExtractor.extract and AtomicDecompositionImpl.getModule treat ontology annotations and declarations differently. If this is an API or behavior regression introduced by a change to one of those classes, that would be worth fixing in the implementation rather than changing tests.
+- If the test is deterministic in the passed_sha but flaky in failed_sha, try running the test locally multiple times and check for nondeterminism (e.g., different order of ontology axioms due to map iteration). Use deterministic collection types if ordering matters.
+
+Files likely to need editing to implement fix
+- contract/src/test/java/uk/ac/manchester/owl/owlapi/tutorialowled2011/TutorialSnippetsTestCase.java
+  - Re-add imports:
+    - uk.ac.manchester.cs.atomicdecomposition.AtomicDecomposition
+    - uk.ac.manchester.cs.atomicdecomposition.AtomicDecompositionImpl
+  - Restore getADModule and getTraditionalModule return semantics (see suggested code)
+  - Add normalizeModule helper and use it to compare modules, or filter out declarations/ontology-annotations before comparing.
+
+- (Optional) contract/src/test/java/org/semanticweb/owlapi/examples/Examples.java
+  - If example method removal was unintended, restore shouldExtractADModules example.
+
+Suggested next steps for maintainers
+1. Reproduce locally using the failing commit, run the single failing test to confirm the difference:
+   - mvn -Dtest=TutorialSnippetsTestCase#testModularizationWithAtomicDecomposition -pl contract test
+2. Apply the minimal fix: restore the missing helper, normalize modules in the test, re-run tests.
+3. If normalization masks a real bug in module extraction (i.e., extractors should be consistent about declarations/ontology annotations), file a separate issue and add regression tests that assert desired consistent behavior (either include or exclude ontology-level annotation axioms consistently).
+4. Consider adding a comment in tests describing why normalization is necessary (document the expected treatment of ontology-level annotations and declarations).
+
+Appendix: Relevant snippets from CODE DIFF
+- Deleted the AtomicDecomposition-based test and helper:
+  - testModularizationWithAtomicDecomposition() (deleted)
+  - getADModule(...) (deleted)
+- Replaced OWLAPIStreamUtils.* with OWLAPIStreamUtils.asUnorderedSet import; this narrows available helpers and may have unintended effects on conversions used in test code.
+- Modified getTraditionalModule to assertNotNull(mod) and (in diff) not return the mod; this will break callers that expect a Set returned.
+
+If you want, I can:
+- Provide a concrete patch that reintroduces getADModule and restores getTraditionalModule (with normalization before assertEquals).
+- Create a suggested unit-test patch that compares normalized modules and documents behavior.
+- Run a local static analysis of the particular methods/classes to detect if extractors include ontology-annotation axioms by design.

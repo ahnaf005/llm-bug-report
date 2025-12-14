@@ -1,0 +1,134 @@
+Title: Build failure due to FindBugs DMI_RANDOM_USED_ONLY_ONCE in TypeResolver.resolve()
+
+Summary
+- CI (Travis) build fails during mvn verify because findbugs reports a bug: "Random object created and used only once" (DMI_RANDOM_USED_ONLY_ONCE) in net.bytebuddy.dynamic.TypeResolver$Active.resolve() at TypeResolver.java:179.
+- A small patch was submitted that adds a @SuppressFBWarnings annotation to the resolve() method to silence FindBugs, but the underlying issue (creating a java.util.Random only to call nextInt() once) remains and is the real cause the static analysis flagged.
+
+Environment (from BUILD LOG)
+- Project: raphw/byte-buddy (commit failed_sha = d3caa93230830ab3ace48ef089ec1f21e64eb107)
+- Build: Maven 3.2.5, Java 1.8.0_91 (Oracle JDK8)
+- OS: Ubuntu 12.04.5 LTS (Travis container)
+- FindBugs plugin: findbugs-maven-plugin:3.0.3 (run as part of mvn verify)
+- Failure occurs in module: byte-buddy-dep
+
+Reproduction steps
+1. Checkout the failing commit (or simply use HEAD where FindBugs reports the issue).
+2. Run FindBugs check (the same goal the CI runs):
+   mvn verify -Pintegration
+   or
+   mvn findbugs:check
+3. Observe the FindBugs output indicating DMI_RANDOM_USED_ONLY_ONCE.
+
+Observed behavior (excerpts from the BUILD LOG)
+- FindBugs output:
+  Total bugs: 1
+  Random object created and used only once in net.bytebuddy.dynamic.TypeResolver$Active.resolve() [net.bytebuddy.dynamic.TypeResolver$Active] At TypeResolver.java:[line 179] DMI_RANDOM_USED_ONLY_ONCE
+- As a result, maven findbugs plugin fails the build:
+  [ERROR] Failed to execute goal ...findbugs-maven-plugin:3.0.3:check ... failed with 1 bugs and 0 errors
+  BUILD FAILURE
+
+Relevant code (from CODE DIFF)
+- Original snippet (context provided by diff around line ~175):
+
+  public interface TypeResolver {
+      ...
+      @Override
+      public TypeResolver.Resolved resolve() {
+          return new Resolved(new Random().nextInt());
+      }
+      ...
+  }
+
+- The patch added a suppression annotation above resolve():
+
+  @Override
+  @SuppressFBWarnings(value = "DMI_RANDOM_USED_ONLY_ONCE", justification = "Avoid thread-contention")
+  public TypeResolver.Resolved resolve() {
+      return new Resolved(new Random().nextInt());
+  }
+
+Root cause
+- FindBugs rule DMI_RANDOM_USED_ONLY_ONCE triggers when a new java.util.Random() is constructed and used only once. This often indicates either a misuse (unnecessary allocation) or possibly weaker randomness because java.util.Random seeded with System.nanoTime() / timestamp can be predictable if created repeatedly. The rule flags it because creating a Random instance per call is inefficient and may also cause correlated values if many are created in a short time.
+- The code creates a new Random just to obtain a single int and discards the instance immediately, which matches the pattern that FindBugs warns about.
+
+Impact
+- CI builds fail, blocking releases/merges until the static analysis warning is addressed.
+- Minor performance impact at runtime (small allocations) and possible predictability concerns in some contexts.
+- The FindBugs plugin is configured to fail the build on warnings, so the build will not proceed.
+
+Patch in the diff
+- The submitted patch adds @SuppressFBWarnings("DMI_RANDOM_USED_ONLY_ONCE") with justification "Avoid thread-contention" to silence FindBugs for that method.
+
+Analysis of the patch
+- Adding the suppression silences the FindBugs warning and will allow the build to pass (assuming the annotation is properly imported and the project includes the FindBugs annotations package).
+- Suppression hides the symptom rather than addressing the underlying inefficiency or possible predictability concerns.
+- The justification string "Avoid thread-contention" suggests an attempt to avoid having a shared Random instance across threads — but creating a Random per-call does not avoid thread contention; in fact shared Random instances can be contention-prone prior to Java 8 (but ThreadLocalRandom exists to avoid that). The justification is ambiguous and may not be convincing to a reviewer.
+
+Recommended fixes
+Option A (preferred): Replace new Random() usage with ThreadLocalRandom
+- Rationale: ThreadLocalRandom avoids contention and is the recommended way to get random ints in concurrent code without allocating new Random instances. It also avoids FindBugs DMI_RANDOM_USED_ONLY_ONCE because no new Random object is created.
+- Code change:
+
+  import java.util.concurrent.ThreadLocalRandom;
+  ...
+  @Override
+  public TypeResolver.Resolved resolve() {
+      return new Resolved(ThreadLocalRandom.current().nextInt());
+  }
+
+- Advantages:
+  - Eliminates the FindBugs warning without suppressing it.
+  - Avoids object allocation each call.
+  - Avoids contention (ThreadLocalRandom is designed for multithreaded usage).
+  - Cleaner and more idiomatic.
+
+Option B: Reuse a single Random instance (less preferred)
+- Make Random static final and reuse it:
+  private static final Random RANDOM = new Random();
+  ...
+  public TypeResolver.Resolved resolve() {
+      return new Resolved(RANDOM.nextInt());
+  }
+- Caveat: java.util.Random prior to Java 8 can cause contention in multi-threaded environments. If performance concurrency is a concern, prefer ThreadLocalRandom.
+
+Option C: Keep suppression (as in patch)
+- If there is a documented reason to create a new Random each call (e.g., to ensure different seeds for some specific reason), add @SuppressFBWarnings with a clear justification and include FindBugs annotations import:
+  import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+  ...
+  @SuppressFBWarnings(value = "DMI_RANDOM_USED_ONLY_ONCE", justification = "New Random used intentionally to avoid sharing state between threads")
+- Downsides: still performs an allocation per call and appears to contradict "Avoid thread-contention" justification. Also suppressions should be sparingly used and documented.
+
+Other notes / Potential follow-ups
+- Ensure the import for the suppression annotation exists: edu.umd.cs.findbugs.annotations.SuppressFBWarnings (or the correct package used in this project). The patch only added the annotation line; ensure build compiles with the annotation present.
+- If the project policy is to treat FindBugs warnings as build breakers, prefer code changes (Option A) that eliminate the warning rather than suppressing it.
+- Add a small unit test if needed to validate the behavior of resolve() is unchanged (i.e., returns a Resolved with an integer), though this is trivial.
+
+Suggested action plan
+1. Replace new Random().nextInt() with ThreadLocalRandom.current().nextInt() in TypeResolver.Active.resolve(). Commit and push.
+2. Rerun mvn verify (or at least mvn findbugs:check) to ensure the FindBugs warning is resolved and the build succeeds.
+3. If replacing with ThreadLocalRandom is not acceptable for some reason, then:
+   a. Add a static final Random or a ThreadLocal<Random> to reuse instances appropriately, OR
+   b. Keep suppression with a clear, accurate justification comment and ensure the suppression annotation is imported.
+4. Optional: add a short comment in the code explaining why the chosen approach was used (performance/threads/predictability concern).
+
+Example patch (preferred change)
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/TypeResolver.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/TypeResolver.java
+@@ -175,7 +175,7 @@ public interface TypeResolver {
+         @Override
+-        public TypeResolver.Resolved resolve() {
+-            return new Resolved(new Random().nextInt());
+-        }
++        public TypeResolver.Resolved resolve() {
++            return new Resolved(java.util.concurrent.ThreadLocalRandom.current().nextInt());
++        }
+
+Verification
+- After applying the preferred code change, run:
+  mvn -DskipTests=false verify
+  or (to run static analysis only)
+  mvn findbugs:check
+- Confirm FindBugs reports zero DMI_RANDOM_USED_ONLY_ONCE and that the Maven build completes successfully.
+
+Conclusion
+- The build failure is caused by the FindBugs DMI_RANDOM_USED_ONLY_ONCE warning triggered by creating a new Random for a single nextInt() call. The submitted patch suppresses the FindBugs warning, but a better fix is to use ThreadLocalRandom.current().nextInt() which eliminates the warning and addresses performance and concurrency concerns without suppressing static analysis.

@@ -1,0 +1,142 @@
+**Detailed Bug Report**
+
+---
+
+**1. Title:** Maven Build Failure: `owlapi-parsers` module fails to compile due to missing `OntologyAxiomPair` symbol after class relocation.
+
+**2. Steps to Reproduce:**
+1.  Clone the `owlcs/owlapi` repository:
+    `git clone --depth=50 --branch=master https://github.com/owlcs/owlapi.git owlcs/owlapi`
+2.  Navigate into the cloned directory:
+    `cd owlcs/owlapi`
+3.  Checkout the specific commit SHA:
+    `git checkout -qf 48d51cbdcce995596a61b0abb745d58cc37cfed4`
+4.  Attempt to build the project using Maven:
+    `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+**3. Triggering Input:**
+The bug is triggered by building the project at commit `48d51cbdcce995596a61b0abb745d58cc37cfed4`. This commit includes a change where the `OntologyAxiomPair` class was moved from the `parsers` module's test sources to the `tools` module's main sources, but the `parsers` module's `pom.xml` was not updated to reflect this new dependency.
+
+**4. Expected Behavior:**
+The Maven build should complete successfully, compiling all modules and installing the artifacts into the local Maven repository.
+
+**5. Observed Behavior:**
+The Maven build fails during the `compile` phase of the `owlapi-parsers` module. The Java compiler reports numerous "cannot find symbol" errors for the `OntologyAxiomPair` class within several files in the `parsers` module. This indicates that the `parsers` module cannot locate the `OntologyAxiomPair` class, which is now part of the `owlapi-tools` module. The build retries twice but fails consistently.
+
+**6. Relevant Code Snippets:**
+
+**a) Class Relocation (from Code Diff):**
+The `OntologyAxiomPair.java` file was moved:
+```diff
+File renamed from parsers/src/test/java/org/semanticweb/owlapi/util/OntologyAxiomPair.java to tools/src/main/java/org/semanticweb/owlapi/util/OntologyAxiomPair.java
+```
+
+**b) Compilation Errors (from Build Log):**
+The `owlapi-parsers` module attempts to use `OntologyAxiomPair` but cannot find it. Examples of errors:
+```
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/util/mansyntax/ManchesterOWLSyntaxParser.java:[39,35] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: package org.semanticweb.owlapi.util
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/util/mansyntax/ManchesterOWLSyntaxParser.java:[63,9] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: interface org.semanticweb.owlapi.util.mansyntax.ManchesterOWLSyntaxParser
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/manchestersyntax/parser/ManchesterOWLSyntaxFramesParser.java:[27,35] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: package org.semanticweb.owlapi.util
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/manchestersyntax/parser/ManchesterOWLSyntaxParserImpl.java:[179,35] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: package org.semanticweb.owlapi.util
+```
+
+**7. Stack Traces:**
+```
+[INFO] -------------------------------------------------------------
+[ERROR] COMPILATION ERROR : 
+[INFO] -------------------------------------------------------------
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/util/mansyntax/ManchesterOWLSyntaxParser.java:[39,35] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: package org.semanticweb.owlapi.util
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/util/mansyntax/ManchesterOWLSyntaxParser.java:[63,9] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: interface org.semanticweb.owlapi.util.mansyntax.ManchesterOWLSyntaxParser
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/util/mansyntax/ManchesterOWLSyntaxParser.java:[96,9] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: interface org.semanticweb.owlapi.util.mansyntax.ManchesterOWLSyntaxParser
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/util/mansyntax/ManchesterOWLSyntaxParser.java:[102,9] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: interface org.semanticweb.owlapi.util.mansyntax.ManchesterOWLSyntaxParser
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/util/mansyntax/ManchesterOWLSyntaxParser.java:[108,9] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: interface org.semanticweb.owlapi.util.mansyntax.ManchesterOWLSyntaxParser
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/util/mansyntax/ManchesterOWLSyntaxParser.java:[114,9] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: interface org.semanticweb.owlapi.util.mansyntax.ManchesterOWLSyntaxParser
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/util/mansyntax/ManchesterOWLSyntaxParser.java:[120,9] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: interface org.semanticweb.owlapi.util.mansyntax.ManchesterOWLSyntaxParser
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/util/mansyntax/ManchesterOWLSyntaxParser.java:[126,9] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: interface org.semanticweb.owlapi.util.mansyntax.ManchesterOWLSyntaxParser
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/util/mansyntax/ManchesterOWLSyntaxParser.java:[132,9] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: interface org.semanticweb.owlapi.util.mansyntax.ManchesterOWLSyntaxParser
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/util/mansyntax/ManchesterOWLSyntaxParser.java:[138,9] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: interface org.semanticweb.owlapi.util.mansyntax.ManchesterOWLSyntaxParser
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/util/mansyntax/ManchesterOWLSyntaxParser.java:[215,10] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: interface org.semanticweb.owlapi.util.mansyntax.ManchesterOWLSyntaxParser
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/manchestersyntax/parser/ManchesterOWLSyntaxFramesParser.java:[27,35] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: package org.semanticweb.owlapi.util
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/manchestersyntax/parser/ManchesterOWLSyntaxFramesParser.java:[35,40] cannot find symbol
+  symbol: class OntologyAxiomPair
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/manchestersyntax/parser/ManchesterOWLSyntaxFramesParser.java:[73,16] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: class org.semanticweb.owlapi.manchestersyntax.parser.ManchesterOWLSyntaxFramesParser
+[ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/manchestersyntax/parser/ManchesterOWLSyntaxParserImpl.java:[179,35] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: package org.semanticweb.owlapi.util
+... (65 more similar errors) ...
+[INFO] 80 errors 
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary:
+[INFO] 
+[INFO] OWLAPI ............................................. SUCCESS [  2.430 s]
+[INFO] OWLAPI :: Interfaces ............................... SUCCESS [ 11.834 s]
+[INFO] OWLAPI :: Tools .................................... SUCCESS [  0.581 s]
+[INFO] OWLAPI :: Default Implementation ................... SUCCESS [  0.241 s]
+[INFO] OWLAPI :: Parsers .................................. FAILURE [  3.243 s]
+[INFO] OWLAPI :: OBO Format ............................... SKIPPED
+[INFO] OWLAPI :: RDF4J Rio ................................ SKIPPED
+[INFO] OWLAPI :: Binding and Config ....................... SKIPPED
+[INFO] OWLAPI :: Compatibility ............................ SKIPPED
+[INFO] OWLAPI :: Tests and Tutorials ...................... SKIPPED
+[INFO] OWLAPI :: Distribution ............................. SKIPPED
+[INFO] OWLAPI :: OSGi and Compatibility Distribution ...... SKIPPED
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time: 21.221 s
+[INFO] Finished at: 2017-04-27T06:56:56+00:00
+[INFO] Final Memory: 31M/359M
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.6.0:compile (default-compile) on project owlapi-parsers: Compilation failure: Compilation failure:
+... (repeated compilation errors) ...
+[ERROR] -> [Help 1]
+```
+
+**8. Patches / Suggested Fixes:**
+The `OntologyAxiomPair` class was moved from the `parsers` module to the `tools` module. For the `owlapi-parsers` module to compile successfully, it needs to declare a dependency on `owlapi-tools` in its `pom.xml`.
+
+**Suggested Fix:**
+Add the following dependency to the `dependencies` section of `parsers/pom.xml`:
+
+```xml
+<dependency>
+    <groupId>${project.groupId}</groupId>
+    <artifactId>owlapi-tools</artifactId>
+    <version>${project.version}</version>
+</dependency>
+```

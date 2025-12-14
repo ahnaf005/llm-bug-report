@@ -1,0 +1,92 @@
+Title
+- Build fails due to Checkstyle MissingSwitchDefault rule (switch without "default" clause)
+
+Summary
+- The Maven build is failing in the byte-buddy-dep module because Checkstyle detects switch statements without a default clause. The intended fix (removing the MissingSwitchDefault check from checkstyle.xml) appears in the diff, but the build log shows the error before that fix is applied. Either the repository at the failing commit still enforced the check, or the build ran before the change took effect.
+
+Steps to Reproduce
+1. Check out the failing commit: 664f65ccf2fc5b9d9c977f254cff39aade0a7734 (the build uses this SHA).
+2. Run the same build command used in CI:
+   - mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+3. Observe the maven-checkstyle-plugin audit of the byte-buddy-dep module.
+
+Triggering Input / Conditions
+- The project contains switch statements that do not include a default clause in:
+  - byte-buddy-dep/src/main/java/net/bytebuddy/asm/TypeConstantAdjustment.java (reported at line 122)
+  - byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java (reported at line 2343)
+- Checkstyle configuration includes the MissingSwitchDefault module (which enforces that every switch has a default clause).
+- Maven Checkstyle plugin (version 2.17) + Checkstyle 6.11.2 are run during the build.
+
+Expected Behavior
+- If the repository has removed the MissingSwitchDefault rule (as the provided diff shows), the build should succeed (Checkstyle should not report errors for switches without default).
+- Otherwise (if rule still present), either:
+  - The code should be updated so all switch statements include a default branch (and build should pass), or
+  - The check should be disabled/adjusted to not fail the build for these code locations.
+
+Observed Behavior (from build log)
+- The build fails in the byte-buddy-dep module with Checkstyle errors:
+  - /home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/asm/TypeConstantAdjustment.java:122:21: error: switch without "default" clause.
+  - /home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java:2343:25: error: switch without "default" clause.
+- Maven reports:
+  - [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (default) on project byte-buddy-dep: Failed during checkstyle execution: There are 2 errors reported by Checkstyle 6.11.2 with checkstyle.xml ruleset. -> [Help 1]
+- The maven command was retried three times and ultimately failed the job.
+
+Relevant Build Log Extracts / Stack Trace
+- Checkstyle errors (exact lines from the build log):
+  - /home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/asm/TypeConstantAdjustment.java:122:21: error: switch without "default" clause.
+  - /home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java:2343:25: error: switch without "default" clause.
+- Maven final error:
+  - [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (default) on project byte-buddy-dep: Failed during checkstyle execution: There are 2 errors reported by Checkstyle 6.11.2 with checkstyle.xml ruleset. -> [Help 1]
+- Context: The build failed during the maven-checkstyle-plugin execution in module byte-buddy-dep.
+
+Relevant Code Snippets (from the diff)
+- The code diff removes the MissingSwitchDefault check from checkstyle.xml. Relevant snippet in the patch:
+  --- a/checkstyle.xml
+  +++ b/checkstyle.xml
+  @@ -65,7 +65,6 @@
+           <module name="EmptyStatement"/>
+           <module name="EqualsHashCode"/>
+           <module name="IllegalInstantiation"/>
+  -        <module name="MissingSwitchDefault"/>
+           <module name="SimplifyBooleanExpression"/>
+           <module name="SimplifyBooleanReturn"/>
+
+Patches / Suggested Fixes
+The provided diff already contains one plausible fix: remove the MissingSwitchDefault rule from the checkstyle configuration so switches without default do not fail the build.
+
+Two acceptable approaches (choose one depending on project policy):
+
+A) (What the diff does) Remove the Checkstyle rule that enforces a default case
+   - File changed: checkstyle.xml
+   - Change: delete or comment out the module:
+     <module name="MissingSwitchDefault"/>
+   - Effect: Checkstyle will no longer report "switch without default clause" as an error and the build will not fail for that reason.
+   - This is the minimal change if the team intentionally does not require defaults in all switches.
+
+B) (Alternative) Keep the check and make the code comply
+   - Edit the two files reported by Checkstyle to add explicit default branches to the offending switch statements.
+   - Example (pseudo):
+     switch (something) {
+       case A:
+         ...
+         break;
+       case B:
+         ...
+         break;
+       default:
+         // explicit no-op/default behavior (or throw if appropriate)
+         break;
+     }
+   - Files to update:
+     - byte-buddy-dep/src/main/java/net/bytebuddy/asm/TypeConstantAdjustment.java (line ~122)
+     - byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/scaffold/TypeWriter.java (line ~2343)
+   - Effect: build will pass without changing Checkstyle configuration and ensures all switches explicitly declare their default behavior.
+
+Recommendation
+- If the project's style policy allows switches without defaults, accept the diff patch (remove MissingSwitchDefault) and ensure CI uses the updated commit for the build.
+- If the project prefers stricter code (explicit defaults), revert that check removal and instead add default branches in the two files flagged by Checkstyle.
+- Ensure that the CI build uses the commit that contains the fix (the failing build log shows the build used commit 664f65cc..., so make sure the patch is merged before running CI again).
+
+Additional notes
+- The build log shows the failure occurred repeatedly across three automatic retries — confirming the error is deterministic for the commit used.
+- The Checkstyle plugin version is 2.17 and Checkstyle 6.11.2; error messages are coming from that tool, not from Java compilation or runtime exceptions.

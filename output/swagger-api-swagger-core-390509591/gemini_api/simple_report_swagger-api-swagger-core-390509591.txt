@@ -1,0 +1,78 @@
+## Software Bug Report: Build Failure - NullPointerException in `PojosTest`
+
+**Bug ID:** SWAGGER-CORE-390509591-NPE
+
+**Title:** Build Failure: `NullPointerException` in `PojosTest.testEqualsAndHashcodes` in `swagger-models` module after API changes.
+
+**Description:**
+The build is failing during the `verify` phase in the `swagger-models` module. The root cause is a `java.lang.NullPointerException` occurring within the `io.swagger.PojosTest.testEqualsAndHashcodes` method. This failure appears to be related to recent API changes in `io.swagger.models.Responses` and `io.swagger.models.Paths`, specifically the removal of `DEFAULT` related methods in `Responses.java` and modifications to `hashCode()` and `equals()` methods in both `Paths.java` and `Responses.java`. Although the failing commit attempts to exclude `Responses.class` and `Paths.class` from `PojosTest`, the `NullPointerException` still occurs, indicating either an incomplete fix or a deeper issue in the test's reflective logic.
+
+Additionally, several `java.lang.IncompatibleClassChangeError` warnings are observed during the `jetty-maven-plugin:start` phase in the `swagger-jaxrs` module, suggesting potential class version mismatches (likely related to ASM library dependencies). While these are currently warnings and not the direct cause of the build failure, they indicate an underlying environment or dependency conflict that should be addressed.
+
+**Module:** `swagger-models` (primary failure), `swagger-jaxrs` (secondary warnings)
+**Component:** `PojosTest`, `io.swagger.models.Responses`, `io.swagger.models.Paths`
+
+**Severity:** High (Build Blocker)
+**Priority:** High
+
+**Steps to Reproduce:**
+1.  Clone the `swagger-api/swagger-core` repository.
+2.  Checkout the commit `a16ef3b26633ed0b5b9bd25a56e04337cff1e0d5`.
+3.  Execute the Maven build command: `./mvnw clean verify`
+
+**Expected Behavior:**
+The build should complete successfully, with all tests passing and no errors or critical warnings.
+
+**Actual Behavior:**
+The build fails during the `test` phase of the `swagger-models` module with a `java.lang.NullPointerException` in `io.swagger.PojosTest.testEqualsAndHashcodes` at line 113.
+
+**Error Stack Trace (Excerpt):**
+```
+[ERROR] Tests run: 249, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 10.073 s <<< FAILURE! - in TestSuite
+[ERROR] testEqualsAndHashcodes(io.swagger.PojosTest)  Time elapsed: 0.092 s  <<< FAILURE!
+java.lang.NullPointerException
+	at io.swagger.PojosTest.testEqualsAndHashcodes(PojosTest.java:113)
+...
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.21.0:test (default-test) on project swagger-models: There are test failures.
+```
+
+**Root Cause Analysis:**
+1.  **`NullPointerException` in `PojosTest`:**
+    *   The `PojosTest.testEqualsAndHashcodes` method is a generic reflective test designed to verify `equals()` and `hashCode()` implementations across various POJO classes.
+    *   The code diff shows significant changes in `io.swagger.models.Responses.java`, including the removal of the `DEFAULT` constant and associated `getDefault()`, `setDefault()`, and `_default()` methods.
+    *   The `io.swagger.models.Paths.java` also had its `hashCode()` and `toString()` methods modified.
+    *   Crucially, the `PojosTest.java` file in the failing commit *adds* `Responses.class` and `Paths.class` to the `excludedClasses` set. This indicates the developer recognized that these classes would cause issues with the generic reflective test due to their API changes.
+    *   Despite this explicit exclusion in the source code, the `NullPointerException` still occurs at `PojosTest.java:113`. This suggests one of the following:
+        *   The exclusion mechanism in `PojosTest` is not fully effective or has a flaw that allows `Responses.class` or `Paths.class` (or a related class that still relies on the removed API) to be processed before the exclusion takes effect.
+        *   The `NullPointerException` is triggered by a different class that is *not* excluded, but whose `equals()` or `hashCode()` implementation (or a dependency it uses) was indirectly affected by the changes in `Responses.java` or `Paths.java`.
+        *   The `NullPointerException` is a direct result of the changes in `equals()` or `hashCode()` within `Paths.java` or `Responses.java` themselves, and the test is still attempting to call these methods on instances of these classes, even if they are "excluded" from the main reflective loop.
+
+2.  **`IncompatibleClassChangeError` Warnings:**
+    *   These warnings (`java.lang.IncompatibleClassChangeError: class org.eclipse.jetty.annotations.AnnotationParser$MyClassVisitor has interface org.objectweb.asm.ClassVisitor as super class`) indicate a mismatch in the versions of the ASM library being used by different dependencies, specifically by Jetty's annotation parser.
+    *   This is a class loading issue where a class compiled against one version of an interface (from ASM) is loaded with a different version of that interface.
+    *   While not causing the build failure directly, it's a sign of potential runtime instability and dependency conflicts that should be resolved.
+
+**Proposed Solution:**
+1.  **Immediate Fix for `NullPointerException`:**
+    *   Thoroughly debug `io.swagger.PojosTest.java` at line 113 to understand precisely why the `NullPointerException` is thrown, even with the intended exclusions.
+    *   Verify that `Responses.class` and `Paths.class` are indeed correctly excluded from the reflective testing logic in `PojosTest`.
+    *   If the NPE is due to reflective access to removed methods/fields, ensure the reflective logic is robust against `NoSuchMethodException` or `NoSuchFieldException` and handles them gracefully (e.g., by skipping the problematic check for that class).
+    *   Review the `equals()` and `hashCode()` implementations in `io.swagger.models.Paths.java` and `io.swagger.models.Responses.java` for any potential null dereferences or other logical errors that could lead to an NPE.
+
+2.  **Address `IncompatibleClassChangeError` Warnings:**
+    *   Analyze the dependency tree (`mvn dependency:tree`) to identify conflicting versions of the ASM library.
+    *   Exclude the problematic ASM dependency from the conflicting library, or upgrade/downgrade dependencies to ensure a consistent ASM version across the project.
+    *   Consider updating the `jetty-maven-plugin` or related Jetty dependencies to a version compatible with the project's other dependencies.
+
+**Environment:**
+*   **Build System:** Travis CI
+*   **Operating System:** Ubuntu 14.04.5 LTS (Trusty)
+*   **Kernel:** 4.14.12-041412-generic
+*   **Java Version:** OpenJDK 1.7.0_151 (IcedTea 2.6.11)
+*   **Maven Version:** Apache Maven 3.3.9
+*   **Git SHA (Failed):** `a16ef3b26633ed0b5b9bd25a56e04337cff1e0d5`
+*   **Git SHA (Passed):** `24f7f1651149fb3e6a2a77553991e6ded7dbc9d4`
+
+**Attachments:**
+*   BUILD LOG (provided in the prompt)
+*   CODE DIFF (provided in the prompt)

@@ -1,0 +1,149 @@
+Bug Report — Failing unit tests after changes to Responses/Paths POJOs
+=====================================================================
+
+Summary
+-------
+A unit test failure (NullPointerException) occurs in modules/swagger-models during mvn clean verify. The failure appears after recent changes to io.swagger.models.Responses and io.swagger.models.Paths and a related test update in PojosTest. The change removed the Responses.getDefault()/setDefault()/_default() methods (and the DEFAULT constant) and altered equals/hashCode/toString implementations. The regression breaks the POJO equality/hashCode tests (PojosTest.testEqualsAndHashcodes).
+
+Build environment (from BUILD LOG)
+---------------------------------
+- Project: swagger-core
+- Module failing: modules/swagger-models
+- Command: ./mvnw clean verify
+- Java: OpenJDK 7 (java version "1.7.0_151")
+- Maven wrapper & plugins used by build (see full log)
+- Reproducible locally by running: mvn -pl modules/swagger-models -DskipTests=false test (or full reactor build)
+
+Failure (excerpt)
+-----------------
+- Test failure: io.swagger.PojosTest.testEqualsAndHashcodes
+- Exception: java.lang.NullPointerException at io.swagger.PojosTest.testEqualsAndHashcodes(PojosTest.java:113)
+- Summary in log:
+  [ERROR] Failures:
+  [ERROR]   PojosTest.testEqualsAndHashcodes:113 » NullPointer
+
+Relevant code changes (from CODE DIFF)
+--------------------------------------
+1) modules/swagger-models/src/main/java/io/swagger/models/Responses.java
+- Removed:
+  - public static final String DEFAULT = "default";
+  - public Response getDefault() { return this.get(DEFAULT); }
+  - public void setDefault(Response _default) { addResponse(DEFAULT, _default); }
+  - public Responses _default(Response _default) { setDefault(_default); return this; }
+- Modified:
+  - equals: variable rename to 'responses' and comparison now returns Objects.equals(vendorExtensions, responses.vendorExtensions) && super.equals(o)
+  - toString: class name changed to "Responses" (was "ApiResponses")
+
+2) modules/swagger-models/src/main/java/io/swagger/models/Paths.java
+- hashCode ordering changed:
+  - from Objects.hash(vendorExtensions, super.hashCode())
+  - to   Objects.hash(super.hashCode(), vendorExtensions)
+- toString now includes vendorExtensions line.
+
+3) modules/swagger-models/src/test/java/io/swagger/PojosTest.java
+- excludedClasses set changed:
+  - previously: (PropertyBuilder.class)
+  - now: (PropertyBuilder.class, Responses.class, Paths.class)
+
+Observations and likely root cause
+---------------------------------
+- The PojosTest test harness performs broad reflective testing of POJOs (equals/hashCode behavior, getter/setter presence) across many model classes. The test method failing (testEqualsAndHashcodes) iterates over POJO classes, instantiates them, calls setters/getters and compares equals/hashCode behavior.
+- By removing the Responses.getDefault/setDefault/_default methods and DEFAULT constant, the reflective expectations regarding a "default" property (a key that was previously accessible via getDefault) are changed. The test harness expects a consistent setter/getter pair for the 'default' response, and removal leads to unexpected reflection results and then a NullPointerException inside the test when it attempts to operate on missing property or null values.
+- The test change attempted to exclude Responses and Paths from the generic POJO tests by adding them to excludedClasses. However:
+  - The test still fails with an NPE at line 113, which is inside testEqualsAndHashcodes — this means the exclusion either did not take effect in time for the failing class or other POJOs referencing Responses/Paths (or their fields) still trigger null-handling code paths in the test. For example, other POJOs may contain fields of type Responses or Paths and the test may traverse into them.
+  - The removal of the getDefault API likely broke assumptions elsewhere (other tests or reflective helpers) that call getDefault via reflection or access the DEFAULT constant.
+- The other changes (equals/hashCode reorder in Paths and toString changes) are less likely to cause NPEs but may affect equality/hashCode tests — i.e., inconsistent equals/hashCode implementations can cause tests asserting equals/hashCode contracts to fail.
+
+Impact
+------
+- Build failing (swagger-models module) — CI shows BUILD FAILURE.
+- Unit test suite (PojosTest and possibly other tests) break on continuous integration.
+- API/backwards-compatibility: Removing getDefault()/setDefault() is an API change on a model class that external code (or tests) expects.
+
+Suggested resolution(s)
+-----------------------
+Option A — Restore backward-compatible API (recommended)
+- Reintroduce the removed API on Responses to preserve backward compatibility and prevent the reflective POJO tests from breaking:
+  - public static final String DEFAULT = "default";
+  - public Response getDefault() { return this.get(DEFAULT); }
+  - public void setDefault(Response _default) { addResponse(DEFAULT, _default); }
+  - public Responses _default(Response _default) { setDefault(_default); return this; }
+- Add @Deprecated annotation and javadoc if the intent is to eventually remove it (to warn clients but retain tests).
+- Keep the improved equals and toString changes if desired, but ensure equals/hashCode contract still holds (super.equals(o) checks consistent with hashCode).
+
+Why this is preferred:
+- Minimizes test churn and downstream breakage.
+- Maintains API compatibility for external users and test expectations.
+- The PojosTest modifications (excluding Responses/Paths) should not be necessary if the API remains backward-compatible.
+
+Option B — Update tests and reflectors to accept the new shape
+- Update PojosTest and any reflective helpers to account for the missing getDefault property:
+  - Either fully exclude Responses and Paths AND any class that contains them (transitively), or
+  - Make the test code tolerate absent getter/setter for reserved-key 'default' (special-case).
+- This is a larger test-harness change and may be more error-prone because the POJO test suite assumes a standard JavaBean accessor pattern.
+
+Recommended quick patch (restore API)
+-------------------------------------
+In Responses.java, add back the constant and accessor methods (preferably annotate Deprecated):
+
+  public static final String DEFAULT = "default";
+
+  /**
+   * returns the default property from a Responses instance.
+   *
+   * @return Response _default
+   */
+  @Deprecated
+  public Response getDefault() {
+      return this.get(DEFAULT);
+  }
+
+  @Deprecated
+  public void setDefault(Response _default) {
+      addResponse(DEFAULT, _default);
+  }
+
+  @Deprecated
+  public Responses _default(Response _default) {
+      setDefault(_default);
+      return this;
+  }
+
+- After restoring these, remove Responses.class and Paths.class from the excludedClasses list in PojosTest (or keep them if there was other rationale), and re-run test suite.
+
+Additional code-quality recommendations
+---------------------------------------
+- Ensure equals/hashCode pair is consistent: When equals checks super.equals(o), hashCode must incorporate the same aspects. Reordering arguments in Objects.hash isn't a correctness issue per se, but make sure all fields used in equals are used (in same logical combination) in hashCode.
+- Avoid changing public model API surface without updating tests and documenting breaking changes.
+- If 'default' is reserved or problematic as a Java identifier, keep explicit getter/setter methods (getDefault/setDefault) as the bridge between map key "default" and Java method names.
+
+How to reproduce locally
+------------------------
+1. Clone repository at the branch/commit that contains the diff.
+2. Ensure JDK 7 (OpenJDK 7) is in use (or same environment).
+3. Run: ./mvnw clean verify
+4. Or to isolate: mvn -pl modules/swagger-models -Dtest=io.swagger.PojosTest#testEqualsAndHashcodes test
+
+Files/lines of interest from the diff
+-------------------------------------
+- modules/swagger-models/src/main/java/io/swagger/models/Responses.java
+  - Methods removed in recent diff: getDefault(), setDefault(), _default(), DEFAULT constant.
+  - Equals and toString modified.
+- modules/swagger-models/src/main/java/io/swagger/models/Paths.java
+  - hashCode argument order changed; toString augmented.
+- modules/swagger-models/src/test/java/io/swagger/PojosTest.java
+  - excludedClasses updated: PropertyBuilder.class, Responses.class, Paths.class
+
+Root-cause summary
+------------------
+The failing test is caused by removing accessor methods (getDefault/setDefault/_default and DEFAULT constant) from the Responses model class. The POJO test harness (PojosTest) expects those accessor methods (or otherwise consistent JavaBean properties) and attempts to exercise equality/hashCode behavior using reflection; the missing API leads to unexpected nulls and unhandled reflection results, causing a NullPointerException in the test.
+
+Immediate action
+----------------
+- Restore the removed accessor methods (and DEFAULT constant) to Responses.java (mark as @Deprecated if removal was intentional).
+- Re-run the test suite (mvn clean verify) and confirm all tests pass.
+- Alternatively, if removal is intentional and desired, modify the PojosTest reflection logic to handle absence of these methods gracefully and update tests to exclude classes safely (ensuring all classes referencing Responses/Paths are accounted for).
+
+If you want, I can:
+- Produce the exact patch to re-add the DEFAULT constant and getDefault/setDefault/_default methods (with deprecation), and update PojosTest to revert the exclusion change; or
+- Produce a minimal change to PojosTest to safely skip Responses/Paths and any classes containing them (but that is fragile).

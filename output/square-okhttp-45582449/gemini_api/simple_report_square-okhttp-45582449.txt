@@ -1,0 +1,125 @@
+## Software Bug Report
+
+**Bug ID:** [NEW]
+**Title:** OkHttp Build Failure: Compilation Errors in `WebSocketEcho.java` (Code Diff Unavailable)
+
+---
+
+**Project:** OkHttp
+**Module/Component:** `samples/guide`
+**Version/Branch:** `2.3.0-SNAPSHOT` (from Maven logs), building `refs/pull/1260/merge`
+
+**Severity:** High (Build Failure)
+**Priority:** High (Blocks successful build and potentially release)
+**Status:** New
+
+---
+
+**Environment:**
+*   **Operating System:** Ubuntu 12.04.5 LTS (precise)
+*   **Java Version:** Oracle JDK 1.7.0_72 (build 1.7.0_72-b14)
+*   **Maven Version:** Apache Maven 3.2.3
+*   **Build System:** Travis CI (container-based infrastructure)
+*   **Git Commit:** `a5652bc2bc3d2a992f39446369fb004a72e881d4` (hpack-test-case submodule) - main commit not explicitly stated but is `FETCH_HEAD` for `refs/pull/1260/merge`.
+
+---
+
+**Description:**
+The `OkHttp` project build is failing consistently during the `mvn install` phase. The failure occurs in the `Sample: Guide` module, specifically during the compilation of `WebSocketEcho.java`. The compilation errors indicate that several symbols related to WebSocket functionality (`WebSocketResponse`, `WebSocketListener.onPong`, `WebSocketCall.execute`) cannot be found or are not correctly overridden, suggesting an API incompatibility or missing dependencies.
+
+Crucially, the `CODE DIFF` section indicates that the system was unable to retrieve the code changes for this build, returning a `404 Not Found` error. This absence of the code diff makes it difficult to immediately identify the specific changes that introduced these compilation issues.
+
+---
+
+**Steps to Reproduce:**
+1.  Clone the `square/okhttp` repository: `git clone --depth=50 git://github.com/square/okhttp.git square/okhttp`
+2.  Navigate into the repository: `cd square/okhttp`
+3.  Fetch and checkout the pull request merge branch: `git fetch origin +refs/pull/1260/merge:` followed by `git checkout -qf FETCH_HEAD`
+4.  Initialize and update git submodules: `git submodule init` and `git submodule update`
+5.  Execute the Maven install command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+---
+
+**Expected Behavior:**
+The `mvn install` command should complete successfully, compiling all modules, including `Sample: Guide`, without any compilation errors.
+
+---
+
+**Actual Behavior:**
+The `mvn install` command fails during the compilation of the `Sample: Guide` module. The build attempts to retry three times, failing identically each time. The compilation errors are reported for `WebSocketEcho.java`, indicating issues with `WebSocketResponse` class, the `onPong` method in `WebSocketListener`, and the `execute` method in `WebSocketCall`.
+
+---
+
+**Error Messages (from Build Log):**
+
+```
+[ERROR] COMPILATION ERROR : 
+[INFO] -------------------------------------------------------------
+[ERROR] /home/travis/build/square/okhttp/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java:[8,39] cannot find symbol
+  symbol:   class WebSocketResponse
+  location: package com.squareup.okhttp.internal.ws
+[ERROR] /home/travis/build/square/okhttp/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java:[20,14] com.squareup.okhttp.recipes.WebSocketEcho is not abstract and does not override abstract method onPong(okio.Buffer) in com.squareup.okhttp.internal.ws.WebSocketListener
+[ERROR] /home/travis/build/square/okhttp/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java:[28,5] cannot find symbol
+  symbol:   class WebSocketResponse
+  location: class com.squareup.okhttp.recipes.WebSocketEcho
+[ERROR] /home/travis/build/square/okhttp/samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java:[28,47] cannot find symbol
+  symbol:   method execute(com.squareup.okhttp.recipes.WebSocketEcho)
+  location: variable call of type com.squareup.okhttp.internal.ws.WebSocketCall
+[INFO] 4 errors 
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary:
+[INFO] 
+[INFO] OkHttp (Parent) .................................... SUCCESS [  1.931 s]
+[INFO] OkHttp ............................................. SUCCESS [  7.492 s]
+[INFO] MockWebServer ...................................... SUCCESS [  5.293 s]
+[INFO] OkHttp Apache HttpClient ........................... SUCCESS [  0.662 s]
+[INFO] OkHttp URLConnection ............................... SUCCESS [  1.105 s]
+[INFO] OkHttp Tests ....................................... SUCCESS [  1.092 s]
+[INFO] OkCurl ............................................. SUCCESS [  3.032 s]
+[INFO] Samples (Parent) ................................... SUCCESS [  0.170 s]
+[INFO] Sample: Guide ...................................... FAILURE [  0.049 s]
+[INFO] Sample: Crawler .................................... SKIPPED
+[INFO] Sample: Simple Client .............................. SKIPPED
+[INFO] Sample: Static Server .............................. SKIPPED
+[INFO] Benchmarks ......................................... SKIPPED
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+```
+
+**Code Diff Retrieval Error:**
+```json
+{
+  "_error": {
+    "code": 404,
+    "message": "The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again."
+  },
+  "_status": "ERR"
+}
+```
+
+---
+
+**Analysis/Possible Cause:**
+The compilation errors strongly suggest that the `WebSocketEcho.java` sample code is out of sync with the current API of the `okhttp` library's internal WebSocket implementation (`com.squareup.okhttp.internal.ws`).
+1.  **`cannot find symbol class WebSocketResponse`**: This indicates that the `WebSocketResponse` class either no longer exists, has been renamed, or has been moved to a different package.
+2.  **`does not override abstract method onPong(okio.Buffer) in com.squareup.okhttp.internal.ws.WebSocketListener`**: This implies that the `WebSocketListener` interface has been updated to include a new abstract method `onPong(okio.Buffer)`, which `WebSocketEcho` (which implements `WebSocketListener`) has not yet implemented.
+3.  **`cannot find symbol method execute(com.squareup.okhttp.recipes.WebSocketEcho)`**: This suggests that the `execute` method on `WebSocketCall` no longer accepts an argument of type `WebSocketEcho`, or its signature has changed.
+
+The primary challenge in diagnosing the root cause is the **unavailability of the code diff**. Without seeing the changes introduced in `refs/pull/1260/merge`, it's impossible to determine if the `WebSocketEcho.java` file itself was modified incorrectly, or if changes in the core `okhttp` library's WebSocket API were introduced without corresponding updates to the sample.
+
+---
+
+**Suggested Fix/Workaround:**
+1.  **Investigate API Changes:** Review recent changes to the `com.squareup.okhttp.internal.ws` package in the `okhttp` library to identify any modifications to `WebSocketResponse`, `WebSocketListener`, and `WebSocketCall`.
+2.  **Update Sample Code:** Modify `samples/guide/src/main/java/com/squareup/okhttp/recipes/WebSocketEcho.java` to conform to the current WebSocket API. This will likely involve:
+    *   Adjusting the import or usage of `WebSocketResponse`.
+    *   Implementing the `onPong(okio.Buffer)` method in `WebSocketEcho`.
+    *   Correcting the call to `WebSocketCall.execute()`.
+3.  **Address Code Diff Issue:** Investigate why the code diff was not available. This might be a separate issue with the CI/CD system or the request for the diff.
+
+---
+
+**Additional Notes:**
+*   The build log also shows several warnings about missing plugin versions (`maven-deploy-plugin`, `exec-maven-plugin`) and unchecked/deprecated operations. While not directly causing this compilation failure, these should be addressed for overall project health and future stability.
+*   The consistent failure across retries confirms this is a deterministic compilation error, not a transient issue.

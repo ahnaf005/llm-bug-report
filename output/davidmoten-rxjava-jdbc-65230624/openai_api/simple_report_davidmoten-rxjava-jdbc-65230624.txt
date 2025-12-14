@@ -1,0 +1,92 @@
+Title: Build failure — "cannot find symbol: class ResultSetMapper" (33 compilation errors)
+
+Summary
+- The Maven build fails during compilation with 33 "cannot find symbol: class ResultSetMapper" errors across many source files.
+- Root cause: the codebase at the failing commit did not include the ResultSetMapper interface. The attached patch adds a new interface file ResultSetMapper.java which resolves the missing symbol.
+- Impact: module fails to compile; CI job exits with BUILD FAILURE.
+
+Affected commit / CI build
+- Failed SHA (CI): 12fa13a1276031b32c4f56ee211f35ed464add7d
+- Passing SHA (prior): 880d91d9e3931224d204090db3d267b28b02edbd
+- Build system from log:
+  - OS: Ubuntu 12.04 (precise)
+  - JDK: Oracle JDK8 (1.8.0_31)
+  - Maven: 3.2.5
+  - Command executed by CI: mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+
+Failure / error excerpt
+- Compilation fails with the repeated error:
+  cannot find symbol
+    symbol:   class ResultSetMapper
+    location: class com.github.davidmoten.rx.jdbc.<...>
+
+- Example error locations (full list in build log; 33 errors total):
+  - src/main/java/com/github/davidmoten/rx/jdbc/QuerySelectOperator.java:[28,19]
+  - src/main/java/com/github/davidmoten/rx/jdbc/QuerySelect.java:[83,38]
+  - src/main/java/com/github/davidmoten/rx/jdbc/Util.java:[237,16]
+  - src/main/java/com/github/davidmoten/rx/jdbc/tuple/Tuples.java:[10,37]
+  - src/main/java/com/github/davidmoten/rx/jdbc/QuerySelectOperation.java:[32,13]
+  - src/main/java/com/github/davidmoten/rx/jdbc/QuerySelectProducer.java:[21,19]
+  - etc.
+
+Build consequences
+- Maven compile step fails (maven-compiler-plugin:3.1:compile).
+- CI retries 3 times; all retries fail with same compilation errors.
+- Final CI result: BUILD FAILURE, job stopped.
+
+Root cause analysis
+- The Java compiler is unable to resolve the symbol ResultSetMapper referenced throughout the codebase. This means the ResultSetMapper type was not present on the compilation classpath (no compiled class or source in the module).
+- The attached code diff (patch) shows a new file being added:
+  src/main/java/com/github/davidmoten/rx/jdbc/ResultSetMapper.java
+  with the interface:
+    package com.github.davidmoten.rx.jdbc;
+    import java.sql.ResultSet;
+    import java.sql.SQLException;
+    public interface ResultSetMapper<T> {
+        T call(ResultSet rs) throws SQLException;
+    }
+
+- This indicates the intended fix is to create the missing interface in the expected package. The failing commit (used by CI) did not include this file; therefore every reference to ResultSetMapper failed to compile.
+
+Patch summary (from CODE DIFF)
+- New file added (9 lines):
+  src/main/java/com/github/davidmoten/rx/jdbc/ResultSetMapper.java
+- Interface:
+  - package: com.github.davidmoten.rx.jdbc
+  - method signature: T call(ResultSet rs) throws SQLException;
+
+Why this patch fixes it
+- All compilation errors are "cannot find symbol" for the ResultSetMapper type — adding the interface with the correct package and name provides the missing type definition and allows the compiler to resolve all references.
+- The method signature appears consistent with typical ResultSet mapping usage and should satisfy call sites expecting a function that maps a ResultSet to T.
+
+Reproduction steps
+1. Clone the repository and check out the failing commit:
+   - git clone ... (repo)
+   - git checkout 12fa13a1276031b32c4f56ee211f35ed464add7d
+2. Run the same build command used by CI:
+   - mvn clean install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+3. Observe the compilation errors "cannot find symbol: class ResultSetMapper" (multiple files).
+
+Fix applied by patch
+- Add ResultSetMapper.java under src/main/java/com/github/davidmoten/rx/jdbc with the interface shown above.
+
+Recommendations / next steps
+1. Apply the patch (add the ResultSetMapper interface) to the failing commit branch so the CI build includes it. Confirm file is committed and pushed.
+2. Re-run the build (locally and in CI) to ensure all compilation errors are resolved:
+   - mvn clean install -DskipTests=true -Dmaven.javadoc.skip=true
+3. Verify all call sites compile and behave as expected:
+   - Check that the methods invoking ResultSetMapper.call(...) expect SQLException to be thrown and are handling it appropriately.
+4. (Optional) Mark the interface as @FunctionalInterface to document intent and enable lambda usage (Java 8):
+   - @FunctionalInterface
+   - public interface ResultSetMapper<T> { T call(ResultSet rs) throws SQLException; }
+5. Add a unit test or basic compile test that uses ResultSetMapper in at least one place to prevent this regression (missing file) from reappearing.
+6. Ensure that your change is included in the next CI run and that no other types are missing.
+
+Additional suggestions
+- If the project uses an IDE or CI pre-commit hooks, consider adding a compile-only CI job early in the pipeline that fails fast if source files are missing or file moves/renames break type resolution.
+- When making broad API changes (add/remove types), update consumers in the same commit or in a coordinated commit so intermediate states do not fail CI.
+
+If you want, I can:
+- Produce the exact git patch content (already included in CODE DIFF) as a patch file ready to apply.
+- Suggest a small unit test demonstrating usage of ResultSetMapper.
+- Run through further validation checks to ensure no additional missing types remain.

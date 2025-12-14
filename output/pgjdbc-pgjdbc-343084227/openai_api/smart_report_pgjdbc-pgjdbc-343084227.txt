@@ -1,0 +1,165 @@
+Title
+- Batch insert rewrite and deep-batched-insert parser change causes test failures and ArrayStoreException
+
+Summary
+- After the change in Parser.java that replaced checks of valuesBraceCloseFound with a check against valuesBraceClosePosition == -1, the test suite fails: multiple BatchExecute/BatchedInsert rewrite tests report incorrect update counts and DeepBatchedInsertStatementTest throws an ArrayStoreException. This appears to be caused by incorrect parsing of VALUES/bind positions (or inconsistent state between valuesBraceCloseFound and valuesBraceClosePosition) leading to incorrect formed batched queries and wrong internal types/sizes later used by the deep-batched insert code.
+
+Steps to Reproduce
+1. Checkout the repository state that includes the patch (the failing CI run applies it; see the diff for Parser.java).
+2. Run the full test build (as done by CI):
+   - mvn clean package -B -V -DpreferQueryMode=extendedForPrepared -P release,coverage
+   - or run the failing test classes directly with Maven surefire.
+3. Observe failures in BatchExecuteTest, BatchedInsertReWriteEnabledTest and error in DeepBatchedInsertStatementTest.
+
+Triggering Input / Conditions
+- Query rewrite for batched INSERTs enabled (insertRewrite = true).
+- Query mode: extendedForPrepared (CI env variable).
+- Tests exercising batched insert rewrite:
+  - BatchExecuteTest.testBatchWithRepeatedInsertStatement
+  - BatchExecuteTest.testBatchWithTwoMultiInsertStatements
+  - BatchedInsertReWriteEnabledTest.testMultiValues1bind
+  - DeepBatchedInsertStatementTest.testDeepInternalsBatchedQueryDecorator
+- The code change in pgjdbc/src/main/java/org/postgresql/core/Parser.java that replaced checks on valuesBraceCloseFound with valuesBraceClosePosition == -1.
+
+Expected Behavior
+- Parser should correctly detect and mark VALUES clause open/close positions and bind positions so that INSERT rewrite logic can group batched values correctly.
+- The batched-insert rewrite tests should pass, returning expected update counts (e.g. SUCCESS_NO_INFO or expected numeric counts).
+- DeepBatchedInsertStatementTest.transformBQD should not throw ArrayStoreException.
+
+Observed Behavior (from CI build log)
+- Multiple test failures due to incorrect update counts:
+  - BatchExecuteTest.testBatchWithRepeatedInsertStatement: expected:<-2> but was:<1>
+  - BatchExecuteTest.testBatchWithTwoMultiInsertStatements: expecting {2, 2} but got {2,2} with wrong elements reported
+  - BatchedInsertReWriteEnabledTest.testMultiValues1bind: expected [[1,1]] but was [[2,2]]
+- One test error (exception):
+  - DeepBatchedInsertStatementTest.testDeepInternalsBatchedQueryDecorator -> transformBQD:283 throws java.lang.ArrayStoreException
+- Full test summary from build log:
+  - Tests run: 4864, Failures: 8, Errors: 1, Skipped: 117
+  - Build fails at Maven surefire plugin test phase: "There are test failures."
+
+Relevant Stack Traces and Failure Output (from build log)
+- Assertion failures (examples):
+  - testBatchWithRepeatedInsertStatement[binary = REGULAR, insertRewrite = true](org.postgresql.test.jdbc2.BatchExecuteTest)
+    java.lang.AssertionError: expected:<-2> but was:<1>
+    at ... BatchExecuteTest.testBatchWithRepeatedInsertStatement(BatchExecuteTest.java:1240)
+
+  - testBatchWithTwoMultiInsertStatements[binary = REGULAR, insertRewrite = true](org.postgresql.test.jdbc2.BatchExecuteTest)
+    org.junit.ComparisonFailure: Inserting two multi-valued statements with two rows each. Expecting {2, 2} rows inserted (or SUCCESS_NO_INFO) expected:<[[-2, -]2]> but was:<[[2, ]2]>
+    at ... BatchExecuteTest.testBatchWithTwoMultiInsertStatements(BatchExecuteTest.java:1299)
+
+  - testMultiValues1bind[0: autoCommit=YES, binary=REGULAR](org.postgresql.test.jdbc2.BatchedInsertReWriteEnabledTest)
+    org.junit.ComparisonFailure: 2 addBatch, 1 row each expected:<[[1, 1]]> but was:<[[2, 2]]>
+    at ... BatchedInsertReWriteEnabledTest.testMultiValues1bind(BatchedInsertReWriteEnabledTest.java:291)
+
+- Error (ArrayStoreException):
+  - java.lang.ArrayStoreException: null
+    at java.util.Arrays.copyOf(Arrays.java:3213)
+    at java.util.ArrayList.toArray(ArrayList.java:411)
+    at org.postgresql.jdbc.DeepBatchedInsertStatementTest.transformBQD(DeepBatchedInsertStatementTest.java:283)
+    at org.postgresql.jdbc.DeepBatchedInsertStatementTest.testDeepInternalsBatchedQueryDecorator(DeepBatchedInsertStatementTest.java:88)
+
+Relevant Code Snippets (from the provided diff)
+- File: pgjdbc/src/main/java/org/postgresql/core/Parser.java
+- Two changed conditions (replaced boolean check valuesBraceCloseFound with position check valuesBraceClosePosition == -1):
+
+Original context (before patch):
+- at lines around 149:
+  if (!isValuesFound || !isCurrentReWriteCompatible || !valuesBraceCloseFound
+      || (bindPositions != null
+      && valuesBraceClosePosition < bindPositions.get(bindPositions.size() - 1))) {
+    valuesBraceOpenPosition = -1;
+    ...
+  }
+
+Patched context (after patch):
+- at lines around 149:
+  if (!isValuesFound || !isCurrentReWriteCompatible || valuesBraceClosePosition == -1
+      || (bindPositions != null
+      && valuesBraceClosePosition < bindPositions.get(bindPositions.size() - 1))) {
+    valuesBraceOpenPosition = -1;
+    ...
+  }
+
+- and later (around 244) the same replacement:
+  if (!isValuesFound || !isCurrentReWriteCompatible || valuesBraceClosePosition == -1
+      || (bindPositions != null
+      && valuesBraceClosePosition < bindPositions.get(bindPositions.size() - 1))) {
+    valuesBraceOpenPosition = -1;
+    ...
+  }
+
+Notes about the change
+- The patch removed direct checks to the boolean flag valuesBraceCloseFound and replaced them with checks against valuesBraceClosePosition == -1.
+- This assumes valuesBraceClosePosition holds -1 when no closing brace was found; if valuesBraceClosePosition is not correctly initialized or updated, the new condition can evaluate differently than the original condition and cause incorrect control flow.
+- Also, code elsewhere may still rely on valuesBraceCloseFound being true/false; removing its usage here without ensuring consistent updates of the position variable can cause inconsistent parser semantics.
+
+Likely Root Causes
+- The new check uses valuesBraceClosePosition == -1 as the "not found" sentinel. If valuesBraceClosePosition:
+  - is not initialized to -1 (default maybe 0), or
+  - not updated properly when a closing brace is found (so remains -1 or some other invalid value), then control flow will differ from the previous boolean flag check.
+- The incorrect detection of VALUES close position or mis-ordering vs bindPositions leads to:
+  - incorrectly assembled multi-row INSERT rewrite statements (hence wrong update counts),
+  - or incorrect data types/lengths in internal arrays/lists used by the "deep" batched insert decorator (hence ArrayStoreException during array copy / toArray()).
+- The ArrayStoreException indicates that a list contains elements incompatible with the target runtime array type used in toArray(T[]). That suggests the parsing produced an unexpected mixed/incorrect element type or the transformation code is fed wrong structures (likely due to earlier parser logic change).
+
+Patches / Suggested Fixes
+1) Immediate rollback (safe)
+- Revert the two condition changes and restore the original checks using valuesBraceCloseFound. This will restore previous behavior until a thorough fix is made.
+
+2) Preferred: Keep position-based check but ensure consistent initialization and update
+- Initialize valuesBraceClosePosition to -1 at declaration time (if not already).
+- Ensure that whenever valuesBraceCloseFound is set (true), valuesBraceClosePosition is set to the correct index; and whenever not found, valuesBraceClosePosition remains -1. Then using valuesBraceClosePosition == -1 is safe.
+- Also change the condition to combine both checks while troubleshooting to preserve semantics:
+  if (!isValuesFound || !isCurrentReWriteCompatible || !valuesBraceCloseFound || valuesBraceClosePosition == -1
+      || (bindPositions != null && valuesBraceClosePosition < bindPositions.get(bindPositions.size() - 1))) {
+    ...
+  }
+
+3) Defensive coding to avoid ArrayStoreException
+- Before calling toArray(T[]), verify the list element types match T, or use List.toArray(new Object[0]) and then convert, or explicitly construct the target array from known, validated element types.
+- Add sanity checks that the bindPositions list and other arrays have expected element types and sizes before transformation.
+
+4) Unit tests and logging
+- Add unit tests for Parser edge cases: missing closing brace, brace position equal to -1, bind positions after or before braces.
+- Add assertions / logging in Parser where valuesBraceClosePosition is set to track mis-detections.
+- Re-run failing tests to confirm fix: BatchExecuteTest, BatchedInsertReWriteEnabledTest, DeepBatchedInsertStatementTest.
+
+Suggested code change example (conservative fix)
+- Re-introduce boolean check while also guarding against incorrect position value:
+
+Replace the two modified ifs with:
+
+if (!isValuesFound || !isCurrentReWriteCompatible || !valuesBraceCloseFound
+    || valuesBraceClosePosition == -1
+    || (bindPositions != null && valuesBraceClosePosition < bindPositions.get(bindPositions.size() - 1))) {
+  valuesBraceOpenPosition = -1;
+  ...
+}
+
+Additionally, ensure valuesBraceClosePosition is initialized correctly where declared, e.g.:
+
+int valuesBraceClosePosition = -1; // default to not found
+
+Rationale: this preserves previous logic (boolean flag) and also tolerates situations where position variable might be incorrectly -1; it avoids changing multiple components at once and gives time to audit all places that set/use valuesBraceCloseFound/valuesBraceClosePosition.
+
+Action items for the author/maintainer
+- Inspect Parser.java variable declarations and ensure valuesBraceClosePosition default is -1 and updated consistently where parsing finds a brace.
+- Revert or update the changed conditions as above.
+- Run the failing tests locally:
+  - org.postgresql.test.jdbc2.BatchExecuteTest
+  - org.postgresql.test.jdbc2.BatchedInsertReWriteEnabledTest
+  - org.postgresql.jdbc.DeepBatchedInsertStatementTest
+- Add unit tests covering missing or misplaced VALUES braces and multiple bind positions.
+- If ArrayStoreException persists, inspect DeepBatchedInsertStatementTest.transformBQD (line around 283 per stack) to find which list->array conversion is failing and add type checks / fix upstream data generation.
+
+Relevant locations from build log (to help debugging)
+- Failing test lines (from build output):
+  - BatchExecuteTest.testBatchWithRepeatedInsertStatement — BatchExecuteTest.java:1240
+  - BatchExecuteTest.testBatchWithTwoMultiInsertStatements — BatchExecuteTest.java:1299
+  - BatchExecuteTest.assertBatchResult — BatchExecuteTest.java:1329
+  - BatchedInsertReWriteEnabledTest.testMultiValues1bind — BatchedInsertReWriteEnabledTest.java:291
+  - DeepBatchedInsertStatementTest.transformBQD — DeepBatchedInsertStatementTest.java:283
+
+Conclusion
+- The small change in Parser.java switching from checking the boolean valuesBraceCloseFound to checking valuesBraceClosePosition == -1 changes parser control flow in some cases and leads to malformed batched-insert rewriting (wrong update counts) and an ArrayStoreException in deep-batched insert tests.
+- Recommended fix: restore the robust boolean check or ensure position sentinel usage is consistent (initialize to -1 and update reliably), plus add defensive checks for list->array conversions. Re-run the failing tests.

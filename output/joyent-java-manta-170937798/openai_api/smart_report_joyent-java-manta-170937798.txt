@@ -1,0 +1,142 @@
+Title
+- Build fails due to Checkstyle JavadocPackage: missing package-info.java in com.joyent.manta.client.multipart
+
+Steps to Reproduce
+1. Clone the repository and checkout the multipart branch used in CI (commit a61829b9... as in the build log).
+   - Example: git clone --depth=50 --branch=multipart https://github.com/joyent/java-manta.git
+   - git checkout a61829b9dbcc2195859716d626ca09a828c3a2d4
+2. Ensure environment similar to CI:
+   - Java: Oracle JDK 8 (1.8.0_31)
+   - Maven: 3.2.5
+3. Run the same Maven command used in the build:
+   - mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+4. Observe the build fails during the checkstyle plugin phase.
+
+Triggering Input / Conditions
+- Running Maven install with the maven-checkstyle-plugin enabled on the module java-manta-client.
+- The package com.joyent.manta.client.multipart does not contain a package-info.java file at the time of build (Checkstyle JavadocPackage rule enabled).
+- Build environment: Java 1.8.0_31, Maven 3.2.5 (same as CI log).
+
+Expected Behavior
+- The Maven build should complete successfully (or at least proceed past the checkstyle JavadocPackage check) after the intended code changes are applied.
+- If code changes intentionally introduce new package-level contents, either package-info.java should be present or checkstyle configuration should be updated so the JavadocPackage rule is satisfied.
+
+Observed Behavior (from CI build log)
+- Maven fails in the checkstyle phase with a JavadocPackage violation:
+  - [ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[0] (javadoc) JavadocPackage: Missing package-info.java file.
+  - [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation.
+- The mvn install step is retried three times and fails each time; the build stops.
+
+Relevant Build Log / Stack Trace
+- Key error lines reproduced from the build log:
+  - [ERROR] src/main/java/com/joyent/manta/client/multipart/MantaMultipartManager.java:[0] (javadoc) JavadocPackage: Missing package-info.java file.
+  - [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (checkstyle) on project java-manta-client: You have 1 Checkstyle violation. -> [Help 1]
+  - (Repeated 3 times as the install command was retried)
+- Context lines from the log:
+  - The CI job used: jdk_switcher use oraclejdk8 (Java 1.8.0_31)
+  - Maven command: mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+
+Relevant Code Snippets (from code diff)
+- The patch introduced a package-info.java for com.joyent.manta.client.multipart (this resolves the Checkstyle JavadocPackage requirement). Content added:
+
+  File: java-manta-client/src/main/java/com/joyent/manta/client/multipart/package-info.java
+  ---
+  /**
+   * Package containing all of the classes used as part of the Manta Multipart
+   * upload API.
+   *
+   * @author <a href="https://github.com/dekobon">Elijah Zupancic</a>
+   * @since 2.5.0
+   */
+  package com.joyent.manta.client.multipart;
+  ---
+
+- The diff splits the inner class Part out of MantaMultipartUpload into its own top-level class MantaMultipartUploadPart and updates all references:
+
+  Examples of changed method signatures in MantaMultipartManager.java
+  - Old:
+    public MantaMultipartUpload.Part uploadPart(final MantaMultipartUpload upload, final int partNumber, final String contents) throws IOException
+  - New:
+    public MantaMultipartUploadPart uploadPart(final MantaMultipartUpload upload, final int partNumber, final String contents) throws IOException
+
+  - Old:
+    public Stream<MantaMultipartUpload.Part> listParts(final UUID id) throws IOException
+      ...
+      .map(MantaMultipartUpload.Part::new);
+  - New:
+    public Stream<MantaMultipartUploadPart> listParts(final UUID id) throws IOException
+      ...
+      .map(MantaMultipartUploadPart::new);
+
+- New file added implementing the part class:
+
+  File: java-manta-client/src/main/java/com/joyent/manta/client/multipart/MantaMultipartUploadPart.java
+  (abridged)
+  ---
+  package com.joyent.manta.client.multipart;
+
+  import com.joyent.manta.client.MantaClient;
+  import com.joyent.manta.client.MantaObject;
+  import com.joyent.manta.client.MantaUtils;
+  import org.apache.commons.lang3.builder.ToStringBuilder;
+
+  import java.io.Serializable;
+  import java.util.Objects;
+
+  /**
+   * A single part of a multipart upload.
+   * @author ...
+   * @since 2.5.0
+   */
+  public class MantaMultipartUploadPart implements Comparable<MantaMultipartUploadPart>, Serializable {
+      private static final long serialVersionUID = -738331736064518314L;
+
+      private final int partNumber;
+      private final String objectPath;
+      private final String etag;
+      private final Long length;
+
+      public MantaMultipartUploadPart(final int partNumber, final String objectPath, final String etag, final Long length) { ... }
+
+      public MantaMultipartUploadPart(final MantaObject object) { ... }
+
+      public int getPartNumber() { return partNumber; }
+      public String getEtag() { return etag; }
+      protected String getObjectPath() { return objectPath; }
+      @Override public int compareTo(final MantaMultipartUploadPart that) { ... }
+      @Override public boolean equals(final Object that) { ... }
+      @Override public int hashCode() { ... }
+      @Override public String toString() { ... }
+  }
+  ---
+
+- MantaMultipartUpload.java had the inner Part class removed (deleted), with imports adjusted accordingly.
+
+- Tests updated to use MantaMultipartUploadPart instead of MantaMultipartUpload.Part (example from test diff):
+  - List<MantaMultipartUploadPart> partsList = new LinkedList<>();
+  - MantaMultipartUploadPart part = new MantaMultipartUploadPart(i, null, null, null);
+
+Patches / Suggested Fixes (available in the diff)
+- The code diff already contains the correct fixes for the reported Checkstyle violation:
+  1. Add package-info.java to the package com.joyent.manta.client.multipart (this provides package-level javadoc and satisfies the Checkstyle JavadocPackage rule).
+  2. Refactor the Part nested class into a new top-level class MantaMultipartUploadPart (MantaMultipartUploadPart.java) and update all usages in MantaMultipartManager, tests, and other places to reference the new class.
+  3. Remove the old nested Part class from MantaMultipartUpload.java and update imports/usages accordingly.
+
+- If the change has not yet been merged into the failing commit, apply the above patches:
+  - Add the package-info.java file (exact content shown above).
+  - Commit MantaMultipartUploadPart.java and the MantaMultipartManager.java updates (method signatures and .map() references to use MantaMultipartUploadPart).
+  - Update tests to use MantaMultipartUploadPart.
+  - Ensure files are added under src/main/java/com/joyent/manta/client/multipart so the Checkstyle plugin sees the package-info.java during the build.
+
+Alternative fixes (if adding package-info.java is undesired):
+- Adjust the project's Checkstyle configuration to not require package-info.java for this package (not recommended unless you want to change repository-wide style rules).
+- Configure the maven-checkstyle-plugin to skip the JavadocPackage rule for this module/package.
+
+Notes / Additional Observations
+- The immediate failing condition in the CI build is purely stylistic (Checkstyle JavadocPackage rule). The code refactor (moving Part to its own class) is coherent and the diff includes the fix (package-info.java). The build failure indicates that the commit that CI used did not include the package-info.java at that time.
+- Ensure that after applying the diff, you run a local mvn install -DskipTests=true -Dmaven.javadoc.skip=true to verify Checkstyle passes before pushing/merging.
+
+Summary / Recommended Next Steps
+1. Merge or apply the patch that adds package-info.java and moves Part into MantaMultipartUploadPart (the provided diff contains these changes).
+2. Re-run the Maven build on CI to confirm the checkstyle violation is resolved.
+3. If CI still finds missing package-level Javadoc for other packages, add package-info.java files as necessary or adjust Checkstyle rules intentionally.

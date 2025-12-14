@@ -1,0 +1,90 @@
+## Software Bug Report
+
+**Bug Title:** FindBugs Failure: `DMI_RANDOM_USED_ONLY_ONCE` in `TypeResolver.java` prevents build completion.
+
+**Project/Module:** Byte Buddy (with dependencies) / `byte-buddy-dep`
+
+**Version/SHA:** `1.4.7-SNAPSHOT` (failing commit: `d3caa93230830ab3ace48ef089ec1f21e64eb107`)
+
+**Environment:**
+*   **Operating System:** Ubuntu 12.04.5 LTS (precise)
+*   **Linux Kernel:** 3.13.0-29-generic
+*   **Java Version:** 1.8.0_91 (Oracle Corporation)
+*   **Maven Version:** Apache Maven 3.2.5
+*   **Build System:** Travis CI (container-based infrastructure)
+
+**Description:**
+The build fails during the `verify` phase when executing the `findbugs-maven-plugin:3.0.3:check` goal for the `byte-buddy-dep` module. The failure is caused by a FindBugs warning `DMI_RANDOM_USED_ONLY_ONCE` being treated as an error. This warning is reported for the `resolve()` method within `net.bytebuddy.dynamic.TypeResolver$Active`.
+
+**Steps to Reproduce:**
+1.  Checkout the failing commit: `git checkout d3caa93230830ab3ace48ef089ec1f21e64eb107`
+2.  Navigate to the project root: `cd raphw/byte-buddy`
+3.  Execute the Maven verify command with the integration profile: `mvn verify -Pintegration`
+
+**Expected Behavior:**
+The build should complete successfully, indicating that all checks (including FindBugs) have passed, or that the specific FindBugs warning is suppressed if it's deemed acceptable.
+
+**Actual Behavior:**
+The build fails with the following error message from the FindBugs plugin:
+```
+[INFO] Total bugs: 1
+[INFO] Random object created and used only once in net.bytebuddy.dynamic.TypeResolver$Active.resolve() [net.bytebuddy.dynamic.TypeResolver$Active] At TypeResolver.java:[line 179] DMI_RANDOM_USED_ONLY_ONCE
+[ERROR] Failed to execute goal org.codehaus.mojo:findbugs-maven-plugin:3.0.3:check (default) on project byte-buddy-dep: failed with 1 bugs and 0 errors
+```
+This indicates that the FindBugs plugin is configured to fail the build on warnings, and it detected a `DMI_RANDOM_USED_ONLY_ONCE` pattern.
+
+**Root Cause Analysis:**
+The `net.bytebuddy.dynamic.TypeResolver$Active.resolve()` method creates a new `Random` object and uses it only once (`new Random().nextInt()`). FindBugs flags this as a `DMI_RANDOM_USED_ONLY_ONCE` warning, suggesting that creating a new `Random` instance for a single use is inefficient and can lead to predictable sequences if not handled carefully (though for `nextInt()` it's less critical than for security-sensitive operations).
+
+The provided code diff shows that the subsequent commit (`de721ac650d1ec4ce17bd6d7d551b13cb49fad5f`) addresses this by adding a `@SuppressFBWarnings` annotation to the `resolve()` method, specifically targeting the `DMI_RANDOM_USED_ONLY_ONCE` warning with the justification "Avoid thread-contention". This implies the original developer considered the warning a false positive or an acceptable trade-off in this specific context. The build fails because the `d3caa93230830ab3ace48ef089ec1f21e64eb107` commit does not yet include this suppression.
+
+**Proposed Solution/Fix:**
+Apply the `@SuppressFBWarnings` annotation to the `resolve()` method in `net.bytebuddy.dynamic.TypeResolver.java` as demonstrated in the `passed_sha` commit.
+
+**Code Diff (Fix):**
+```diff
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/TypeResolver.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/TypeResolver.java
+@@ -175,6 +175,7 @@ public interface TypeResolver {
+         }
+ 
+         @Override
++        @SuppressFBWarnings(value = "DMI_RANDOM_USED_ONLY_ONCE", justification = "Avoid thread-contention")
+         public TypeResolver.Resolved resolve() {
+             return new Resolved(new Random().nextInt());
+         }
+```
+
+**Relevant Build Log Snippet:**
+```
+[INFO] ------------------------------------------------------------------------
+[INFO] Building Byte Buddy (with dependencies) 1.4.7-SNAPSHOT
+[INFO] ------------------------------------------------------------------------
+...
+[INFO] --- findbugs-maven-plugin:3.0.3:findbugs (findbugs) @ byte-buddy-dep ---
+[INFO] Fork Value is true
+     [java] Warnings generated: 1
+[INFO] Done FindBugs Analysis....
+[INFO] 
+[INFO] <<< findbugs-maven-plugin:3.0.3:check (default) < :findbugs @ byte-buddy-dep <<<
+[INFO] 
+[INFO] --- findbugs-maven-plugin:3.0.3:check (default) @ byte-buddy-dep ---
+[INFO] BugInstance size is 1
+[INFO] Error size is 0
+[INFO] Total bugs: 1
+[INFO] Random object created and used only once in net.bytebuddy.dynamic.TypeResolver$Active.resolve() [net.bytebuddy.dynamic.TypeResolver$Active] At TypeResolver.java:[line 179] DMI_RANDOM_USED_ONLY_ONCE
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary:
+[INFO] 
+[INFO] Byte Buddy (parent) ................................ SUCCESS [  8.451 s]
+[INFO] Byte Buddy Java agent .............................. SUCCESS [ 28.076 s]
+[INFO] Byte Buddy (with dependencies) ..................... FAILURE [03:21 min]
+[INFO] Byte Buddy (without dependencies) .................. SKIPPED
+[INFO] Byte Buddy benchmarks .............................. SKIPPED
+[INFO] Byte Buddy for Android ............................. SKIPPED
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.codehaus.mojo:findbugs-maven-plugin:3.0.3:check (default) on project byte-buddy-dep: failed with 1 bugs and 0 errors -> [Help 1]
+```

@@ -1,0 +1,89 @@
+## Software Bug Report
+
+**Bug ID:** BUG-20240722-001
+
+**Title:** Build Failure: `FacturaServiceImplTest` expects 'Factura B' in `getTipoFacturaVenta` result, but test expectation was removed in current commit.
+
+**Severity:** High (Build Failure)
+**Priority:** High (Blocks CI/CD pipeline, indicates a discrepancy between expected and actual behavior or test configuration)
+**Status:** New
+**Reporter:** AI Assistant
+**Date Reported:** 2024-07-22
+
+---
+
+**1. Problem Description:**
+
+The CI build for the `belluccifranco/sic` project is failing during the `mvn test` phase. The failure occurs in the `SIC-API` module, specifically within the `FacturaServiceImplTest` class. The test `shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien` is failing due to an `AssertionError` indicating a mismatch in array lengths. The error message states `array lengths differed, expected.length=5 actual.length=4`.
+
+The provided code diff shows that the `expResult` array in this specific test method was modified to remove "Factura B", changing its expected length from 5 to 4. However, the test failure message indicates that the test *still expected* an array of length 5, while the actual method under test (`facturaService.getTipoFacturaVenta`) returned an array of length 4. This suggests a discrepancy where the test's expectation (as interpreted by the test runner) does not align with the code changes in the test file, or the method under test was changed without a corresponding, correct update to the test.
+
+**2. Environment:**
+
+*   **Build System:** Travis CI (container-based infrastructure)
+*   **Operating System:** Ubuntu 12.04.5 LTS (Precise)
+*   **Linux Kernel:** 3.13.0-29-generic
+*   **Java Version:** Oracle JDK 8 (1.8.0_31)
+*   **Maven Version:** Apache Maven 3.2.5
+*   **Project Version:** 2.2.1 (SIC-API)
+*   **Failing Commit SHA:** `7699514d8732d25f4539ec008738a042ea1e29ae`
+*   **Passing Commit SHA (for reference):** `b21d4ba403ce8c368f0e9e675e8dc8905fcd9401`
+
+**3. Steps to Reproduce:**
+
+1.  Clone the repository `https://github.com/belluccifranco/sic.git`.
+2.  Navigate to the project root directory.
+3.  Checkout the failing commit: `git checkout 7699514d8732d25f4539ec008738a042ea1e29ae`
+4.  Navigate to the `sic-api` module: `cd sic-api`
+5.  Execute the Maven test command: `mvn test -B`
+
+**4. Expected Behavior:**
+
+The build should succeed, and all tests, including `FacturaServiceImplTest.shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien`, should pass.
+*   If the `getTipoFacturaVenta` method correctly returns 4 elements (excluding "Factura B"), then the test's `expResult` array (as modified in the diff) should be used, and the assertion should pass.
+*   If "Factura B" should still be returned by `getTipoFacturaVenta`, then the test's `expResult` array should contain 5 elements (including "Factura B"), and the diff is incorrect.
+
+**5. Actual Behavior:**
+
+The build fails with the following error in the `SIC-API` module:
+
+```
+Failed tests: 
+  FacturaServiceImplTest.shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien:122 array lengths differed, expected.length=5 actual.length=4
+
+Tests run: 63, Failures: 1, Errors: 0, Skipped: 0
+```
+
+The stack trace points to `sic.service.impl.FacturaServiceImplTest.shouldGetTipoFacturaVentaWhenEmpresaDiscriminaYClienteTambien(FacturaServiceImplTest.java:122)`.
+
+**6. Code Changes (from provided diff):**
+
+The relevant change is in `sic-api/src/test/java/sic/service/impl/FacturaServiceImplTest.java`:
+
+```diff
+--- a/sic-api/src/test/java/sic/service/impl/FacturaServiceImplTest.java
++++ b/sic-api/src/test/java/sic/service/impl/FacturaServiceImplTest.java
+@@ -117,7 +117,7 @@ public class FacturaServiceImplTest {
+         when(condicionIVAqueDiscrimina.isDiscriminaIVA()).thenReturn(Boolean.TRUE);
+         when(empresa.getCondicionIVA()).thenReturn(condicionIVAqueDiscrimina);
+         when(cliente.getCondicionIVA()).thenReturn(condicionIVAqueDiscrimina);
+-        String[] expResult = {"Factura A", "Factura B", "Factura X", "Factura Y", "Pedido"};
++        String[] expResult = {"Factura A", "Factura X", "Factura Y", "Pedido"};
+         String[] result = facturaService.getTipoFacturaVenta(empresa, cliente);
+         assertArrayEquals(expResult, result);
+     }
+```
+
+**7. Analysis and Root Cause (Hypothesis):**
+
+The error message `expected.length=5 actual.length=4` is critical.
+1.  The `CODE DIFF` clearly shows that the `expResult` array in `FacturaServiceImplTest.java` was changed from 5 elements (including "Factura B") to 4 elements (excluding "Factura B"). This means the *intended* expectation of the test in the current commit is an array of length 4.
+2.  However, the `BUILD LOG` reports that the `expected.length` was 5. This strongly suggests that the test runner is executing an *outdated compiled version* of the `FacturaServiceImplTest` class, which still holds the previous expectation of 5 elements.
+3.  Simultaneously, the `actual.length=4` indicates that the `facturaService.getTipoFacturaVenta` method (the code under test) is now returning an array of 4 elements (presumably, "Factura B" has been removed from its output).
+
+Therefore, the most probable root cause is a caching issue or an incomplete build process where the updated test class (`FacturaServiceImplTest.java`) was not correctly recompiled or loaded by the test runner, leading to an assertion against an old expectation.
+
+**8. Proposed Solution:**
+
+1.  **Clean Build:** Perform a clean Maven build to ensure all old compiled classes are removed and new ones are generated. This can be done by running `mvn clean install` in the project root, and then `mvn test -B` in the `sic-api` module. This should force the test runner to use the latest compiled version of the test class.
+2.  **Verify `getTipoFacturaVenta` logic:** Confirm that the `facturaService.getTipoFacturaVenta` method's logic has indeed changed to no longer return "Factura B" when the `empresa` and `cliente` both discriminate IVA. If the method *should* still return "Factura B", then the change in the test's `expResult` array (as seen in the diff) is incorrect, and the test should be reverted to expect 5 elements. If the method *should not* return "Factura B", then the test's `expResult` is correct, and the issue is purely with the test execution environment.

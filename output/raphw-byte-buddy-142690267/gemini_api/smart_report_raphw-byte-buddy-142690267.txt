@@ -1,0 +1,86 @@
+## Bug Report: FindBugs DMI_RANDOM_USED_ONLY_ONCE Warning Causes Build Failure
+
+### 1. Title
+FindBugs `DMI_RANDOM_USED_ONLY_ONCE` warning causes build failure in `TypeResolver.java`.
+
+### 2. Steps to Reproduce
+1.  Clone the `raphw/byte-buddy` repository.
+2.  Checkout the specific commit `d3caa93230830ab3ace48ef089ec1f21e64eb107`.
+3.  Execute the Maven build and verification process using the command: `mvn verify -Pintegration`.
+
+### 3. Triggering Input
+The `findbugs-maven-plugin` is configured to run during the `verify` phase of the Maven build. The plugin flags the instantiation and single use of a `java.util.Random` object within the `resolve()` method of `net.bytebuddy.dynamic.TypeResolver$Active` as a `DMI_RANDOM_USED_ONLY_ONCE` warning. Since the build is configured to fail on FindBugs warnings/errors, this triggers the build failure.
+
+### 4. Expected Behavior
+The Maven build should complete successfully, and the `findbugs-maven-plugin` should not report any critical bugs or warnings that lead to a build failure. Specifically, the `DMI_RANDOM_USED_ONLY_ONCE` warning should either not be reported or be explicitly suppressed if it's deemed a false positive or acceptable behavior.
+
+### 5. Observed Behavior
+The Maven build fails during the `verify` phase for the `byte-buddy-dep` module. The `findbugs-maven-plugin:3.0.3:check` goal reports one bug, `DMI_RANDOM_USED_ONLY_ONCE`, which causes the build to terminate with a `BUILD FAILURE`.
+
+**Error Message:**
+```
+[INFO] BugInstance size is 1
+[INFO] Error size is 0
+[INFO] Total bugs: 1
+[INFO] Random object created and used only once in net.bytebuddy.dynamic.TypeResolver$Active.resolve() [net.bytebuddy.dynamic.TypeResolver$Active] At TypeResolver.java:[line 179] DMI_RANDOM_USED_ONLY_ONCE
+[INFO]
+[ERROR] Failed to execute goal org.codehaus.mojo:findbugs-maven-plugin:3.0.3:check (default) on project byte-buddy-dep: failed with 1 bugs and 0 errors -> [Help 1]
+```
+
+### 6. Relevant Code Snippets
+The problematic code snippet from `byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/TypeResolver.java` at line 179 (from the failing commit `d3caa93230830ab3ace48ef089ec1f21e64eb107`):
+
+```java
+public interface TypeResolver {
+    // ... other code ...
+    class Active implements TypeResolver {
+        // ... other code ...
+        @Override
+        public TypeResolver.Resolved resolve() {
+            return new Resolved(new Random().nextInt()); // Line 179
+        }
+    }
+}
+```
+
+### 7. Stack Traces
+The relevant part of the build log showing the failure:
+```
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary:
+[INFO]
+[INFO] Byte Buddy (parent) ................................ SUCCESS [  8.451 s]
+[INFO] Byte Buddy Java agent .............................. SUCCESS [ 28.076 s]
+[INFO] Byte Buddy (with dependencies) ..................... FAILURE [03:21 min]
+[INFO] Byte Buddy (without dependencies) .................. SKIPPED
+[INFO] Byte Buddy benchmarks .............................. SKIPPED
+[INFO] Byte Buddy for Android ............................. SKIPPED
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time: 04:00 min
+[INFO] Finished at: 2016-07-06T08:20:47+00:00
+[INFO] Final Memory: 51M/417M
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.codehaus.mojo:findbugs-maven-plugin:3.0.3:check (default) on project byte-buddy-dep: failed with 1 bugs and 0 errors -> [Help 1]
+[ERROR]
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR]
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException
+[ERROR]
+[ERROR] After correcting the problems, you can resume the build with the command
+[ERROR]   mvn <goals> -rf :byte-buddy-dep
+```
+
+### 8. Patches / Suggested Fixes
+The provided code diff contains a patch that addresses this issue by suppressing the FindBugs warning:
+
+```diff
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/TypeResolver.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/dynamic/TypeResolver.java
+@@ -175,6 +175,7 @@ public interface TypeResolver {
+         }\n
+ \n         @Override\n+        @SuppressFBWarnings(value = "DMI_RANDOM_USED_ONLY_ONCE", justification = "Avoid thread-contention")\n         public TypeResolver.Resolved resolve() {\n             return new Resolved(new Random().nextInt());\n         }\n```
+This patch adds the `@SuppressFBWarnings(value = "DMI_RANDOM_USED_ONLY_ONCE", justification = "Avoid thread-contention")` annotation to the `resolve()` method, indicating that the use of `new Random().nextInt()` is intentional and justified to avoid thread contention, thus preventing the FindBugs plugin from failing the build.

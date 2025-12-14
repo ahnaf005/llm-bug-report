@@ -1,0 +1,114 @@
+## Software Bug Report
+
+**Bug ID:** #20240626-NFE-BUILD-001
+
+**Title:** Maven Javadoc Plugin Failure due to Invalid Javadoc Comment
+
+**Severity:** Critical (Build Failure)
+
+**Status:** Fixed (Critical Error), Warnings Remain
+
+---
+
+**1. Overview**
+
+The continuous integration (CI) build for the `wmixvideo/nfe` project failed during the `maven-javadoc-plugin:2.9.1:jar` goal. The primary cause of the failure was a Javadoc parsing error due to the use of an unescaped `>` character within a comment, which Javadoc interpreted as a malformed HTML tag or generic type. Additionally, numerous Javadoc warnings regarding missing `@param` and `@return` tags, as well as deprecated API usage, were reported but not addressed by the provided fix.
+
+---
+
+**2. Environment**
+
+*   **Build System:** Travis CI (container-based infrastructure)
+*   **Operating System:** Ubuntu 12.04.5 LTS (Precise)
+*   **Linux Kernel:** 3.13.0-29-generic
+*   **Java Version:** Oracle JDK 1.8.0_31 (Java HotSpot(TM) 64-Bit Server VM)
+*   **Maven Version:** Apache Maven 3.2.5
+*   **Git SHA (Failed Build):** `12c8a862172bb697d54268935005e83c52e89481`
+*   **Git SHA (Passed Build - implied by diff):** `491c8724ef888422ad323e237013968c16c6d29b`
+
+---
+
+**3. Description**
+
+The build process failed specifically during the Javadoc generation phase. The `maven-javadoc-plugin` encountered a syntax error in a Javadoc comment within the `NFAutorizador31.java` file, leading to an `Exit code: 1` and terminating the build. The problematic character sequence was `=>` which was not properly escaped or rephrased for Javadoc. While the critical error has been addressed by changing `=>` to `:`, several Javadoc warnings related to missing `@param` and `@return` tags, and deprecated API usage, persist.
+
+---
+
+**4. Steps to Reproduce**
+
+1.  Clone the `wmixvideo/nfe` repository.
+2.  Checkout the failing commit: `git checkout 12c8a862172bb697d54268935005e83c52e89481`
+3.  Execute the Maven build command: `mvn install -DskipTests=true -Dgpg.skip=true --settings ~/settings.xml`
+
+---
+
+**5. Observed Behavior**
+
+The build fails with the following error message from the `maven-javadoc-plugin`:
+
+```
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-javadoc-plugin:2.9.1:jar (attach-javadocs) on project nfe: MavenReportException: Error while creating archive:
+[ERROR] Exit code: 1 - /home/travis/build/wmixvideo/nfe/src/main/java/com/fincatto/nfe310/classes/NFAutorizador31.java:93: error: bad use of '>'
+[ERROR] * Links NFC-e segundo site => https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia
+[ERROR] ^
+```
+
+Additionally, 33 Javadoc warnings are reported, primarily concerning missing `@param` and `@return` tags in various `NFNotaInfoItemImpostoICMSXX.java` files, and deprecated API usage.
+
+---
+
+**6. Expected Behavior**
+
+The Maven build should complete successfully, including the generation of Javadoc documentation, without any errors or warnings.
+
+---
+
+**7. Root Cause Analysis**
+
+The `maven-javadoc-plugin` uses the standard Javadoc tool. In Javadoc comments, the `>` character can be interpreted as the start of an HTML tag or a generic type parameter. When used unescaped in a context where it's not part of valid HTML or Java syntax (like `=>` in a plain text URL description), it causes a parsing error. Specifically, line 93 of `NFAutorizador31.java` contained `=>` which triggered this parsing error, leading to the `bad use of '>'` message and the build failure.
+
+---
+
+**8. Proposed Solution (Implemented in Diff)**
+
+The provided code diff addresses the critical build failure by modifying the problematic Javadoc comment.
+
+**Change:**
+In `src/main/java/com/fincatto/nfe310/classes/NFAutorizador31.java`, line 93:
+`- * Links NFC-e segundo site => https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia`
+`+ * Links NFC-e segundo site: https://ciranda.me/tsdn/blog-da-tecnospeed/post/como-emitir-nfc-e-na-bahia`
+
+This change replaces the `=>` sequence with a simple `:` which resolves the Javadoc parsing error.
+
+**Additional Stylistic Changes in Diff:**
+The diff also includes other minor, non-critical changes:
+*   Reordering of `import` statements.
+*   Adding `final` keyword to method parameters (e.g., `getNfceInutilizacao(final NFAmbiente ambiente)`).
+*   Adding spaces around array initializers (e.g., `new NFUnidadeFederativa[] { NFUnidadeFederativa.AM }`).
+These changes are stylistic improvements and do not directly relate to the build failure.
+
+---
+
+**9. Resolution**
+
+The critical build failure caused by the `bad use of '>'` error in the Javadoc comment has been resolved by the changes in the provided code diff. The build should now pass this specific Javadoc error.
+
+---
+
+**10. Remaining Issues / Recommendations**
+
+Despite the fix for the critical error, the build log indicates several warnings that were not addressed by the provided diff:
+
+*   **Javadoc Tag Warnings (31 instances):** Many methods are missing `@param` and `@return` tags in their Javadoc comments. For example:
+    *   `/home/travis/build/wmixvideo/nfe/src/main/java/com/fincatto/nfe310/classes/nota/NFNotaInfoICMSTotal.java:81: warning: no @param for valor`
+    *   `/home/travis/build/wmixvideo/nfe/src/main/java/com/fincatto/nfe310/classes/nota/NFNotaInfoICMSTotal.java:157: warning: no @return`
+    *   Similar warnings appear across `NFNotaInfoItemImpostoICMS00.java`, `NFNotaInfoItemImpostoICMS10.java`, `NFNotaInfoItemImpostoICMS20.java`, `NFNotaInfoItemImpostoICMS30.java`, `NFNotaInfoItemImpostoICMS51.java`, `NFNotaInfoItemImpostoICMS70.java`, `NFNotaInfoItemImpostoICMS90.java`, `NFNotaInfoItemImpostoICMSPartilhado.java`, `NFNotaInfoItemImpostoICMSSN101.java`, `NFNotaInfoItemImpostoICMSSN201.java`, `NFNotaInfoItemImpostoICMSSN202.java`, and `NFNotaInfoItemImpostoICMSSN900.java`.
+*   **Deprecated API Usage Warnings (2 instances):** The compiler reports that some input files use or override a deprecated API. For example:
+    *   `/home/travis/build/wmixvideo/nfe/src/main/java/com/fincatto/nfe310/classes/nota/NFNotaInfoItemImpostoICMS70.java: Some input files use or override a deprecated API.`
+    *   `/home/travis/build/wmixvideo/nfe/src/test/java/com/fincatto/nfe310/classes/NFNotaInfoItemImpostoICMSModalidadeBaseCalculoTest.java: ... uses or overrides a deprecated API.`
+
+**Recommendations:**
+1.  **Complete Javadoc:** Review all reported Javadoc warnings and add the necessary `@param`, `@return`, and `@throws` tags to ensure comprehensive and accurate documentation.
+2.  **Address Deprecated API:** Investigate the deprecated API usage and update the code to use modern alternatives where appropriate. This improves code maintainability and compatibility with future Java versions.
+3.  **Enable `Xlint`:** Recompile with `-Xlint:deprecation` to get detailed information about deprecated API usage and facilitate its resolution.
+4.  **Automate Javadoc Checks:** Consider configuring the `maven-javadoc-plugin` to fail the build on warnings (`<failOnWarnings>true</failOnWarnings>`) to prevent similar issues from accumulating in the future.

@@ -1,0 +1,107 @@
+Title: Build failed due to Checkstyle violations in IllegalSQLIndexFilter.java
+
+Summary
+- CI job "Test JDK 17, ubuntu-latest" failed during the Maven Checkstyle phase with 9 checkstyle violations in src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java.
+- The code diff for the change set shows other unrelated edits (SQLASTOutputVisitor, Hive tests) and that IllegalSQLIndexFilter.java was removed in a later patch. The failing build used failed_sha (9003085...), which still contained the style errors.
+- Root cause: coding-style issues (trailing whitespace, blank line after opening brace, missing whitespace around colon in for-each, extra semicolon causing an empty statement) introduced or present in IllegalSQLIndexFilter.java triggered the checkstyle plugin and made the build fail.
+
+Build log (relevant excerpts)
+- maven-checkstyle-plugin reported: "There are 9 errors reported by Checkstyle 9.2 with src/checkstyle/druid-checks.xml ruleset."
+- Errors:
+  1. src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[34] (regexp) RegexpMultiline: Line has trailing whitespace
+  2. src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[35] (regexp) RegexpMultiline: Line has trailing whitespace
+  3. src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[42] (regexp) RegexpMultiline: Line has trailing whitespace
+  4. src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[49] (regexp) RegexpMultiline: Blank line after opening brace
+  5. src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[83,51] (whitespace) WhitespaceAround: ':' is not preceded with whitespace.
+  6. src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[96,51] (whitespace) WhitespaceAround: ':' is not preceded with whitespace.
+  7. src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[107,66] (coding) EmptyStatement: Empty statement.
+  8. src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[117,45] (whitespace) WhitespaceAround: ':' is not preceded with whitespace.
+  9. src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[177] (regexp) RegexpMultiline: Blank line after opening brace
+
+Code diff (high level)
+- Files added/modified in this patch series:
+  - core/src/main/java/com/alibaba/druid/sql/visitor/SQLASTOutputVisitor.java — small reordering and new printing logic for "SORTED BY" and "INTO n BUCKETS".
+  - core/src/test/java/com/alibaba/druid/bvt/sql/hive/HiveCreateTableTest_12.java — adjusted expected output ordering for CREATE TABLE formatting.
+  - Added new tests: core/src/test/java/com/alibaba/druid/bvt/sql/hive/issues/Issue5853.java.
+- Files removed in the diff:
+  - src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java (deleted)
+  - src/test/java/com/alibaba/druid/bvt/filter/IllegalSQLIndexFilterExecuteTest.java (deleted)
+- Note: The failing CI run used commit failed_sha (9003085...), which still triggered Checkstyle on IllegalSQLIndexFilter.java. The style issues existed in that commit and caused build failure. The deletion appears in a later patch but was not present in the failing CI run.
+
+Root cause analysis (mapping errors to source)
+- Trailing whitespace (lines 34, 35, 42)
+  - Remove trailing spaces at those lines. Checkstyle flagged those exact lines.
+- Blank line after opening brace (lines 49 and 177)
+  - Remove the blank line immediately after a '{' (class or method opening). Checkstyle enforces no blank lines after opening brace.
+- WhitespaceAround: ':' not preceded with whitespace (lines 83, 96, 117)
+  - These match for-each loops in the deleted source, e.g.:
+      for (TableStat.Condition condition: conditions) {
+    should be:
+      for (TableStat.Condition condition : conditions) {
+  - Add a space before the colon for every enhanced-for.
+- EmptyStatement (line 107,66)
+  - The deleted file contains a double semicolon in this statement:
+      String[] tableArray = tableInfo.split("\\\\.");;
+    Remove the extra semicolon:
+      String[] tableArray = tableInfo.split("\\\\.");
+- Because the file was present in the failing commit, the checkstyle plugin failed the build. Deleting the file in a later change will avoid this file being checked only if that deletion is included in the commit used by CI. In this run, it was not.
+
+Reproduction steps
+1. Checkout the failing commit (sha 9003085f558c134de5b7fe70ac4d54e75898eae6) or ensure the problematic file is present in your workspace.
+2. Run:
+   ./mvnw -Penable-for-jdk17+,gen-code-cov clean package -B
+3. Observe maven-checkstyle-plugin failure with the same 9 violations.
+
+Fix recommendations
+- Fix the violations in src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java (or ensure file removal is present in the branch used by CI).
+  Specific edits to apply:
+  1. Remove trailing whitespace on lines 34, 35, 42 (delete trailing spaces).
+  2. Remove blank lines immediately after opening braces at lines 49 and 177.
+  3. Add a space before the colon in every enhanced-for loop:
+     - Change:
+         for (TableStat.Condition condition: conditions) {
+       To:
+         for (TableStat.Condition condition : conditions) {
+     - Do the same for other for-each occurrences (e.g., for (IndexInfo indexInfo: indexInfos) { ... }).
+  4. Remove the stray extra semicolon:
+     - Change:
+         String[] tableArray = tableInfo.split("\\\\.");;
+       To:
+         String[] tableArray = tableInfo.split("\\\\.");
+- Alternatively, if the intent is to remove IllegalSQLIndexFilter.java and its tests fully:
+  - Ensure the deletion is included in the commit/PR that CI builds. Re-run CI after push. If deletion is intended, no checkstyle runs against the removed file.
+- After applying fixes, locally validate:
+  - Run mvn -q -DskipTests -Penable-for-jdk17+,gen-code-cov checkstyle:check to confirm no violations.
+  - Run ./mvnw -Penable-for-jdk17+,gen-code-cov clean package -B to reproduce the full build.
+
+Suggested preventative measures
+- Add a pre-commit hook (or local git hook) to run checkstyle or run "mvn checkstyle:check" before commit.
+- Configure IDE (IntelliJ / Eclipse) to show trailing whitespaces and enforce formatting rules consistent with src/checkstyle/druid-checks.xml.
+- Add a small CI step early in the pipeline that runs checkstyle alone and fails fast so other long steps are not wasted.
+
+Suggested patch (examples)
+- Example fixes (illustrative; line numbers from reported errors):
+
+  - Replace:
+      for (TableStat.Condition condition: conditions) {
+    With:
+      for (TableStat.Condition condition : conditions) {
+
+  - Replace:
+      String[] tableArray = tableInfo.split("\\\\.");;
+    With:
+      String[] tableArray = tableInfo.split("\\\\.");
+
+  - Remove blank lines directly after:
+      public class IllegalSQLIndexFilter extends FilterEventAdapter {
+      
+      private static Map...
+    -> remove the blank line so the variable declaration directly follows the opening brace.
+
+Priority and impact
+- Priority: high. The Checkstyle failure stops the CI pipeline and prevents further build artifacts and downstream testing from running.
+- Impact: blocked CI and PRs until style issues are fixed or the offending file is properly removed in the built commit.
+
+If you want, I can:
+- Produce an exact patch file for IllegalSQLIndexFilter.java fixing each violation (based on the deleted file content included in the code diff).
+- Or, verify that deleting the file in the branch being built (and re-running CI) fixes the failure.

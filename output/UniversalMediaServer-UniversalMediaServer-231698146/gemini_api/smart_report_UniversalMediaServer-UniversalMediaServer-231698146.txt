@@ -1,0 +1,128 @@
+## Bug Report: `AudioProperties` Setters Do Not Throw `IllegalArgumentException` for Invalid Input
+
+### 1. Title
+`AudioProperties` setters fail to validate input, leading to `IllegalArgumentException` not being thrown as expected by tests.
+
+### 2. Steps to Reproduce
+1.  Clone the UniversalMediaServer repository at commit `0579589d0ccb96c37872eab4f6ba3238bcbe6fe6`.
+2.  Ensure Java 7 and Maven 3.2.5 are installed.
+3.  Run the Maven build command: `mvn install -Dmaven.javadoc.skip=true -B -V`
+4.  Observe the build failure during the `maven-surefire-plugin:2.19.1:test` phase.
+
+### 3. Triggering Input
+The `AudioPropertiesTest` attempts to set audio properties (bitrate, number of channels, bits per sample, sample frequency) with invalid input values (specifically, values less than 1). The tests expect an `IllegalArgumentException` to be thrown in these scenarios.
+
+### 4. Expected Behavior
+When methods like `setBitRate`, `setNumberOfChannels`, `setBitsperSample`, and `setSampleFrequency` in `AudioProperties.java` are called with values less than 1, they should throw an `IllegalArgumentException` to indicate invalid input.
+
+### 5. Observed Behavior
+The build fails because the `AudioPropertiesTest` expects `IllegalArgumentException` to be thrown when invalid values (less than 1) are passed to the setter methods. However, the original implementation of these methods does not perform this validation, thus not throwing the expected exception. This causes the tests to fail with an `AssertionError` indicating that the expected exception was not thrown.
+
+**Error Message from Build Log:**
+```
+Failed tests: 
+  AudioPropertiesTest.testBitsperSample_withIllegalArgument Expected exception: java.lang.IllegalArgumentException
+  AudioPropertiesTest.testSampleFrequency_withIllegalArgument Expected exception: java.lang.IllegalArgumentException
+  AudioPropertiesTest.testSetBitRate_withIllegalArgument Expected exception: java.lang.IllegalArgumentException
+  AudioPropertiesTest.testSetNumberOfChannels_withIllegalArgument Expected exception: java.lang.IllegalArgumentException
+
+Tests run: 302, Failures: 4, Errors: 0, Skipped: 0
+
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+```
+
+### 6. Relevant Code Snippets
+The issue lies in the `net.pms.formats.v2.AudioProperties` class, specifically in the setter methods for `bitRate`, `numberOfChannels`, `bitsperSample`, and `sampleFrequency`. The original code was missing input validation.
+
+```java
+--- a/src/main/java/net/pms/formats/v2/AudioProperties.java
++++ b/src/main/java/net/pms/formats/v2/AudioProperties.java
+@@ -75,6 +75,9 @@ public class AudioProperties {
+  	 * @param bitrate to set.
+  	 */
+  	public void setBitRate(int bitRate) {
++ 		if (bitRate < 1) {
++ 			throw new IllegalArgumentException("Bitrate can't be less than 1.");
++ 		}
+  		this.bitRate = bitRate;
+  	}
+  
+@@ -101,6 +104,9 @@ public class AudioProperties {
+  	 * @param numberOfChannels number of channels to set.
+  	 */
+  	public void setNumberOfChannels(int numberOfChannels) {
++ 		if (numberOfChannels < 1) {
++ 			throw new IllegalArgumentException("Channel number can't be less than 1.");
++ 		}
+  		this.numberOfChannels = numberOfChannels;
+  	}
+  
+@@ -127,6 +133,9 @@ public class AudioProperties {
+  	 * @param bitsperSample bits per sample to set.
+  	 */
+  	public void setBitsperSample(int bitsperSample) {
++ 		if (bitsperSample < 1) {
++ 			throw new IllegalArgumentException("Bits per sample can't be less than 1.");
++ 		}
+  		this.bitsperSample = bitsperSample;
+  	}
+  
+@@ -179,6 +188,9 @@ public class AudioProperties {
+  	 * @param sampleFrequency sample frequency in Hz
+  	 */
+  	public void setSampleFrequency(int sampleFrequency) {
++ 		if (sampleFrequency < 1) {
++ 			throw new IllegalArgumentException("Sample frequency can't be less than 1 Hz.");
++ 		}
+  		this.sampleFrequency = sampleFrequency;
+  	}
+  
+```
+
+### 7. Stack Traces
+```
+Running net.pms.formats.v2.AudioPropertiesTest
+Tests run: 21, Failures: 4, Errors: 0, Skipped: 0, Time elapsed: 0.022 sec <<< FAILURE! - in net.pms.formats.v2.AudioPropertiesTest
+testSetNumberOfChannels_withIllegalArgument(net.pms.formats.v2.AudioPropertiesTest)  Time elapsed: 0.006 sec  <<< FAILURE!
+java.lang.AssertionError: Expected exception: java.lang.IllegalArgumentException
+
+testSampleFrequency_withIllegalArgument(net.pms.formats.v2.AudioPropertiesTest)  Time elapsed: 0 sec  <<< FAILURE!
+java.lang.AssertionError: Expected exception: java.lang.IllegalArgumentException
+
+testBitsperSample_withIllegalArgument(net.pms.formats.v2.AudioPropertiesTest)  Time elapsed: 0.001 sec  <<< FAILURE!
+java.lang.AssertionError: Expected exception: java.lang.IllegalArgumentException
+
+testSetBitRate_withIllegalArgument(net.pms.formats.v2.AudioPropertiesTest)  Time elapsed: 0 sec  <<< FAILURE!
+java.lang.AssertionError: Expected exception: java.lang.IllegalArgumentException
+```
+
+### 8. Patches / Suggested Fixes
+The provided code diff contains the necessary patches to fix this bug. The fix involves adding `if` conditions to the setter methods in `AudioProperties.java` to check if the input value is less than 1. If it is, an `IllegalArgumentException` is thrown with a descriptive message.
+
+Specifically, the following lines were added:
+*   In `setBitRate(int bitRate)`:
+    ```java
+    if (bitRate < 1) {
+        throw new IllegalArgumentException("Bitrate can't be less than 1.");
+    }
+    ```
+*   In `setNumberOfChannels(int numberOfChannels)`:
+    ```java
+    if (numberOfChannels < 1) {
+        throw new IllegalArgumentException("Channel number can't be less than 1.");
+    }
+    ```
+*   In `setBitsperSample(int bitsperSample)`:
+    ```java
+    if (bitsperSample < 1) {
+        throw new IllegalArgumentException("Bits per sample can't be less than 1.");
+    }
+    ```
+*   In `setSampleFrequency(int sampleFrequency)`:
+    ```java
+    if (sampleFrequency < 1) {
+        throw new IllegalArgumentException("Sample frequency can't be less than 1 Hz.");
+    }
+    ```

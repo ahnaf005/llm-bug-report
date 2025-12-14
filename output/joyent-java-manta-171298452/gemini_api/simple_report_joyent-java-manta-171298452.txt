@@ -1,0 +1,124 @@
+## Software Bug Report
+
+**Bug Title:** Maven Build Failure: Missing Apache Commons Codec and HttpComponents Test Dependencies in `java-manta-it` module
+
+**Bug ID:** (To be assigned)
+
+**Project:** joyent/java-manta
+
+**Module Affected:** `java-manta-it`
+
+**Branch:** `multipart`
+
+**Commit SHA (Failing):** `bb242902336c1d9120168470fe181b515ef4b36b`
+
+**Commit SHA (Passing):** `973ebe53c5490867349039b52d7731c28d4b9d69`
+
+**Environment:**
+*   **CI System:** Travis CI
+*   **Operating System:** Ubuntu 12.04.5 LTS (precise)
+*   **Linux Kernel:** 3.13.0-29-generic
+*   **Java Version:** Oracle JDK 1.8.0_31
+*   **Maven Version:** Apache Maven 3.2.5
+
+**Severity:** High (Build failure, prevents compilation and testing)
+
+**Priority:** High (Blocks CI/CD pipeline and development)
+
+---
+
+### Description
+
+The Maven build for the `joyent/java-manta` project on the `multipart` branch fails during the `install` phase, specifically during the `testCompile` goal of the `java-manta-it` module. The failure is due to compilation errors indicating that several Apache Commons Codec and Apache HttpComponents packages and symbols cannot be found. This suggests that necessary test-scoped dependencies are missing from the `java-manta-it/pom.xml`.
+
+The build log shows repeated compilation errors across multiple test files, including `MantaObjectOutputStreamIT.java`, `MantaClientIT.java`, and `MantaMultipartManagerIT.java`.
+
+---
+
+### Steps to Reproduce
+
+1.  Clone the `joyent/java-manta` repository:
+    `git clone https://github.com/joyent/java-manta.git`
+2.  Navigate into the cloned directory:
+    `cd joyent/java-manta`
+3.  Checkout the failing commit:
+    `git checkout bb242902336c1d9120168470fe181b515ef4b36b`
+4.  Execute the Maven install command:
+    `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+---
+
+### Expected Behavior
+
+The `mvn install` command should complete successfully, compiling all modules (including `java-manta-it`) without any compilation errors.
+
+---
+
+### Actual Behavior
+
+The `mvn install` command fails during the `testCompile` phase of the `java-manta-it` module with the following compilation errors:
+
+*   `package org.apache.commons.codec.digest does not exist`
+*   `package org.apache.commons.codec does not exist`
+*   `package org.apache.http.client.utils does not exist`
+*   `cannot find symbol variable DigestUtils`
+*   `cannot find symbol variable Charsets`
+*   `cannot find symbol variable DateUtils`
+
+These errors are reported for files like:
+*   `/home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaObjectOutputStreamIT.java`
+*   `/home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/MantaClientIT.java`
+*   `/home/travis/build/joyent/java-manta/java-manta-it/src/test/java/com/joyent/manta/client/multipart/MantaMultipartManagerIT.java`
+
+---
+
+### Analysis / Root Cause
+
+The compilation errors clearly indicate that the `java-manta-it` module's test sources are attempting to use classes from `org.apache.commons.codec` (e.g., `DigestUtils`, `Charsets`) and `org.apache.http.client.utils` (e.g., `DateUtils`), but the corresponding libraries are not available on the classpath during the `testCompile` phase.
+
+The provided `CODE DIFF` confirms this diagnosis. Between the failing commit (`bb242902336c1d9120168470fe181b515ef4b36b`) and the passing commit (`973ebe53c5490867349039b52d7731c28d4b9d69`), the `java-manta-it/pom.xml` file was modified to add the `org.apache.httpcomponents:httpclient` dependency with `test` scope.
+
+The `httpclient` library (from `org.apache.httpcomponents`) provides the `org.apache.http.client.utils.DateUtils` class. Furthermore, `httpclient` typically has a transitive dependency on `org.apache.commons.codec:commons-codec`, which provides `org.apache.commons.codec.Charsets` and `org.apache.commons.codec.digest.DigestUtils`. Therefore, adding the `httpclient` dependency resolves all the reported "package does not exist" and "cannot find symbol" errors.
+
+---
+
+### Proposed Solution / Fix
+
+Add the `org.apache.httpcomponents:httpclient` dependency to the `test` scope in the `java-manta-it/pom.xml` file. This change is already present in the `passed_sha` (`973ebe53c5490867349039b52d7731c28d4b9d69`).
+
+**Diff snippet from `CODE DIFF`:**
+```xml
+--- a/java-manta-it/pom.xml
++++ b/java-manta-it/pom.xml
+@@ -35,6 +35,18 @@
+             <version>2.5.1-SNAPSHOT</version>
+             <scope>test</scope>
+         </dependency>
++        <dependency>
++            <groupId>org.apache.httpcomponents</groupId>
++            <artifactId>httpclient</artifactId>
++            <version>${dependency.apache-http-client.version}</version>
++            <scope>test</scope>
++            <exclusions>
++                <exclusion>
++                    <groupId>commons-logging</groupId>
++                    <artifactId>commons-logging</artifactId>
++                </exclusion>
++            </exclusions>
++        </dependency>
+         <dependency>
+             <groupId>org.slf4j</groupId>
+             <artifactId>jul-to-slf4j</artifactId>
+```
+
+---
+
+### Workaround
+
+No workaround is available as this is a compilation error preventing the build from completing.
+
+---
+
+### Additional Notes
+
+The build environment (Travis CI, specific JDK/Maven versions) appears to be correctly configured and is not the root cause of this issue. The problem is purely a missing dependency declaration in the project's `pom.xml`.

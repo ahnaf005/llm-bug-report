@@ -1,0 +1,92 @@
+## Software Bug Report
+
+**Bug ID:** #BB-20240626-001
+
+**Title:** Maven Checkstyle Plugin Fails Due to 'Missing Javadoc Comment' on Class with Newly Added Javadoc
+
+**Project:** Byte Buddy
+
+**Module:** `byte-buddy-dep`
+
+**Version:** 1.5.14-SNAPSHOT
+
+**Environment:**
+*   **Operating System:** Ubuntu 12.04.5 LTS (Precise)
+*   **Linux Kernel:** 4.8.12-040812-generic (as reported by Maven)
+*   **Java Version:** Oracle JDK 1.8.0_111 (Java HotSpot(TM) 64-Bit Server VM, build 25.111-b14)
+*   **Maven Version:** Apache Maven 3.2.5
+*   **Build System:** Travis CI (container-based infrastructure)
+*   **Checkstyle Plugin:** `org.apache.maven.plugins:maven-checkstyle-plugin:2.17`
+*   **Checkstyle Core Version:** 6.11.2
+
+**Severity:** High (Build Failure)
+
+**Priority:** High (Blocks successful builds)
+
+**Status:** New
+
+**Reproducibility:** Always (Failed 3 times consistently during the build log)
+
+---
+
+**Description:**
+The build for the `byte-buddy-dep` module consistently fails due to a Checkstyle error indicating a "Missing a Javadoc comment" for the `SerializedConstant` class. This occurs on line 14 of `SerializedConstant.java`. However, the provided code diff clearly shows that a Javadoc comment block (`/** ... */`) has been added immediately preceding the `SerializedConstant` class declaration, which should satisfy the `MissingJavadocType` rule. This suggests either a false positive from the Checkstyle plugin/configuration or an issue with how the Javadoc is formatted or interpreted against the defined rules.
+
+**Steps to Reproduce:**
+1.  Clone the `raphw/byte-buddy` repository.
+2.  Checkout the specific commit `cea264e688cf165d0693da9721eac5781905d3ee`.
+3.  Apply the provided code diff, which includes adding a Javadoc comment to `SerializedConstant.java` and a new test file `SerializedConstantTest.java`.
+4.  Execute the Maven build command: `mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V`
+
+**Expected Behavior:**
+The Maven build should complete successfully, as the `SerializedConstant` class now has a Javadoc comment, satisfying the Checkstyle rule for missing Javadoc types.
+
+**Actual Behavior:**
+The Maven build fails with the following error message from the `maven-checkstyle-plugin`:
+```
+/home/travis/build/raphw/byte-buddy/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bytecode/constant/SerializedConstant.java:14: error: Missing a Javadoc comment.
+Audit done.
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary:
+[INFO] 
+[INFO] Byte Buddy (parent) ................................ SUCCESS [ 10.020 s]
+[INFO] Byte Buddy Java agent .............................. SUCCESS [  5.593 s]
+[INFO] Byte Buddy (with dependencies) ..................... FAILURE [  6.328 s]
+[INFO] Byte Buddy (without dependencies) .................. SKIPPED
+...
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (default) on project byte-buddy-dep: Failed during checkstyle execution: There is 1 error reported by Checkstyle 6.11.2 with checkstyle.xml ruleset. -> [Help 1]
+```
+This error persists across multiple retries of the build command.
+
+**Logs/Screenshots:**
+(See "BUILD LOG" section above for full log. Relevant snippet included in "Actual Behavior".)
+
+**Code Diff (Relevant Section):**
+```diff
+--- a/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bytecode/constant/SerializedConstant.java
++++ b/byte-buddy-dep/src/main/java/net/bytebuddy/implementation/bytecode/constant/SerializedConstant.java
+@@ -11,6 +11,9 @@ import org.objectweb.asm.MethodVisitor;
+
+ import java.io.*;
+
++/**
++ * A constant that represents a value in its serialized form.
++ */
+ public class SerializedConstant implements StackManipulation {
+
+     /**
+```
+The diff shows the addition of the Javadoc comment for the `SerializedConstant` class, which is located at line 14 in the modified file.
+
+**Possible Cause/Analysis:**
+1.  **Checkstyle Configuration Issue:** The `checkstyle.xml` ruleset might have specific requirements for Javadoc comments (e.g., requiring `@author`, `@version`, `@param` tags, or a minimum length) that are not met by the simple Javadoc comment added.
+2.  **Checkstyle Plugin/Core Bug:** There might be a bug in `maven-checkstyle-plugin` version 2.17 or Checkstyle core version 6.11.2 that causes it to incorrectly flag a valid Javadoc comment as missing.
+3.  **Invisible Characters/Encoding:** Although less likely, an invisible character or an encoding issue in the added Javadoc could be preventing Checkstyle from parsing it correctly.
+4.  **Incorrect Rule Application:** The error message specifically points to line 14, which is the class declaration. The Javadoc is directly above it. It's possible the rule is looking for something *within* the class declaration itself, or a different Javadoc element (e.g., for a constructor or field that is also on line 14 in some interpretation, though this is unlikely for a class declaration).
+
+**Suggested Fixes/Workarounds:**
+*   **Review `checkstyle.xml`:** Examine the `checkstyle.xml` file for the `MissingJavadocType` rule (or similar Javadoc-related rules) and verify its exact configuration. Ensure the added Javadoc meets all specified requirements.
+*   **Expand Javadoc:** Try adding more standard Javadoc tags (e.g., `@since`, `@see`) to the class Javadoc to see if a more comprehensive comment satisfies the rule.
+*   **Update Checkstyle:** Attempt to update the `maven-checkstyle-plugin` and its underlying Checkstyle core to a newer version, as this might resolve any known bugs.
+*   **Temporarily Disable Rule:** As a temporary workaround to unblock the build, the `MissingJavadocType` rule could be temporarily disabled in `checkstyle.xml` or configured to be a warning instead of an error.
+*   **Re-type Javadoc:** Manually re-type the Javadoc comment to rule out any hidden character issues.

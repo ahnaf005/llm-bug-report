@@ -1,0 +1,168 @@
+Title
+- Unit test failure: TutorialSnippetsTestCase.testModularizationWithAtomicDecomposition assertion mismatch after refactor
+
+Summary
+- A recent code change modified test helper methods and removed atomic-decomposition based module extraction, but left or relied on an existing test expecting atomic-decomposition behavior. As a result, the test TutorialSnippetsTestCase.testModularizationWithAtomicDecomposition failed during mvn verify with an assertion comparing two module sets (expected vs actual). The change swapped a method that returned a Set<OWLAxiom> into a void/asserting method, removed getADModule and related imports — causing test behavior and expectations to diverge.
+
+Steps to Reproduce
+1. Checkout the branch/commit that produced the failing build (failed_sha c391f19df...).
+2. Run the test suite for the contract module:
+   - mvn -pl contract test
+   or run full build:
+   - mvn verify
+3. Observe the failing test: uk.ac.manchester.owl.owlapi.tutorialowled2011.TutorialSnippetsTestCase.testModularizationWithAtomicDecomposition
+
+Triggering Input / Conditions
+- Code changes shown in the diff:
+  - Replaced wildcard static import of OWLAPIStreamUtils with asUnorderedSet only.
+  - Removed imports for AtomicDecomposition and AtomicDecompositionImpl.
+  - Removed the test method body that used atomic decomposition (getADModule).
+  - Modified getTraditionalModule to assert the module is not null and not return it, thereby changing its API.
+  - Deleted helper method getADModule.
+- Running the existing tests (which still expect getTraditionalModule to return a Set and to be compared to the AD-extracted module) triggers the assertion failure.
+
+Expected Behavior
+- The test TutorialSnippetsTestCase.testModularizationWithAtomicDecomposition should complete successfully:
+  - It should extract a module using the atomic decomposition approach (AD).
+  - It should extract the traditional locality-based module (STAR).
+  - It should compare both modules for equality (as the test expects).
+  - The test should pass (no assertion failure).
+
+Observed Behavior
+- Test failure (1 failing test) in the contract module:
+  - Test: TutorialSnippetsTestCase.testModularizationWithAtomicDecomposition
+  - Failure is an assertion comparing expected module contents vs actual module contents. The expected set and actual set differ (ordering and content, e.g. extra Declaration/AnnotationAssertion present in actual).
+- Build summary:
+  - Tests run: 4771, Failures: 1, Errors: 0, Skipped: 2
+  - Build failed with: There are test failures. (maven-surefire-plugin)
+
+Relevant Output / Error Messages (from build log)
+- The actual failing assertion message (truncated large output showing expected vs actual):
+  - Failed tests:
+    - TutorialSnippetsTestCase.testModularizationWithAtomicDecomposition:642 expected:<[FunctionalDataProperty(...), DataPropertyRange(...), DisjointClasses(...), ...]> but was:<[FunctionalDataProperty(...), DataPropertyRange(...), Declaration(ObjectProperty(...)), Declaration(Class(...)), AnnotationAssertion(owl:versionInfo ... ), Declaration(Class(...)), SubClassOf(...), ...]>
+
+- Build failure message:
+  - [ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.18.1:test (default-test) on project owlapi-contract: There are test failures.
+
+- Additional (non-fatal) warnings/errors seen in the log (not the test failure, but may be helpful/contextual):
+  - [main] ERROR uk.ac.manchester.cs.owl.owlapi.OWLOntologyManagerImpl - Runtime Warning: Parsers should load imported ontologies using the makeImportLoadRequest method.
+  - Many "roundtrip fail: ..." and "parse fail: ..." lines from the tests printing differences for other syntaxes (these are test diagnostics).
+  - Several "Duplicate clause" messages from org.obolibrary.obo2owl.OWLAPIOwl2Obo
+  - These are informational/troubleshooting messages but do not appear to be the cause of the failing assertion.
+
+Relevant Code Snippets (from the diff)
+- Import change (removed wildcard and replaced with explicit asUnorderedSet):
+  - Old:
+    - import static org.semanticweb.owlapi.util.OWLAPIStreamUtils.*;
+  - New:
+    - import static org.semanticweb.owlapi.util.OWLAPIStreamUtils.asUnorderedSet;
+
+- AtomicDecomposition imports removed:
+  - Removed:
+    - import uk.ac.manchester.cs.atomicdecomposition.AtomicDecomposition;
+    - import uk.ac.manchester.cs.atomicdecomposition.AtomicDecompositionImpl;
+
+- getTraditionalModule changed: (previously returned Set<OWLAxiom>, now asserts and returns void)
+  - Old (deleted in diff):
+    - protected Set<OWLAxiom> getTraditionalModule(OWLOntologyManager m, OWLOntology o, Set<OWLEntity> seedSig) {
+    -     SyntacticLocalityModuleExtractor sme = new SyntacticLocalityModuleExtractor(m, o, ModuleType.STAR);
+    -     Set<OWLAxiom> mod = sme.extract(seedSig);
+    -     return mod;
+    - }
+  - New (existing in diff):
+    - protected Set<OWLAxiom> getTraditionalModule(OWLOntologyManager m, OWLOntology o, Set<OWLEntity> seedSig) {
+    -     SyntacticLocalityModuleExtractor sme = new SyntacticLocalityModuleExtractor(m, o, ModuleType.STAR);
+    -     Set<OWLAxiom> mod = sme.extract(seedSig);
+    -     assertNotNull(mod);
+    - }
+
+  Note: The new method asserts non-null but does not return the Set — the signature still declares a return type Set<OWLAxiom> (the diff shows it still declares return type; if it lost return that would be compile-time error, but the build compiled; likely the new method still returns Set in base file in other context, but diff indicates assertNotNull(mod); then later a closing brace — in the repository the method probably still returns nothing causing inconsistent behavior across commits — the build did compile but the test failing indicates the test method expected to call getTraditionalModule and compare, but the helper signatures changed or getADModule removed).
+
+- getADModule removed (deleted):
+  - Old:
+    - protected Set<OWLAxiom> getADModule(OWLOntology o, Set<OWLEntity> sig) {
+    -     AtomicDecomposition ad = new AtomicDecompositionImpl(o);
+    -     Set<OWLAxiom> mod = asSet(ad.getModule(sig.stream(), false, ModuleType.STAR));
+    -     return mod;
+    - }
+
+- testModularizationWithAtomicDecomposition removed or its logic deleted (diff removed a block where it:
+  - created OWLOntologyManager m, loaded pizza/koala ontology
+  - built sig and seedSig using reasoner and asUnorderedSet
+  - extracted mod from AD (getADModule)
+  - compared mod with getTraditionalModule via assertEquals(mod, getTraditionalModule(...))
+
+Key cause analysis
+- The diff shows removal of the atomic decomposition path and helper getADModule and changing getTraditionalModule behavior. The failing test asserts equality between modules extracted by two different methods (AD vs traditional STAR). With getADModule and the comparison removed in the code post-change, tests will either be inconsistent with the test expectations or the actual test in the failing build still expects the old behavior. The test failure output clearly shows expected vs actual module sets differ: the actual set contains extra Declaration and AnnotationAssertion statements (owl:versionInfo and Declarations) that are not present in the expected set. This indicates the STAR extraction result (or AD result) is different from what the test expected — possibly due to:
+  - Change in module extraction behavior
+  - Change/bug in test helpers (getTraditionalModule no longer returns the module)
+  - The removed AD path means the test might use a different method or produce a different module set
+  - Non-deterministic ordering of elements printed in expected/actual (though assertion compares sets, but the JUnit output shows mismatch of set contents — not merely ordering)
+
+Patches / Suggested Fixes
+There are two classes of fixes depending on intent:
+
+A) If the intention is to keep the atomic-decomposition-based test and its equality assertion (recommended quick fix to restore existing test behavior):
+1. Reintroduce getADModule and AtomicDecomposition imports.
+2. Restore testModularizationWithAtomicDecomposition to:
+   - build AD module (using AtomicDecompositionImpl)
+   - build traditional module (SyntacticLocalityModuleExtractor.extract(seedSig))
+   - compare sets with assertEquals(modAD, modTraditional)
+
+Code patch (suggested) — restore removed methods and test compare (sketch):
+- Re-add imports at top:
+  - import uk.ac.manchester.cs.atomicdecomposition.AtomicDecomposition;
+  - import uk.ac.manchester.cs.atomicdecomposition.AtomicDecompositionImpl;
+
+- Implement getADModule helper:
+  - protected Set<OWLAxiom> getADModule(OWLOntology o, Set<OWLEntity> sig) {
+  -     AtomicDecomposition ad = new AtomicDecompositionImpl(o);
+  -     Set<OWLAxiom> mod = asSet(ad.getModule(sig.stream(), false, ModuleType.STAR));
+  -     return mod;
+  - }
+
+- Modify getTraditionalModule to return the module (instead of assertNotNull):
+  - protected Set<OWLAxiom> getTraditionalModule(OWLOntologyManager m, OWLOntology o, Set<OWLEntity> seedSig) {
+  -     SyntacticLocalityModuleExtractor sme = new SyntacticLocalityModuleExtractor(m, o, ModuleType.STAR);
+  -     Set<OWLAxiom> mod = sme.extract(seedSig);
+  -     return mod;
+  - }
+
+- Restore the test method body (if deleted) to:
+  - Set<OWLAxiom> modAD = getADModule(o, sig);
+  - assertNotNull(modAD);
+  - Set<OWLAxiom> modTraditional = getTraditionalModule(m, o, seedSig);
+  - assertNotNull(modTraditional);
+  - assertEquals(modAD, modTraditional);
+
+B) If the intention is to intentionally remove AD-based comparison (i.e., refactor to drop AD), then update/remove/adjust the test expectations accordingly:
+1. Remove or update the test TutorialSnippetsTestCase.testModularizationWithAtomicDecomposition so it no longer expects equality between AD and traditional modules.
+2. If you need to keep a check, adapt the test to compare normalized modules, e.g.:
+   - Compare modules after removing Declaration axioms and AnnotationAssertions (owl:versionInfo, rdfs:seeAlso) if those are not relevant.
+   - Or update expected fixture to include Declaration and AnnotationAssertion axioms.
+3. Ensure getTraditionalModule returns the module (not assert-only) if other code depends on it; or rename it to indicate its void/asserting behavior and update callers accordingly.
+
+Additional notes / suggestions:
+- The failure shows the actual module contains extra Declaration and AnnotationAssertion axioms (like owl:versionInfo annotation on an IRI and Declaration(...) entries). If these axioms are now included by the extractor but were not expected, the test should be made resilient to presence/absence of such metadata axioms (normalize both modules before comparison).
+- If set equality is intended, ensure both modules are filtered to remove annotations/metadata or both include them consistently.
+- Use set-equality comparisons rather than ordered lists or string output comparisons to avoid ordering differences.
+
+Concrete patch suggestion (minimal revert for immediate green build) — change in TutorialSnippetsTestCase.java:
+- Replace the current getTraditionalModule (which asserts and does not return) with the previous implementation that returns the Set<OWLAxiom>.
+- Re-add getADModule (AtomicDecompositionImpl usage) and the test code that compares AD vs traditional result.
+
+Why this is likely the fix
+- The failing assertion compares two sets and shows differences in content. The code diff removed or changed the functions that produced those two sets (AD and traditional). Restoring the removed functions and returning the module for comparison will restore the original comparison behavior; alternatively, updating the test to the new intended behavior will fix the build if the intention was to remove AD.
+
+Files changed in diff (for reference)
+- contract/src/test/java/org/semanticweb/owlapi/examples/Examples.java
+  - Large code block removed (shouldExtractADModules example)
+- contract/src/test/java/uk/ac/manchester/owl/owlapi/tutorialowled2011/TutorialSnippetsTestCase.java
+  - Imports changed and atomic decomposition references removed
+  - getTraditionalModule behavior changed (no longer returns module)
+  - getADModule removed
+  - testModularizationWithAtomicDecomposition test body removed or modified
+
+Recommended immediate action
+- Reintroduce getADModule and have getTraditionalModule return the module, then re-run mvn verify to confirm tests pass.
+- Alternatively, if the project maintainers intend to remove atomic decomposition tests, update the unit tests to reflect the new behavior and adjust expectations (including metadata/Declaration handling).

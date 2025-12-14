@@ -1,0 +1,98 @@
+Title: Build Failure — Checkstyle header and formatting errors in FileContentsTest.java after patch
+
+Summary
+- A recent patch (failed_sha: f1b28dbcdeab04227463ffe9bfb476e891962418) introduced changes to src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java.
+- The Maven build fails during the ant-phase-verify Checkstyle run with 3 errors:
+  1. Header line(s) in FileContentsTest.java do not match the project header rule.
+  2. A whitespace formatting issue: "," is not followed by whitespace (now fixed in diff).
+- Build exited with FAILURE; details in the Build Log (Checkstyle reported 3 errors).
+
+Environment
+- Project: checkstyle/checkstyle
+- Build system: Travis CI (container), Ubuntu 12.04.5 LTS
+- Java: OpenJDK 7 (1.7.0_75)
+- Maven: 3.2.5
+- Checkstyle version (used by ant task): 6.9-SNAPSHOT
+- Failed commit: f1b28dbcdeab04227463ffe9bfb476e891962418
+- Last passing commit (for comparison): db1c0575158797299e928b5cb50d3080d64f5dda
+
+Relevant Build Log Excerpts
+- Checkstyle errors shown:
+  - /src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java:1: Line does not match expected header line of '////////////////////////////////////////////////////////////////////////////////'.
+  - /src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java:1: Line does not match expected header line of '^/{80}$'.
+  - /src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java:25:30: ',' is not followed by whitespace.
+- Maven failure location:
+  - /home/travis/build/checkstyle/checkstyle/config/ant-phase-verify.xml:50: Checkstyle failed: Got 3 errors and 0 warnings.
+
+Code Diff Summary (patches included in this PR)
+1) pom.xml
+- Removed one coverage regex entry for TokenTypes (unrelated to the build failure but included in the diff).
+
+2) src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java
+- Added license/header block at file top (20 lines added).
+- Repaired formatting: changed o.reportCppComment(1,2); to o.reportCppComment(1, 2); (fixes the comma whitespace error).
+
+Observed behavior
+- After applying the patch, the Checkstyle ant target reports the header line(s) do not match the expected header and fails the build.
+- The comma-whitespace error (line 25:30) reported in the Build Log is addressed by the code diff; however the header mismatch remains and causes the build to fail (2 header-related errors + 1 whitespace error originally = 3 errors).
+
+Root cause analysis
+- The Checkstyle header check enforces very strict file header formatting. The build log provides two messages for the first line:
+  - One message expects an exact literal header line '////////////////////////////////////////////////////////////////////////////////'.
+  - Another expects a regex '^/{80}$' (i.e., exactly 80 consecutive '/' characters).
+- This indicates the header-check is comparing the first line of FileContentsTest.java against the project's canonical header and failing.
+- Possible reasons the header check fails, even though a header was added:
+  1. The first line in the file is not exactly 80 slash ('/') characters. The added line in the diff looks like '////////////////////////////////////////////////////////////////////////////////' — but it must be verified that it is exactly 80 '/' characters. If the number is not exactly 80, the '^/{80}$' regex will fail.
+  2. There may be a Unicode BOM (Byte Order Mark) or invisible characters at the very start of the file, causing the exact-match to fail.
+  3. The file may have leading whitespace or an empty line before the header.
+  4. The file line endings may be CRLF vs LF (some header matchers are sensitive; BOM is more likely culprit).
+  5. The bottom header (closing line of slashes) must also match the expected pattern in some rules — here the log references only line 1, so top line is the problem.
+- The whitespace error (',' not followed by whitespace) was corrected in the patch. Two header-related errors remain.
+
+Recommended fixes
+1) Ensure the first line of the file is exactly 80 forward slashes with no leading characters or BOM:
+   - Use an authoritative header from other source files in the repo (copy-paste from a file that passes the header-check).
+   - Confirm exact length: e.g., run in shell:
+     printf '%.0s/' {1..80}; echo
+     and paste the produced line as the first line of the file.
+   - Verify there are no invisible characters preceding the first slash. Remove BOM if present:
+     - In Unix: dos2unix or iconv -f UTF-8 -t UTF-8 -c may help remove BOM; or open in an editor and save without BOM.
+2) Verify file encoding and line endings:
+   - Ensure file is UTF-8 without BOM.
+   - Ensure LF line endings (Unix).
+   - In Git, ensure .gitattributes (if used) is not altering the file on commit in a way that introduces CRLF or BOM.
+3) Ensure the header block exactly matches the project's expected header block:
+   - Some projects also check the middle lines (copyright text). If the project's header-check uses a template, copy the entire header block from an existing file that passes.
+4) Verify there are no leading blank lines before the header. The header must start at the first character of the file.
+5) Locally reproduce and test:
+   - Run the same check locally:
+     mvn clean -DskipTests -DskipITs -Dpmd.skip=true -Dfindbugs.skip=true -Dcobertura.skip=true verify
+   - Or invoke the Ant target that enforces header rules (ant-phase-verify) to get immediate feedback.
+
+Suggested small patch (example)
+- Replace the first line with an exact 80-slash line produced by the printf technique above and ensure no BOM:
+
+  (top of file)
+  // replace this line with exact 80 slashes (no surrounding quotes)
+  //////////////////////////////////////////////////////////////////////////////////
+  // [rest of license lines...]
+  //////////////////////////////////////////////////////////////////////////////////
+
+Note: In the diff you added the license block — keep that block but make sure the topmost and bottommost slash lines are exact and that there is no invisible prefix (BOM) on the file.
+
+Additional notes
+- The whitespace error reported at line 25:30 (',' is not followed by whitespace) was fixed in the code diff by changing o.reportCppComment(1,2); to o.reportCppComment(1, 2);. Confirmed done.
+- The pom.xml change removing the TokenTypes coverage regex is unrelated to the failing Checkstyle header; however, it may affect coverage gating elsewhere — just be aware.
+
+Severity
+- High: build is blocked; CI cannot pass until header checks are satisfied.
+
+Action items
+- Developer: adjust FileContentsTest.java header to exactly match project's header template (use a known good file as reference), ensure file encoding without BOM, and verify no leading blank lines.
+- Developer: run the same Maven/Ant verify locally to confirm.
+- CI: re-run after fix.
+
+If you'd like, I can:
+- Provide a ready-to-apply exact header block copied from a passing file in the repository (if you provide one), or
+- Suggest commands to detect and remove BOM and convert line endings, or
+- Produce a small script that checks the first line length and prints non-printable characters for a failing file.

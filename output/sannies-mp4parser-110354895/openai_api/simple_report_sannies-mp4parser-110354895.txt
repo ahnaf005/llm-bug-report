@@ -1,0 +1,102 @@
+Bug Report: Build failure in muxer module due to assignment to final static BUFFER
+
+Summary
+- CI job: mvn install on commit ca853b7 (failed_sha).
+- Failure point: compilation error in muxer test compile: H264TrackImplTest.java cannot assign a value to final variable BUFFER.
+- Relevant change in code diff: AbstractH26XTrack.BUFFER was modified from "public static final int BUFFER = 65535 << 10;" to "public static int BUFFER = 65535 << 10;" (i.e., remove final).
+- Despite the diff showing final removed, Maven compilation failed with the "cannot assign a value to final variable BUFFER" error, which indicates the compiler still sees BUFFER as final.
+
+Build failure (relevant excerpt)
+- Module: muxer
+- Maven phase: test-compile
+- Error:
+  /home/travis/build/sannies/mp4parser/muxer/src/test/java/org/mp4parser/muxer/tracks/H264TrackImplTest.java:[39,22] cannot assign a value to final variable BUFFER
+
+Full failing log location: many lines above in BUILD LOG (see the repeated "COMPILATION ERROR" block).
+
+Files involved
+- muxer/src/main/java/org/mp4parser/muxer/tracks/AbstractH26XTrack.java
+  - Old: public static final int BUFFER = 65535 << 10;
+  - New (in patch): public static int BUFFER = 65535 << 10;
+- muxer/src/test/java/org/mp4parser/muxer/tracks/H264TrackImplTest.java
+  - Test contains an assignment to BUFFER (line 39 in the failing build).
+
+Reproduction
+- Checkout commit ca853b726e61355a8cf5b63f0a3ca6d90e7d5332 (the failing SHA used by CI).
+- Run: mvn -B -e -X clean install -DskipTests=false
+- Build will stop at muxer:test-compile with the same error (see above).
+
+Root cause analysis
+1. The direct compilation error arises because H264TrackImplTest attempts to assign a value to a variable declared final. Java forbids assigning to final fields after initialization.
+
+2. The code diff shows the intent to make BUFFER non-final by changing:
+   - from: public static final int BUFFER = 65535 << 10;
+   - to:   public static int BUFFER = 65535 << 10;
+   If that change is present in the actual source used by the build, the test assignment should compile.
+
+3. Possible explanations for the discrepancy between the diff and the compiler error:
+   - The CI build used a source tree that still contained the old (final) declaration. The committed change may not have been included in the branch/tag that CI built.
+   - There may be multiple BUFFER declarations (e.g., another class or interface defines BUFFER as public static final) and the test is referencing that other final constant.
+   - A stale compiled class or dependency on the class with final BUFFER exists in the reactor/classpath. (Note: Java inlines static final compile-time constants into callers at compile time; but an assignment to such an inlined constant would be a source-level error only if the compiler sees the declaration as final.)
+   - The test may be referencing BUFFER through an imported static constant from a different class (not AbstractH26XTrack) that is still final.
+
+4. Most likely: the test source (H264TrackImplTest.java) tries to assign to BUFFER, but the version of AbstractH26XTrack that the compiler used during test-compile still declared BUFFER final. The reason could be that the change to remove final was not present in the source tree used for the CI build (commit mismatch), or that there is another final BUFFER declaration in scope.
+
+Immediate actionable fixes and recommendations
+A. Quick verification steps (do first)
+   1. Confirm that the commit containing the change (removing final) has been pushed to the branch the CI builds.
+      - Locally run git show <commit> and inspect muxer/src/main/java/.../AbstractH26XTrack.java to confirm it's non-final.
+   2. Clean the local build artifacts and re-run the build to ensure no stale classes:
+      - mvn -B -e -X clean install
+   3. Search for other BUFFER declarations:
+      - grep -R "BUFFER" -n muxer/src || rg "BUFFER" muxer/src
+
+B. Two possible fixes (choose based on intended design):
+   Option 1 — Make BUFFER mutable (if tests must change it dynamically):
+   - Keep the change in AbstractH26XTrack to remove final (as shown in the diff). Prefer encapsulation:
+     - private static volatile int BUFFER = 65535 << 10;
+     - public static int getBuffer() { return BUFFER; }
+     - public static void setBuffer(int newBuffer) { BUFFER = newBuffer; }
+   - Update tests to call AbstractH26XTrack.setBuffer(...) instead of assigning to the field directly.
+   - Rationale: public mutable static field is poor practice; use accessor methods and mark it volatile if modified across threads.
+
+   Option 2 — Keep BUFFER final and change test:
+   - If BUFFER was intended to be a compile-time constant, revert the diff (keep final).
+   - Update H264TrackImplTest to not assign to BUFFER. If the test needs to simulate different buffer sizes, use dependency injection or adjust API (e.g. allow passing buffer size into constructors or setters).
+
+C. Example suggested patch (encapsulation approach)
+- AbstractH26XTrack.java:
+  - Replace public static int BUFFER = 65535 << 10;
+  - With:
+    private static volatile int BUFFER = 65535 << 10;
+    public static int getBuffer() { return BUFFER; }
+    public static void setBuffer(int b) { BUFFER = b; }
+
+- H264TrackImplTest.java:
+  - Replace assignments like AbstractH26XTrack.BUFFER = <value>; with AbstractH26XTrack.setBuffer(<value>);
+
+D. Additional CI considerations
+   - Ensure the commit that changes AbstractH26XTrack is included in the branch and that the CI runs a clean build. If the reactor contains multiple modules that reference BUFFER, do a full "mvn -T1C -U clean install" to ensure no stale snapshot artifacts are used.
+   - If multiple modules or previous releases define a public static final BUFFER constant, consider renaming or moving to avoid name collisions and the compile-time constant inlining pitfalls.
+
+Why encapsulation + setter is recommended
+- public static mutable fields are bad for maintainability and thread-safety.
+- If tests or other code need to alter behavior for testing, explicit setters are clearer and keep the API controllable.
+- Using private static + accessors avoids accidental reintroducing of final constants and helps manage concurrency (volatile).
+
+Suggested next steps for developer
+1. Verify that the change removing final is actually present on the branch the CI built (if not, push the change).
+2. Decide whether BUFFER should be mutable or constant:
+   - If mutable: implement the accessor/setter change and update tests.
+   - If constant: revert the test assignment and refactor tests to not attempt assignment.
+3. Re-run a local clean build (mvn clean install) and then push. Confirm CI passes.
+4. Optionally: run static search for other public static fields that tests assign to and apply similar encapsulation patterns.
+
+Pointers to relevant log lines
+- Compilation error location: BUILD LOG -> "[ERROR] /home/travis/build/sannies/mp4parser/muxer/src/test/java/org/mp4parser/muxer/tracks/H264TrackImplTest.java:[39,22] cannot assign a value to final variable BUFFER"
+- Code diff: shows AbstractH26XTrack change (removal of final) — included in CODE DIFF section.
+
+If you want, I can:
+- Propose an explicit patch file implementing the accessor/setter approach,
+- Produce a minimal test modification patch for H264TrackImplTest, or
+- Search the repository for other BUFFER declarations and report collisions.

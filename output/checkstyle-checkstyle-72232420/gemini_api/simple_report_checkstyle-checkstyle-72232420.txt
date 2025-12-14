@@ -1,0 +1,79 @@
+## Software Bug Report: Checkstyle Build Failure due to Code Style Violations
+
+**Bug ID:** CS-BUILD-20150723-001
+**Status:** Open
+**Priority:** High
+**Severity:** Critical (Build Failure)
+**Reported By:** [Your Name/System]
+**Date Reported:** 2024-06-26
+
+---
+
+### 1. Overview
+
+The Checkstyle project build is failing on Travis CI at commit `f1b28dbcdeab04227463ffe9bfb476e891962418`. The failure occurs during the `ant-phase-verify` stage, specifically when the Checkstyle tool itself is run against the project's source code. The build reports 3 Checkstyle errors, preventing successful completion.
+
+### 2. Environment
+
+*   **Build System:** Travis CI (worker-linux-docker-9eda5877.prod.travis-ci.org)
+*   **Operating System:** Ubuntu 12.04.5 LTS (Precise)
+*   **Linux Kernel:** 3.13.0-29-generic
+*   **Java Version:** OpenJDK 1.7.0_75 (IcedTea 2.5.4)
+*   **Maven Version:** Apache Maven 3.2.5
+*   **Ant Version:** Apache Ant(TM) version 1.8.2
+*   **Checkstyle Version:** 6.9-SNAPSHOT (being built)
+*   **Git SHA (Failing):** `f1b28dbcdeab04227463ffe9bfb476e891962418`
+*   **Git SHA (Passing - prior to changes):** `db1c0575158797299e928b5cb50d3080d64f5dda`
+
+### 3. Steps to Reproduce
+
+1.  Clone the Checkstyle repository: `git clone git://github.com/checkstyle/checkstyle.git`
+2.  Navigate into the directory: `cd checkstyle/checkstyle`
+3.  Checkout the failing commit: `git checkout f1b28dbcdeab04227463ffe9bfb476e891962418`
+4.  Execute the Maven build command: `mvn clean verify -DskipTests -DskipITs -Dpmd.skip=true -Dfindbugs.skip=true -Dcobertura.skip=true`
+
+### 4. Expected Behavior
+
+The Maven build should complete successfully, indicating that the project's code adheres to its defined Checkstyle rules.
+
+### 5. Actual Behavior
+
+The Maven build fails during the `ant-phase-verify` stage with the following error:
+`[ERROR] Failed to execute goal org.apache.maven.plugins:maven-antrun-plugin:1.8:run (ant-phase-verify) on project checkstyle: An Ant BuildException has occured: The following error occurred while executing this line: /home/travis/build/checkstyle/checkstyle/config/ant-phase-verify.xml:50: Checkstyle failed: Got 3 errors and 0 warnings.`
+
+The Checkstyle report within the build log details the specific violations:
+
+```
+[checkstyle] Running Checkstyle 6.9-SNAPSHOT on 677 files
+[checkstyle] /home/travis/build/checkstyle/checkstyle/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java:1: Line does not match expected header line of '////////////////////////////////////////////////////////////////////////////////'.
+[checkstyle] /home/travis/build/checkstyle/checkstyle/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java:1: Line does not match expected header line of '^/{80}$'.
+[checkstyle] /home/travis/build/checkstyle/checkstyle/src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java:25:30: ',' is not followed by whitespace.
+```
+
+### 6. Analysis and Root Cause
+
+The build failure is directly caused by Checkstyle violations found in `src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java`. The provided code diff (`patches` section) shows the changes that were introduced *between* the `passed_sha` (`db1c0575158797299e928b5cb50d3080d64f5dda`) and the `failed_sha` (`f1b28dbcdeab04227463ffe9bfb476e891962418`), which *resolve* these issues. This implies the `failed_sha` still contains the problematic code.
+
+1.  **Header Violations (Lines 1 & 2):**
+    *   The build log indicates two header errors on line 1 of `FileContentsTest.java`. The expected header is either a literal string of 80 forward slashes (`////////////////////////////////////////////////////////////////////////////////`) or a regex matching it (`^/{80}$`).
+    *   The code diff for `FileContentsTest.java` shows that a new, multi-line license header (20 lines long) was *added* to the file. This new header does not match the configured single-line header expectation, leading to these two errors.
+
+2.  **Whitespace Violation (Line 25, Column 30):**
+    *   The build log reports `',' is not followed by whitespace.` at `FileContentsTest.java:25:30`.
+    *   In the `failed_sha` version of the file, this line would correspond to `o.reportCppComment(1,2);`. The comma between `1` and `2` is not followed by a space.
+    *   The code diff for `FileContentsTest.java` shows that this specific issue is *resolved* in the `passed_sha` by changing the line to `o.reportCppComment(1, 2);`, which includes the required whitespace.
+
+The `pom.xml` change (deletion of two `regex` lines related to `TokenTypes` from `cobertura.excludes`) is unlikely to be the direct cause of these Checkstyle errors, as it pertains to code coverage exclusions rather than code style rules.
+
+### 7. Proposed Solution / Workaround
+
+To resolve the build failure at `f1b28dbcdeab04227463ffe9bfb476e891962418`, the following actions are required:
+
+1.  **Address Header Violations:**
+    *   Either revert the header in `src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java` to match the expected single-line format (`////////////////////////////////////////////////////////////////////////////////`).
+    *   **OR** Update the Checkstyle configuration (likely `HeaderCheck` or `RegexpHeaderCheck`) to correctly recognize and validate the new multi-line license header.
+
+2.  **Address Whitespace Violation:**
+    *   Modify the line `o.reportCppComment(1,2);` in `src/test/java/com/puppycrawl/tools/checkstyle/api/FileContentsTest.java` to `o.reportCppComment(1, 2);` by adding a space after the comma.
+
+The changes shown in the provided `CODE DIFF` section for `FileContentsTest.java` effectively implement these solutions and would lead to a passing build if applied to the `failed_sha`.

@@ -1,0 +1,126 @@
+Title
+- Build failure: many "cannot find symbol: class OntologyAxiomPair" errors in parsers module after OntologyAxiomPair moved to tools module
+
+Steps to Reproduce
+1. Check out commit 48d51cbdcce995596a61b0abb745d58cc37cfed4 (the failing SHA shown in the build log) or apply the code changes from the provided diff.
+2. Run a full Maven build from repository root:
+   mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+3. Observe compilation errors in module owlapi-parsers.
+
+Triggering Input / Conditions
+- The code diff moves/renames OntologyAxiomPair.java from:
+  parsers/src/test/java/org/semanticweb/owlapi/util/OntologyAxiomPair.java
+  to:
+  tools/src/main/java/org/semanticweb/owlapi/util/OntologyAxiomPair.java
+- Parsers module main-source files (parsers/src/main/java/...) still import and reference org.semanticweb.owlapi.util.OntologyAxiomPair.
+- No corresponding dependency on owlapi-tools was added to the parsers module pom (only oboformat/pom.xml was modified to depend on owlapi-tools).
+- Result: when compiling parsers, the symbol OntologyAxiomPair is not on the classpath.
+
+Expected Behavior
+- The project builds successfully. Parsers module should be able to compile its classes that reference org.semanticweb.owlapi.util.OntologyAxiomPair because the class is available on the compilation classpath (either as part of the same module or as a declared dependency).
+
+Observed Behavior (from build log)
+- Parsing/compilation of the parsers module fails with many errors like:
+  /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/util/mansyntax/ManchesterOWLSyntaxParser.java:[39,35] cannot find symbol
+    symbol:   class OntologyAxiomPair
+    location: package org.semanticweb.owlapi.util
+  ... (same cannot find symbol repeated ~80 times across multiple parser classes)
+- Maven fails with BUILD FAILURE and the maven-compiler-plugin reports compilation failure.
+- Reactor summary shows:
+  OWLAPI :: Parsers .................................. FAILURE
+- Full failure excerpt (representative):
+  [ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/util/mansyntax/ManchesterOWLSyntaxParser.java:[39,35] cannot find symbol
+  symbol:   class OntologyAxiomPair
+  location: package org.semanticweb.owlapi.util
+  ...
+  [INFO] 80 errors
+  ...
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.6.0:compile (default-compile) on project owlapi-parsers: Compilation failure
+
+Relevant Code Snippets from the Diff
+- The diff shows the file rename / move:
+  File renamed from parsers/src/test/java/org/semanticweb/owlapi/util/OntologyAxiomPair.java
+  to tools/src/main/java/org/semanticweb/owlapi/util/OntologyAxiomPair.java
+
+- The parsers sources reference the class; build log example:
+  /parsers/src/main/java/org/semanticweb/owlapi/manchestersyntax/parser/ManchesterOWLSyntaxParserImpl.java:[1092,16] cannot find symbol
+    symbol:   class OntologyAxiomPair
+    location: class org.semanticweb.owlapi.manchestersyntax.parser.ManchesterOWLSyntaxParserImpl
+
+- The diff also shows an attempt to add a dependency in oboformat/pom.xml:
+  +    <dependency>
+  +        <groupId>${project.groupId}</groupId>
+  +        <artifactId>owlapi-tools</artifactId>
+  +        <version>${project.version}</version>
+  +    </dependency>
+  (Note: this was added only to oboformat/pom.xml — not to parsers/pom.xml.)
+
+Root Cause (analysis)
+- OntologyAxiomPair was previously available to parsers (it lived under parsers/src/test in the previous layout — a test/test-utility location that may have been used by parser sources).
+- The change moved OntologyAxiomPair into the tools module main sources (tools/src/main/java/...).
+- Parsers' main sources now reference that type but the parsers module does not declare a compile-time dependency on owlapi-tools. Therefore the class is not present on the compilation classpath of the parsers module and the Java compiler reports "cannot find symbol".
+- The diff added owlapi-tools as a dependency in oboformat/pom.xml, but not in parsers/pom.xml where it is actually required.
+
+Patches / Suggested Fixes
+Choose one of the options below depending on intended project layering:
+
+1) Add tools dependency to parsers module (quick fix)
+- Edit parsers/pom.xml and add:
+  <dependencies>
+    ...
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>owlapi-tools</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    ...
+  </dependencies>
+- This makes OntologyAxiomPair available to parsers at compile time.
+
+2) Move / copy OntologyAxiomPair into a module that parsers already depends on (better architectural fix)
+- If OntologyAxiomPair is a utility used by parsers (and conceptually belongs to parsers), move it into parsers/src/main/java/org/semanticweb/owlapi/util/ so it is part of the parsers artifact.
+- Or place it in the api module (or another shared module) that is intended to host common utilities and that all dependent modules already depend on. Then update package visibility accordingly.
+
+3) If OntologyAxiomPair is test-only utility:
+- If it should remain test-only, ensure parsers' main sources do not depend on it. Move the usage from parsers/main into tests or refactor to remove the dependency in main code.
+- Alternatively, duplicate or reimplement the small utility inside parsers main sources if intended.
+
+4) Update build / module dependencies consistently
+- The diff added the owlapi-tools dependency only to oboformat/pom.xml; ensure all modules that need the tool-level classes have declared dependency entries and that module ordering / reactor is consistent.
+
+Additional recommendations
+- Avoid using test-scope classes in main-source code. If parsers' main code depended on a class that previously only lived in parsers/test, that was a fragile state; moving the file to a tools/main artifact requires explicitly declaring the dependency.
+- Run a full build locally after adding the dependency or moving the class.
+- Review other files moved from tests to main to ensure all modules that consume them declare dependencies.
+
+Minimal example pom snippet to add to parsers/pom.xml:
+<dependency>
+  <groupId>${project.groupId}</groupId>
+  <artifactId>owlapi-tools</artifactId>
+  <version>${project.version}</version>
+</dependency>
+
+Why this will fix it
+- Adding the tools artifact as a dependency ensures the compiled class OntologyAxiomPair (tools/src/main/java/...) is available on the classpath when compiling parsers, resolving the "cannot find symbol" errors.
+
+Files/moves of interest in diff
+- Renamed/moved: parsers/src/test/java/org/semanticweb/owlapi/util/OntologyAxiomPair.java -> tools/src/main/java/org/semanticweb/owlapi/util/OntologyAxiomPair.java
+- Added dependency: oboformat/pom.xml gained owlapi-tools dependency (but not parsers/pom.xml)
+
+Build log evidence (selected)
+- First representative error:
+  [ERROR] /home/travis/build/owlcs/owlapi/parsers/src/main/java/org/semanticweb/owlapi/util/mansyntax/ManchesterOWLSyntaxParser.java:[39,35] cannot find symbol
+    symbol:   class OntologyAxiomPair
+    location: package org.semanticweb.owlapi.util
+- Many additional similar errors in ManchesterOWLSyntaxParserImpl, ManchesterOWLSyntaxFramesParser, ClassFrameParser, etc.
+- Summary:
+  [INFO] 80 errors
+  ...
+  [ERROR] Failed to execute goal ... maven-compiler-plugin ... on project owlapi-parsers: Compilation failure
+  ...
+  The command "mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V" failed 3 times.
+
+If you want, I can:
+- Produce the exact patch to add owlapi-tools to parsers/pom.xml.
+- Or produce a patch to move OntologyAxiomPair into parsers/src/main/java so no dependency change is needed.
+- Or search the diff for other moved test->main files and prepare a comprehensive dependency fix.

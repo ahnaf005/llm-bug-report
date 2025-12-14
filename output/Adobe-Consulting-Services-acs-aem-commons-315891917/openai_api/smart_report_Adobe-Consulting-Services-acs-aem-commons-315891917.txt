@@ -1,0 +1,97 @@
+Title
+- VersionedClientlibsTransformerFactoryTest failures after changing mocked HtmlLibrary.getInputStream() to getInputStream(false) — tests get NullPointerException and empty ACSHASH token
+
+Steps to Reproduce
+1. Check out the repository at the commit that includes the test changes (the diff shown).
+2. Run Maven verify in the project root: mvn verify -B
+3. Observe unit test failures in bundle module, specifically tests under com.adobe.acs.commons.rewriter.impl.VersionedClientlibsTransformerFactoryTest.
+
+Triggering Input / Conditions
+- A change in VersionedClientlibsTransformerFactoryTest that replaces mocked calls of HtmlLibrary.getInputStream() with HtmlLibrary.getInputStream(false).
+- The production code under test still calls HtmlLibrary.getInputStream() (no boolean parameter) -> Mockito stubs do not match the actual invocation.
+- When the code calls getInputStream() and no stub is registered, the mock returns null which causes downstream NPEs and broken behavior (empty version token), failing assertions that expect MD5/ACSHASH in generated versioned paths.
+
+Expected Behavior
+- Tests should pass.
+- Versioned clientlibs transformation should produce versioned paths with the expected MD5/ACSHASH tokens inlined, e.g. /etc/clientlibs/test.fcadcfb01c1367e9...css or /etc/clientlibs/test.ACSHASHfcadcfb0...css.
+- No NullPointerExceptions while computing or persisting status during other tests.
+
+Observed Behavior (from build log)
+- Many failures in VersionedClientlibsTransformerFactoryTest asserting that versioned filenames contain the expected MD5 tokens; instead the token portion is empty (i.e. "[]").
+  - Example failure:
+    - org.junit.ComparisonFailure: expected:<...etc/clientlibs/test.[fcadcfb01c1367e9e5b7f2e6d455ba8f.]css> but was:<...etc/clientlibs/test.[]css>
+    - Location: VersionedClientlibsTransformerFactoryTest.testCSSClientLibrary (line 197 in test)
+- Several NullPointerExceptions in VersionedClientlibsTransformerFactoryTest methods:
+  - java.lang.NullPointerException at com.adobe.acs.commons.rewriter.impl.VersionedClientlibsTransformerFactoryTest.doFilter_notFoundInCache_md5Match(VersionedClientlibsTransformerFactoryTest.java:537)
+  - java.lang.NullPointerException at com.adobe.acs.commons.rewriter.impl.VersionedClientlibsTransformerFactoryTest.doFilter_notFoundInCache_md5MisMatch(VersionedClientlibsTransformerFactoryTest.java:551)
+  - java.lang.NullPointerException at com.adobe.acs.commons.rewriter.impl.VersionedClientlibsTransformerFactoryTest.doFilter_notFoundInCacheWithDot_md5MisMatch(VersionedClientlibsTransformerFactoryTest.java:565)
+- The overall build fails with:
+  - [ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.20.1:test (default-test) on project acs-aem-commons-bundle: There are test failures.
+
+Relevant Code Snippets (from provided diff)
+- Test file changes (selected hunks):
+  - Removed unused import:
+    - -import ch.qos.logback.classic.turbo.TurboFilter;
+  - Replaced mocks that previously stubbed getInputStream() with getInputStream(false):
+    - - when(htmlLibrary.getInputStream()).thenReturn(new java.io.ByteArrayInputStream("I love strings".getBytes()));
+    + when(htmlLibrary.getInputStream(false)).thenReturn(new java.io.ByteArrayInputStream("I love strings".getBytes()));
+    - when(proxiedHtmlLibrary.getInputStream()).thenReturn(new java.io.ByteArrayInputStream("I love strings when they are proxied".getBytes()));
+    + when(proxiedHtmlLibrary.getInputStream(false)).thenReturn(new java.io.ByteArrayInputStream("I love strings when they are proxied".getBytes()));
+    - when(library.getInputStream()).thenReturn(INPUTSTREAM);
+    + when(library.getInputStream(false)).thenReturn(INPUTSTREAM);
+    (multiple occurrences in test replaced similarly)
+
+Relevant Test Failure Stack Traces / Log Excerpts
+- Comparison failures:
+  - [ERROR] VersionedClientlibsTransformerFactoryTest.testCSSClientLibrary:197 expected:<...test.[fcadcfb01c1367e9e5b7f2e6d455ba8f.]css> but was:<...test.[]css>
+  - Several other similar ComparisonFailure entries for JS/CSS/minified/proxied variants (see build log).
+- NullPointerExceptions:
+  - [ERROR] doFilter_notFoundInCache_md5Match(...) java.lang.NullPointerException at VersionedClientlibsTransformerFactoryTest.doFilter_notFoundInCache_md5Match(VersionedClientlibsTransformerFactoryTest.java:537)
+  - [ERROR] doFilter_notFoundInCache_md5MisMatch(...) java.lang.NullPointerException at VersionedClientlibsTransformerFactoryTest.doFilter_notFoundInCache_md5MisMatch(VersionedClientlibsTransformerFactoryTest.java:551)
+  - [ERROR] doFilter_notFoundInCacheWithDot_md5MisMatch(...) java.lang.NullPointerException at VersionedClientlibsTransformerFactoryTest.doFilter_notFoundInCacheWithDot_md5MisMatch(VersionedClientlibsTransformerFactoryTest.java:565)
+- Build failure summary:
+  - [ERROR] Tests run: 949, Failures: 10, Errors: 3 ... BUILD FAILURE
+
+Root Cause Analysis
+- The tests were changed to stub HtmlLibrary.getInputStream(false) rather than HtmlLibrary.getInputStream(). However, the production code (VersionedClientlibsTransformerFactory or the library manager) still invokes getInputStream() (without boolean argument). Because Mockito stubs are method-signature-specific, when the code calls the parameterless getInputStream(), the mock returns null (no matching when), causing downstream NullPointerExceptions or resulting in empty/absent MD5 tokens because the stream wasn't provided to the tested component.
+- In short: test stubs no longer match the actual runtime method calls; mismatch between test mocking and the method actually invoked.
+
+Patches / Suggested Fixes
+Option A — Make tests robust to both method overloads (recommended quick fix)
+- Add a second Mockito stub for the parameterless getInputStream() in each place the test currently stubs getInputStream(false). This preserves the test intent regardless of which overload production code uses.
+- Example patch snippet to add in the test where the diff changed:
+  - when(htmlLibrary.getInputStream(false)).thenReturn(new java.io.ByteArrayInputStream("I love strings".getBytes()));
+  - // also stub the parameterless method to keep compatibility with existing production calls:
+    when(htmlLibrary.getInputStream()).thenReturn(new java.io.ByteArrayInputStream("I love strings".getBytes()));
+- Apply the same dual-stub for proxiedHtmlLibrary and all other occurrences (library mocks in the test).
+
+Option B — Update production code to call the boolean overload getInputStream(false)
+- If the intended API usage changed and production code is supposed to call getInputStream(false) (to avoid side effects e.g. auto-closing or to disable caching) then modify the production code so it invokes the same overload that tests now stubbed.
+- This is a larger change and must be done carefully (ensure no behavior regression) — update all call sites accordingly and re-run full test suite.
+
+Option C — Make tests reflect the single intended API version
+- Decide on the intended API (older getInputStream() or newer getInputStream(boolean)), then change tests to match production code consistently. Either:
+  - Revert test changes to stub getInputStream() (if production code remains calling getInputStream()), OR
+  - Change production code to use getInputStream(false) and then the test change is correct.
+
+Minimal recommended fix (patch to tests)
+- Update VersionedClientlibsTransformerFactoryTest to provide both stubs for the mocked HtmlLibrary objects. Example for one location (mirrors the diff context):
+
+  when(htmlLibrary.getInputStream(false)).thenReturn(new ByteArrayInputStream("I love strings".getBytes()));
+  when(htmlLibrary.getInputStream()).thenReturn(new ByteArrayInputStream("I love strings".getBytes()));
+
+  // and similarly for proxiedHtmlLibrary and other library mocks:
+  when(proxiedHtmlLibrary.getInputStream(false)).thenReturn(new ByteArrayInputStream("I love strings when they are proxied".getBytes()));
+  when(proxiedHtmlLibrary.getInputStream()).thenReturn(new ByteArrayInputStream("I love strings when they are proxied".getBytes()));
+
+- This ensures tests will pass regardless of whether production calls getInputStream() or getInputStream(false).
+
+Notes / Additional Recommendations
+- Search the codebase for other places where HtmlLibrary.getInputStream() is called. Decide on a consistent API usage and update either the code or tests accordingly.
+- If the HtmlLibrary API was upgraded and the parameterless getInputStream() was removed or deprecated, update production code to the intended overload and update all tests accordingly.
+- Run the full test suite after the fix. The build log also shows other NPEs related to ProcessInstanceImpl.persistStatus and ResourceUtil.getOrCreateResourceInternal — those appear in other tests and are likely unrelated to this test-change; monitor them if they persist after fixing the VersionedClientlibs tests.
+- If making production code changes, ensure you adjust all consumers and check for semantic differences introduced by the boolean parameter (e.g. whether it controls buffering or caching or conservative behavior).
+
+If you want, I can:
+- Generate the precise patch that adds the dual-method stubs to the test file (all instances from the diff).
+- Or propose the required production code changes (replace calls to getInputStream() with getInputStream(false)) and provide the patch.

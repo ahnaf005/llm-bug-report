@@ -1,0 +1,97 @@
+## Software Bug Report: Java Compilation Failure - Lossy Conversion (double to float)
+
+**Bug ID:** #20231016-001 (Example ID, assign a real one)
+
+**Summary:**
+The Travis CI build for the `HubSpot/Singularity` project on the `hs_qa` branch is failing during the compilation phase of the `SingularityBase` module. The error is an "incompatible types: possible lossy conversion from double to float" in `MesosTaskStatisticsObject.java` when compiling with Java 8. The provided "CODE DIFF" was an HTTP 404 error, indicating the actual code changes are missing from this report.
+
+**Project:** HubSpot/Singularity
+**Module Affected:** SingularityBase
+**Branch:** `hs_qa`
+**Commit:** `e8fd6892f326916c3da9359a216a7e0e06cd4f47`
+
+---
+
+**1. Description:**
+The continuous integration build on Travis CI fails when attempting to compile the `SingularityBase` module. The `maven-compiler-plugin` reports multiple "incompatible types" errors, specifically concerning the assignment of `double` values to `float` variables, which is considered a "lossy conversion" by the Java 8 compiler. This prevents the successful build and installation of the `SingularityBase` artifact and, consequently, the entire project.
+
+The build environment explicitly switches to `oraclejdk8` (Java 1.8.0_31) before the Maven build command, suggesting that the code might have been developed or previously compiled under a different Java version (e.g., Java 7) where such conversions might have been implicitly handled or the compiler was less strict.
+
+Crucially, the "CODE DIFF" section provided in the context is an HTTP 404 error, meaning the actual code changes that triggered this build are unavailable. This significantly hinders the ability to pinpoint the exact lines of code that were modified to introduce this issue.
+
+---
+
+**2. Steps to Reproduce:**
+1.  Clone the `HubSpot/Singularity` repository.
+2.  Checkout the `hs_qa` branch to commit `e8fd6892f326916c3da9359a216a7e0e06cd4f47`.
+3.  Ensure Java 8 (specifically `oraclejdk8` / `1.8.0_31`) is set as the active JDK.
+4.  Execute the Maven build command: `mvn -Pbuild-swagger-documentation -DskipTests=true -B -q -fae install`
+
+---
+
+**3. Expected Behavior:**
+The Maven build should complete successfully, compiling all modules without errors and installing the artifacts to the local repository.
+
+---
+
+**4. Actual Behavior:**
+The Maven build fails during the compilation of the `SingularityBase` module with the following errors:
+```
+[ERROR] COMPILATION ERROR : 
+[ERROR] /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[60,12] incompatible types: possible lossy conversion from double to float
+[ERROR] /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[64,12] incompatible types: possible lossy conversion from double to float
+[ERROR] /home/travis/build/HubSpot/Singularity/SingularityBase/src/main/java/com/hubspot/mesos/json/MesosTaskStatisticsObject.java:[68,12] incompatible types: possible lossy conversion from double to float
+```
+The build command exits with status code 1.
+
+---
+
+**5. Impact:**
+*   Prevents successful CI builds on the `hs_qa` branch.
+*   Blocks the release or deployment of the `SingularityBase` module and potentially the entire Singularity application.
+*   Indicates a potential type safety issue that could lead to precision loss if not addressed.
+
+---
+
+**6. Root Cause Analysis (Hypothesis):**
+The error "incompatible types: possible lossy conversion from double to float" indicates that the Java 8 compiler is strictly enforcing type safety when assigning a `double` (64-bit floating-point) value to a `float` (32-bit floating-point) variable. This is a common issue when migrating code from older Java versions (e.g., Java 7) to Java 8, as newer compilers often have stricter checks.
+
+Without the actual code diff, it's impossible to determine if new code was introduced that directly assigns `double` literals or expressions to `float` fields, or if existing code was modified in a way that now results in `double` values being passed to `float` parameters/fields. It's also possible that no code changes were made, and the issue is purely due to the compiler version change.
+
+The warning `Java HotSpot(TM) 64-Bit Server VM warning: ignoring option MaxPermSize=192m; support was removed in 8.0` further confirms that Java 8 is indeed active and processing the build, which aligns with the stricter type checking hypothesis.
+
+---
+
+**7. Proposed Solutions/Workarounds:**
+
+**Immediate Action Required:**
+*   **Provide the actual CODE DIFF:** The "CODE DIFF" section returned a 404 error. The actual code changes are essential for a precise diagnosis and fix. Please ensure the correct code changes are attached to this report.
+
+**Once Code Diff is Available (or for general fix):**
+1.  **Explicit Type Casting:** The most direct solution is to explicitly cast the `double` values to `float` at the problematic lines (60, 64, 68) in `MesosTaskStatisticsObject.java`.
+    *   Example: `this.someFloat = (float) someDoubleValue;`
+    *   *Consideration:* This acknowledges the potential loss of precision. If the precision of `double` is truly required, this might not be the best long-term solution.
+
+2.  **Change Data Type:** If the values being assigned are inherently `double` and their full precision is important, consider changing the data type of the affected fields in `MesosTaskStatisticsObject.java` from `float` to `double`.
+    *   Example: Change `private float someValue;` to `private double someValue;`
+    *   *Consideration:* This might have ripple effects on other parts of the codebase that interact with these fields.
+
+3.  **Review `MesosTaskStatisticsObject.java`:** Examine lines 60, 64, and 68 in `MesosTaskStatisticsObject.java` to understand the source of the `double` values and the intended use of the `float` fields.
+
+---
+
+**8. Environment Details:**
+*   **Operating System:** Ubuntu 12.04.5 LTS
+*   **Linux Kernel:** 3.13.0-29-generic
+*   **Java Version (Build):** Oracle JDK 1.8.0_31 (Java HotSpot(TM) 64-Bit Server VM, build 25.31-b07)
+*   **Maven Version:** Apache Maven 3.2.5
+*   **Maven Compiler Plugin:** 3.3
+*   **Build System:** Travis CI (container-based infrastructure)
+*   **Git Branch:** `hs_qa`
+*   **Git Commit:** `e8fd6892f326916c3da9359a216a7e0e06cd4f47`
+
+---
+
+**9. Attachments:**
+*   `BUILD LOG` (provided in original context)
+*   `CODE DIFF` (missing, returned 404 error - **Critical to provide**)

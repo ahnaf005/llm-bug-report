@@ -1,0 +1,89 @@
+Title
+- Compilation error in muxer module: test assigns to final static BUFFER in AbstractH26XTrack (cannot assign a value to final variable BUFFER)
+
+Steps to Reproduce
+1. Clone repository and checkout the failing commit (sha referenced in build log): ca853b726e61355a8cf5b63f0a3ca6d90e7d5332.
+2. From repo root run the same Maven command used in CI:
+   mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+   (Note: even with -DskipTests=true, Maven still performs the test-compile phase and will compile test sources.)
+3. Observe the build failure during the muxer:test-compile phase.
+
+Triggering Input / Conditions
+- The test code in muxer/src/test/java/org/mp4parser/muxer/tracks/H264TrackImplTest.java attempts to assign a new value to AbstractH26XTrack.BUFFER (a static field).
+- The production code declares BUFFER as a final static int, causing a compile-time error when test code tries to reassign it.
+
+Expected Behavior
+- The project should compile successfully. Either:
+  - The BUFFER field should be mutable (non-final) if tests or runtime need to change it; or
+  - Tests should not attempt to reassign a final constant; tests should be adapted to work without changing BUFFER (or change strategy to configure buffer limit another way).
+
+Observed Behavior (from build log)
+- Maven fails in the muxer module during test compilation with a Java compile error:
+  - /home/travis/build/sannies/mp4parser/muxer/src/test/java/org/mp4parser/muxer/tracks/H264TrackImplTest.java:[39,22] cannot assign a value to final variable BUFFER
+- The build is retried 3 times and fails each time with the same error.
+- Build summary: File Muxer module fails, rest of reactor skipped.
+
+Exact error messages (selected lines from build log)
+- [ERROR] /home/travis/build/sannies/mp4parser/muxer/src/test/java/org/mp4parser/muxer/tracks/H264TrackImplTest.java:[39,22] cannot assign a value to final variable BUFFER
+- [ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.2:testCompile (default-testCompile) on project muxer: Compilation failure
+- [ERROR] -> [Help 1]
+
+Relevant Code Snippets (from diff)
+- Old (production) code that causes the problem (BUFFER is final):
+  --- a/muxer/src/main/java/org/mp4parser/muxer/tracks/AbstractH26XTrack.java
+  +++ b/muxer/src/main/java/org/mp4parser/muxer/tracks/AbstractH26XTrack.java
+  @@ -17,7 +17,7 @@
+   public abstract class AbstractH26XTrack extends AbstractTrack {
+   
+-    public static final int BUFFER = 65535 << 10;
++    public static int BUFFER = 65535 << 10;
+     protected long[] decodingTimes;
+     protected List<CompositionTimeToSample.Entry> ctts = new ArrayList<CompositionTimeToSample.Entry>();
+     protected List<SampleDependencyTypeBox.Entry> sdtp = new ArrayList<SampleDependencyTypeBox.Entry>();
+
+- The diff included with the report shows the intended patch: removing the final modifier so the field becomes mutable:
+  public static int BUFFER = 65535 << 10;
+
+Stack Trace / Build Log Excerpts (fuller context)
+- From first failure attempt:
+  [ERROR] COMPILATION ERROR :
+  [INFO] -------------------------------------------------------------
+  [ERROR] /home/travis/build/sannies/mp4parser/muxer/src/test/java/org/mp4parser/muxer/tracks/H264TrackImplTest.java:[39,22] cannot assign a value to final variable BUFFER
+  [INFO] 1 error
+  ...
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.2:testCompile (default-testCompile) on project muxer: Compilation failure
+  [ERROR] /home/travis/build/sannies/mp4parser/muxer/src/test/java/org/mp4parser/muxer/tracks/H264TrackImplTest.java:[39,22] cannot assign a value to final variable BUFFER
+
+Patches / Suggested Fixes
+1. Patch already prepared (shown in the diff) — remove the final modifier:
+   - Change in muxer/src/main/java/org/mp4parser/muxer/tracks/AbstractH26XTrack.java:
+     - Old: public static final int BUFFER = 65535 << 10;
+     - New: public static int BUFFER = 65535 << 10;
+   - This will allow test code that assigns a new value to BUFFER to compile.
+
+2. Alternative (preferred design) fixes to consider instead of making a static mutable field:
+   - Avoid mutable public static state:
+     - Make BUFFER private static and provide a package-visible or protected setter used only by tests, e.g.:
+         private static int BUFFER = 65535 << 10;
+         static void setBufferSizeForTests(int size) { BUFFER = size; }
+       This keeps the API cleaner while still allowing tests to adjust behavior.
+   - Make BUFFER an instance field configurable via constructor:
+     - Move BUFFER out of static into instance-level, allow track constructors to accept buffer size. Tests can construct track instances with desired buffer size.
+   - Update tests to not assign to the static BUFFER:
+     - If BUFFER is intended to be a constant, change H264TrackImplTest so it doesn't attempt to reassign BUFFER. Instead use reflection or constructor/configuration options if the test needs different behavior.
+   - Add annotations / comments explaining test-only mutation:
+     - If changing to mutable static is chosen, document that this is test-only and consider resetting the static field after tests to avoid interference between tests.
+
+Notes / Recommendations
+- The diff included in this report (removal of final) is a minimal change that will fix the compilation error; however, making public static mutable fields is brittle and not recommended as long-term design.
+- Prefer either making BUFFER configurable per-instance or adding explicit, controlled test hooks (package-private setter) to avoid exposing mutable global state.
+- After applying the patch, re-run the Maven build to ensure there are no other compile-time issues (mvn -DskipTests=true ... still runs test-compile).
+
+Files Mentioned
+- Failing test: muxer/src/test/java/org/mp4parser/muxer/tracks/H264TrackImplTest.java (line reported: 39)
+- Production file to modify: muxer/src/main/java/org/mp4parser/muxer/tracks/AbstractH26XTrack.java
+
+Summary
+- Cause: Tests assign to a static field BUFFER declared final; Java prohibits assigning to final variables.
+- Immediate fix (in diff): remove final modifier on BUFFER so assignment is allowed.
+- Recommended: Prefer a safer design (inject buffer size via constructor or add test-only setter) rather than exposing a public mutable static field.

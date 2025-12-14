@@ -1,0 +1,174 @@
+Title
+- Maven build fails due to Checkstyle violations in src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java
+
+Summary
+- After applying the changes in the patch (which delete IllegalSQLIndexFilter and its tests and add Hive SQL formatting changes/tests), the CI Maven build fails during the Checkstyle phase. The failure is caused by 9 Checkstyle violations in src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java (trailing whitespace, blank-line-after-opening-brace, WhitespaceAround for ':' tokens, and an EmptyStatement). The build stops with "You have 9 Checkstyle violations." and exits with code 1.
+
+Steps to Reproduce
+1. Checkout the commit (or apply the provided diff) that includes the changes in the CODE DIFF (removal of IllegalSQLIndexFilter.java and associated test, plus the other modifications).
+2. On a machine with Java 17 and Maven, run:
+   ./mvnw -Penable-for-jdk17+,gen-code-cov clean package -B
+3. Observe the build fail during the maven-checkstyle-plugin:check phase.
+
+Triggering Input / Conditions
+- The CI run invoked: ./mvnw -Penable-for-jdk17+,gen-code-cov clean package -B (Java 17).
+- The repository content contains src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java which Checkstyle inspects.
+- The code has formatting/style issues that violate the project's src/checkstyle/druid-checks.xml ruleset.
+
+Expected Behavior
+- Maven Checkstyle plugin should complete with zero violations and the build should proceed to package the modules.
+- If the file was intentionally deleted in this patch, the Checkstyle step should not report violations for that file (i.e., the repo state used by CI should match the intended changes).
+
+Observed Behavior (from build log)
+- Checkstyle reports 9 errors, all in src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:
+  - Trailing whitespace (RegexpMultiline) on several lines
+  - Blank line after opening brace (RegexpMultiline)
+  - WhitespaceAround: ':' is not preceded with whitespace (several positions)
+  - EmptyStatement (a stray semicolon)
+- Maven stops with:
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:3.1.2:check (checkstyle) on project druid-parent: You have 9 Checkstyle violations. -> [Help 1]
+- CI exit code: 1
+
+Relevant Build Log / Stack Trace Excerpts
+- Checkstyle summary and errors:
+  [INFO] There are 9 errors reported by Checkstyle 9.2 with src/checkstyle/druid-checks.xml ruleset.
+  [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[34] (regexp) RegexpMultiline: Line has trailing whitespace
+  [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[35] (regexp) RegexpMultiline: Line has trailing whitespace
+  [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[42] (regexp) RegexpMultiline: Line has trailing whitespace
+  [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[49] (regexp) RegexpMultiline: Blank line after opening brace
+  [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[83,51] (whitespace) WhitespaceAround: ':' is not preceded with whitespace.
+  [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[96,51] (whitespace) WhitespaceAround: ':' is not preceded with whitespace.
+  [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[107,66] (coding) EmptyStatement: Empty statement.
+  [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[117,45] (whitespace) WhitespaceAround: ':' is not preceded with whitespace.
+  [ERROR] src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java:[177] (regexp) RegexpMultiline: Blank line after opening brace
+
+- Maven final error:
+  [ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:3.1.2:check (checkstyle) on project druid-parent: You have 9 Checkstyle violations. -> [Help 1]
+  [ERROR] Process completed with exit code 1.
+
+Relevant Code Snippets (from CODE DIFF)
+- The deleted file (src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java) contains the code that Checkstyle flagged. Excerpt (top portion and relevant areas that contain formatting issues):
+
+  (file header and package)
+  package com.alibaba.druid.filter.index;
+
+  import com.alibaba.druid.filter.FilterEventAdapter;
+  import com.alibaba.druid.proxy.jdbc.StatementProxy;
+  import com.alibaba.druid.sql.SQLUtils;
+  import com.alibaba.druid.sql.ast.SQLStatement;
+  import com.alibaba.druid.sql.ast.expr.SQLMethodInvokeExpr;
+  import com.alibaba.druid.sql.dialect.mysql.parser.MySqlStatementParser;
+  import com.alibaba.druid.sql.dialect.mysql.visitor.MySqlSchemaStatVisitor;
+  import com.alibaba.druid.sql.parser.Token;
+  import com.alibaba.druid.stat.TableStat;
+  import com.alibaba.druid.util.JdbcConstants;
+  import com.alibaba.druid.util.StringUtils;
+
+  ... (comments)
+
+  public class IllegalSQLIndexFilter extends FilterEventAdapter {
+
+      private static Map<String, List<IndexInfo>> indexInfoMap = new ConcurrentHashMap<String, List<IndexInfo>>();
+
+      private String dbType;
+
+      @Override
+      protected void statementExecuteBefore(StatementProxy statement, String sql) {
+          MySqlStatementParser sqlStatementParser = new MySqlStatementParser(sql);
+          String tokenName = sqlStatementParser.getLexer().token().name();
+
+          if (Token.SELECT.name().equals(tokenName) || Token.UPDATE.name().equals(tokenName)) {
+              // 解析select查询
+              List<SQLStatement> stmtList = SQLUtils.parseStatements(sql, JdbcConstants.MYSQL);
+              SQLStatement stmt = stmtList.get(0);
+              MySqlSchemaStatVisitor visitor = new MySqlSchemaStatVisitor();
+              stmt.accept(visitor);
+
+              Map<TableStat.Name, TableStat> tableMap = visitor.getTables();
+              if (tableMap.size() > 3) {
+                  throw new RuntimeException("SQL不允许超出3张表操作");
+              }
+              // 不允许使用函数
+              List<SQLMethodInvokeExpr> sqlMethodInvokeExprs = visitor.getFunctions();
+              if (sqlMethodInvokeExprs != null && !sqlMethodInvokeExprs.isEmpty()) {
+                  throw new RuntimeException("请不要在where条件中使用【函数】");
+              }
+              //TODO 不允许使用子查询
+
+              // 查询用到的字段
+              List<TableStat.Condition> conditions = visitor.getConditions();
+              if (conditions == null || conditions.isEmpty()) {
+                  throw new RuntimeException("请带上where条件");
+              } else {
+                  for (TableStat.Condition condition: conditions) {
+                      // 不允许使用 !=
+                      if (StringUtils.equals("!=", condition.getOperator())) {
+                          throw new RuntimeException("请不要在where条件中使用【!=】");
+                      }
+                      // 不允许使用NOT关键字
+                      else if (condition.getOperator().indexOf("NOT") >= 0) {
+                          throw new RuntimeException("请不要在where条件中使用【not】");
+                      }
+                  }
+
+                  List<String> tableIndexValid = new ArrayList<String>();
+                  // 索引最左原理，得到查询条件中的第一个字段
+                  for (TableStat.Condition condition: conditions) {
+                      String tableInfo = condition.getColumn().getTable();
+                      // 如果表已经做了验证，不在做验证了
+                      if (tableIndexValid.contains(tableInfo)) {
+                          continue;
+                      }
+                      // 是否使用索引
+                      boolean useIndexFlag = false;
+                      // 表存在的索引
+                      String dbName = null;
+                      String tableName = null;
+                      String[] tableArray = tableInfo.split("\\.");;
+                      if (tableArray.length == 1) {
+                          tableName = tableArray[0];
+                      } else {
+  ...
+
+- Note: In the snippet above there is an obvious double semicolon in
+  String[] tableArray = tableInfo.split("\\.");;
+  (this corresponds to the EmptyStatement error Checkstyle flagged at [107,66]).
+
+- Also there are several trailing whitespace lines and blank lines after opening braces in the file (Checkstyle errors list specific line numbers in the build log).
+
+Patches / Suggested Fixes
+1. Fix the Checkstyle violations in src/main/java/com/alibaba/druid/filter/index/IllegalSQLIndexFilter.java (or remove the file from the commit if the intention is to delete it):
+   - Remove trailing whitespace on the lines flagged by RegexpMultiline.
+   - Remove blank lines immediately after opening braces where disallowed by the Checkstyle rule.
+   - Ensure whitespace before ':' where required (WhitespaceAround rule) — add a space before ':' tokens referenced in errors. The error refers to ':' not preceded by whitespace; inspect ternary or label/colon uses and format like "condition ? a : b" with whitespace before and after ':'.
+   - Remove the stray extra semicolon (EmptyStatement) at:
+       String[] tableArray = tableInfo.split("\\.");;
+     -> should be:
+       String[] tableArray = tableInfo.split("\\.");
+
+2. If the file is intentionally deleted in this change:
+   - Ensure the delete is actually part of the commit(s) submitted to CI (i.e., no residual/uncommitted file content left in the branch used by the build). The build log shows Checkstyle errors in that file — confirm the repository state used by the CI run includes the deletion.
+   - Alternatively, commit the deletion and ensure the build runs on that commit (re-trigger CI).
+
+3. Run the project's Checkstyle locally before pushing:
+   - ./mvnw checkstyle:check
+   - Or run the full build locally: ./mvnw -Penable-for-jdk17+,gen-code-cov clean package
+   Fix all reported Checkstyle issues and re-commit.
+
+4. Automated fix (example changes):
+   - Remove double semicolons and trailing spaces; adjust whitespace around colons. Example correction for double semicolon:
+       - before: String[] tableArray = tableInfo.split("\\.");;
+       - after:  String[] tableArray = tableInfo.split("\\.");
+
+   - Use an IDE or code formatter aligned with the project's Checkstyle config to fix remaining whitespace issues.
+
+Additional Notes
+- The build log lists 9 Checkstyle violations total. Fixing the listed issues should allow the build to proceed past the checkstyle:check phase.
+- Because the code diff shows that IllegalSQLIndexFilter.java was removed, there are two plausible causes:
+  a) The file was modified (not fully deleted) in the commit used by CI and still contains style violations.
+  b) The deletion is part of the diff shown, but the CI run was executed against an earlier commit or a partially-applied patch — confirm the commit SHA used by CI (build log shows ref 9003085f...) matches the intended patch.
+- After fixing the style issues or confirming the file delete, re-run CI.
+
+If you want, I can:
+- Produce a clean patch that fixes the exact Checkstyle complaints (remove trailing whitespace, remove blank lines after opening braces, fix whitespace around ':' occurrences, remove the extra semicolon) based on the deleted file contents; or
+- Help construct a follow-up commit to re-run CI with the corrected file or deletion.
